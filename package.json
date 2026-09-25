@@ -4,6 +4,15 @@
   "description": "AI-friendly 2D rigging & animation toolkit (Live2D/Spine-like): text-first model format, deterministic headless renderer, CLI, MCP server and live-reload editor.",
   "type": "module",
   "license": "MIT",
+  "author": "RevStudio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RevStudio/Rev2D.git"
+  },
+  "homepage": "https://github.com/RevStudio/Rev2D#readme",
+  "bugs": {
+    "url": "https://github.com/RevStudio/Rev2D/issues"
+  },
   "bin": {
     "rev2d": "./bin/rev2d.js"
   },
@@ -76,5 +85,17 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"
-  }
+  },
+  "keywords": [
+    "live2d",
+    "spine",
+    "2d-animation",
+    "rigging",
+    "skeletal-animation",
+    "ai-agents",
+    "mcp",
+    "model-context-protocol",
+    "typescript",
+    "webgl2"
+  ]
 }

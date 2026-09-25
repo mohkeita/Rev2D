@@ -1,7 +1,7 @@
 # Rev2D launch copy: X (Twitter) and GitHub
 
-Ready-to-post copy for the Rev2D launch. Replace `{REPO_URL}` with the repository URL before
-posting. X counts every link as 23 characters whatever its length, so the lengths below stay valid.
+Ready-to-post copy for the Rev2D launch (repository: https://github.com/RevStudio/Rev2D).
+X counts every link as 23 characters whatever its length, so the lengths below stay valid.
 Each post names the file to attach; all files are in `docs/media/`.
 
 This file is launch material: it is not part of the npm package (`package.json` excludes it) and
@@ -82,7 +82,7 @@ claude mcp add rev2d -- node /path/to/Rev2D/bin/rev2d.js mcp
 
 Plus a 19-command CLI, a live web editor with a File menu, and 1,350+ tests. v0.1, Node 22+. Feedback welcome!
 
-{REPO_URL}
+https://github.com/RevStudio/Rev2D
 ```
 
 ## Korean thread (한국어 스레드)
@@ -144,15 +144,15 @@ claude mcp add rev2d -- node /path/to/Rev2D/bin/rev2d.js mcp
 
 CLI 명령 19개, 파일 메뉴가 있는 라이브 웹 에디터, 테스트 1,350개 이상. v0.1, Node 22+. 피드백 환영합니다!
 
-{REPO_URL}
+https://github.com/RevStudio/Rev2D
 ```
 
 ## Weighted lengths
 
 X allows 280 weighted characters per post. It counts most Latin characters and punctuation as 1,
 Hangul, CJK, emoji and some symbols (`→`, `…`) as 2, and every link as 23. The table was computed
-with the official `twitter-text` library (`parseTweet`, v3 rules), with `{REPO_URL}` replaced by a
-link.
+with the official `twitter-text` library (`parseTweet`, v3 rules), with the repository
+link counted as a link.
 
 <!-- x-lengths:start -->
 | Thread | Post | Attach | Weighted length | Left of 280 |
@@ -187,8 +187,9 @@ Live2D/Spine-style 2D rigging & animation, built for AI agents. A rig is one JSO
 
 ### Social preview
 
-Settings → General → Social preview: upload `docs/media/poster.png` (1280×720, 0.2 MB). GitHub
-recommends 1280×640, so check how it is cropped after the upload.
+Settings → General → Social preview: upload `docs/media/social-preview.png` (1280×640, GitHub's
+recommended size; the poster cropped by 40 px top and bottom). GitHub has no API for this image,
+so it has to be uploaded in the web UI.
 
 ### Hashtags
 

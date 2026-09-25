@@ -1,7 +1,6 @@
 <!--
   게시 전 관리자 확인 사항 (README.md 맨 위 주석과 같은 내용입니다):
-  1. 저장소 전체에서 {REPO_URL} 자리 표시자를 찾아 저장소 URL로 바꿉니다.
-  2. 데모 영상: GitHub는 저장소 안의 MP4 링크를 인라인으로 재생하지 않고, 첨부 파일로 올린 영상만
+  데모 영상: GitHub는 저장소 안의 MP4 링크를 인라인으로 재생하지 않고, 첨부 파일로 올린 영상만
      재생합니다. README.md에 docs/media/rev2d-demo.mp4를 첨부하면서 받은
      https://github.com/user-attachments/assets/<id> URL을 이 파일에도 포스터 링크 바로 아래에
      단독 줄로 넣으면 됩니다(단독 줄에 있는 첨부 URL은 동영상 플레이어로 표시됩니다).
@@ -317,7 +316,7 @@ FAIL  blob.r2d.json
 요구 사항: Node 22 이상, git.
 
 ```sh
-git clone {REPO_URL} Rev2D && cd Rev2D
+git clone https://github.com/RevStudio/Rev2D.git && cd Rev2D
 npm install
 
 node bin/rev2d.js new hero.r2d.json --template hana     # 템플릿: blank(기본), empty, minimal, hana, robot-arm, slime, textured

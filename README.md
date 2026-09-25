@@ -1,7 +1,6 @@
 <!--
-  Maintainers, before publishing:
-  1. Replace every {REPO_URL} placeholder (search the repository) with the repository URL.
-  2. Demo video: GitHub plays an MP4 inline only when it is uploaded as an attachment, not when it is
+  Maintainers:
+  Demo video: GitHub plays an MP4 inline only when it is uploaded as an attachment, not when it is
      linked from the repository. Edit this README on github.com, drag docs/media/rev2d-demo.mp4
      (65 s, 5 MB) into the editor and wait for the upload: GitHub inserts a
      https://github.com/user-attachments/assets/<id> URL. Put that URL on its own line right below
@@ -306,7 +305,7 @@ Format details: [docs/SPEC.md](docs/SPEC.md). Which example uses which technique
 Requirements: Node 22+ and git.
 
 ```sh
-git clone {REPO_URL} Rev2D && cd Rev2D
+git clone https://github.com/RevStudio/Rev2D.git && cd Rev2D
 npm install
 
 node bin/rev2d.js new hero.r2d.json --template hana     # templates: blank (default), empty, minimal, hana, robot-arm, slime, textured
