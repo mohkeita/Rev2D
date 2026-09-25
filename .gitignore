@@ -1,0 +1,11 @@
+node_modules/
+# build output (npm run build): dist/*.js + *.d.ts and the editor UI in dist/editor
+dist/
+# scratch output of renders, tests and experiments
+out/
+# npm pack tarballs
+*.tgz
+*.log
+.DS_Store
+.vite/
+coverage/

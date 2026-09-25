@@ -1,0 +1,14 @@
+# Text files are stored with LF and checked out with LF on every OS, so model files, docs and
+# snapshots compare byte for byte (and shebang scripts such as bin/rev2d.js keep working).
+* text=auto eol=lf
+
+# Binary assets: never touch line endings, never diff/merge as text.
+*.png binary
+*.gif binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.tgz binary

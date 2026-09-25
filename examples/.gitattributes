@@ -1,0 +1,5 @@
+# Example models are canonical formatModelJson output (LF) and must stay byte-identical on every OS,
+# including Windows checkouts with core.autocrlf=true. Textures are binary.
+*.json text eol=lf
+*.md text eol=lf
+*.png binary

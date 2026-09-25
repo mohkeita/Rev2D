@@ -1,0 +1,30 @@
+# Rev2D
+
+> Rev2D is an AI-friendly 2D rigging and animation toolkit in the spirit of Live2D Cubism and Spine, written in TypeScript. A model is one JSON file (`*.r2d.json`) with parameters, bones, warp deformers, parts (vector shapes, images, meshes), keyform bindings, IK (with softness and stretch), pendulum physics and layered animations, all in canvas-pixel coordinates (+y down, clockwise degrees). The `rev2d` CLI and an MCP server validate models with precise diagnostics, render them deterministically without a GPU (with debug overlays, parameter-sweep, overview and animation contact sheets, GIFs), report exact pose numbers (IK reach, physics outputs, mapped points, tables over time), analyze whole animations (physics clamping, IK snap risk, loop seams), and apply atomic, validated edit operations; `rev2d edit` opens a live-reloading web editor that the AI can observe and drive.
+
+Start with AGENTS.md: it explains the mental model, the validate → render → sheet → inspect → analyze → ops verification loop, how to read diagnostics and notes, the property address grammar, the standard parameter signs (AngleX > 0 turns toward the screen right, AngleY > 0 looks up, L = the character's left = screen right) and common mistakes. Run tools with `node bin/rev2d.js <command>` (or `npx rev2d` inside the repository); MCP: `node bin/rev2d.js mcp` over stdio, then call `rev2d_guide`. Explicit parameter values beat animations and physics; physics steps at 60 Hz from rest (a single pose simulates at most the 60 s before its time).
+
+## Docs
+
+- [AGENTS.md](AGENTS.md): guide for AI agents: mental model, parameter conventions, verification loop (render notes, sheets, inspect, analyze), diagnostics, address cheat sheet, ops cheat sheet, common mistakes, MCP tools; developing Rev2D (commands, module boundaries, conventions)
+- [docs/SPEC.md](docs/SPEC.md): authoritative model format and evaluation semantics (coordinates, parameter naming and signs, objects, addresses, bindings, animations with smooth ease, track offset and layers, IK with softness/stretch and diagnostics, physics, per-frame pipeline, Pose and mapPoint)
+- [docs/RECIPES.md](docs/RECIPES.md): copy-paste op batches, each with the commands that verify it (all executed by the test suite): head turn, blink, mouth morphs, breathing, hair physics, arm IK, skinning, squash & stretch, draw order, blend modes, textures, layered animations, events, clean closed eyes, gestures over an idle (add, once, compose), a hat on a turning head (follow), markings under an outline, pixel parameter rigs, a walk cycle, physics tuning with analyze, recolor
+- [docs/OPS.md](docs/OPS.md): edit operations (add and update with bone world position / worldRotation, remove, rename, set, bind with relative values, bind_linear, bind_warp, follow, unbind, key, unkey, move, recolor, compose, patch), reference handling and the bind_warp head-turn math
+- [docs/CLI.md](docs/CLI.md): every rev2d command, flag, exit code, note and --json output shape (including animation layer syntax, sampling flags, inspect series/tracks and analyze)
+- [docs/MCP.md](docs/MCP.md): MCP server setup (Claude Code and other clients), the 16 tools, conventions, editor bridge, troubleshooting
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): pipeline, module responsibilities, data contracts, determinism guarantees, editor protocol, extension points
+
+## Examples
+
+- [examples/README.md](examples/README.md): the five example models and a feature matrix of the techniques each one uses
+- [examples/minimal/minimal.r2d.json](examples/minimal/minimal.r2d.json): the smallest complete rig (one parameter, bone, warp, binding and animation)
+- [examples/hana/hana.r2d.json](examples/hana/hana.r2d.json): Live2D-style bust: 3x3 head-turn warp grid, path-morph eyes and mouth, masks, hair physics
+- [examples/robot-arm/robot-arm.r2d.json](examples/robot-arm/robot-arm.r2d.json): Spine-style skeleton: two-bone IK, skinning, cable physics
+- [examples/slime/slime.r2d.json](examples/slime/slime.r2d.json): squash and stretch, blend modes, events
+- [examples/textured/textured.r2d.json](examples/textured/textured.r2d.json): PNG textures, atlas crops in warps, textured mesh
+
+## Optional
+
+- [README.md](README.md): project overview, feature map against Live2D/Spine concepts, quick start, Korean summary
+- [src/core/schema.ts](src/core/schema.ts): the zod schema that defines the format (`rev2d schema` prints it as JSON Schema)
+- [src/mcp/guide.ts](src/mcp/guide.ts): the compact quickstart served by the `rev2d_guide` MCP tool

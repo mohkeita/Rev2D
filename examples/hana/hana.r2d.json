@@ -1,0 +1,1970 @@
+{
+  "format": "rev2d",
+  "version": 1,
+  "meta": {
+    "name": "hana",
+    "width": 512,
+    "height": 640,
+    "background": "#efe7f1",
+    "fps": 30,
+    "author": "Rev2D examples",
+    "description": "Live2D-style anime bust (vector only). Head turn via a 3x3 AngleX x AngleY warp keyform grid, eye/mouth path morphs, iris masks, hair physics. L/R suffixes = character left/right (L is on screen right)."
+  },
+  "parameters": [
+    {
+      "id": "AngleX",
+      "min": -30,
+      "max": 30,
+      "default": 0,
+      "group": "Face",
+      "description": "Head turn: + looks toward screen right."
+    },
+    {
+      "id": "AngleY",
+      "min": -30,
+      "max": 30,
+      "default": 0,
+      "group": "Face",
+      "description": "Head pitch: + looks up."
+    },
+    {
+      "id": "AngleZ",
+      "min": -30,
+      "max": 30,
+      "default": 0,
+      "group": "Face",
+      "description": "Head tilt: + rotates clockwise (1/3 degree per unit)."
+    },
+    {
+      "id": "EyeLOpen",
+      "min": 0,
+      "max": 1,
+      "default": 1,
+      "group": "Eyes",
+      "description": "Character's left eye (screen right): 0 closed, 1 open."
+    },
+    {
+      "id": "EyeROpen",
+      "min": 0,
+      "max": 1,
+      "default": 1,
+      "group": "Eyes",
+      "description": "Character's right eye (screen left): 0 closed, 1 open."
+    },
+    {
+      "id": "EyeBallX",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "group": "Eyes",
+      "description": "Gaze: + looks toward screen right."
+    },
+    {
+      "id": "EyeBallY",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "group": "Eyes",
+      "description": "Gaze: + looks up."
+    },
+    {
+      "id": "BrowLY",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "group": "Brows",
+      "description": "Left brow (screen right): -1 lowered/angry, +1 raised."
+    },
+    {
+      "id": "BrowRY",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "group": "Brows",
+      "description": "Right brow (screen left): -1 lowered/angry, +1 raised."
+    },
+    {
+      "id": "MouthOpen",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "group": "Mouth",
+      "description": "0 closed, 1 fully open."
+    },
+    {
+      "id": "MouthForm",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "group": "Mouth",
+      "description": "-1 frown / pout, 0 neutral, +1 smile."
+    },
+    {
+      "id": "Cheek",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "group": "Face",
+      "description": "Blush strength."
+    },
+    {
+      "id": "BodyAngleX",
+      "min": -10,
+      "max": 10,
+      "default": 0,
+      "group": "Body",
+      "description": "Upper-body turn/lean: + toward screen right."
+    },
+    {
+      "id": "Breath",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "group": "Body",
+      "description": "0 exhaled, 1 inhaled (shoulders up, chest out)."
+    },
+    {
+      "id": "HairFront",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "group": "Hair",
+      "description": "Bangs sway. Physics output (hairFront)."
+    },
+    {
+      "id": "HairSide",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "group": "Hair",
+      "description": "Side locks sway. Physics output (hairSide)."
+    },
+    {
+      "id": "HairBack",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "group": "Hair",
+      "description": "Back hair sway. Physics output (hairBack)."
+    }
+  ],
+  "bones": [
+    { "id": "root", "x": 256, "y": 640, "length": 0, "description": "Bottom center of the canvas." },
+    {
+      "id": "body",
+      "parent": "root",
+      "x": 0,
+      "y": -40,
+      "rotation": -90,
+      "length": 220,
+      "description": "Hips -> shoulders. Rotated -90 so the bone points up; BodyAngleX leans it."
+    },
+    {
+      "id": "neck",
+      "parent": "body",
+      "x": 220,
+      "y": 0,
+      "length": 44,
+      "description": "Shoulder line -> head pivot."
+    },
+    {
+      "id": "head",
+      "parent": "neck",
+      "x": 44,
+      "y": 0,
+      "length": 220,
+      "description": "Pivot under the chin; AngleZ rotates it."
+    }
+  ],
+  "warps": [
+    {
+      "id": "bodyWarp",
+      "parent": "body",
+      "rect": [60, 360, 392, 365],
+      "cols": 4,
+      "rows": 5,
+      "description": "Torso: BodyAngleX turn and Breath."
+    },
+    {
+      "id": "backHairWarp",
+      "parent": "head",
+      "rect": [94, 80, 324, 420],
+      "cols": 2,
+      "rows": 4,
+      "description": "Back hair: HairBack sway, moves opposite to the face on head turns (parallax)."
+    },
+    {
+      "id": "faceWarp",
+      "parent": "head",
+      "rect": [110, 70, 292, 400],
+      "cols": 8,
+      "rows": 8,
+      "description": "Head turn: AngleX x AngleY keyform grid. Parent of all face parts and front hair."
+    },
+    {
+      "id": "eyeBallWarp",
+      "parent": "faceWarp",
+      "rect": [184, 236, 144, 52],
+      "cols": 6,
+      "rows": 1,
+      "description": "Moves both irises with EyeBallX / EyeBallY."
+    },
+    {
+      "id": "frontHairWarp",
+      "parent": "faceWarp",
+      "rect": [132, 84, 248, 180],
+      "cols": 3,
+      "rows": 2,
+      "description": "Bangs: HairFront sway (bottom row swings most)."
+    },
+    {
+      "id": "sideHairWarpR",
+      "parent": "faceWarp",
+      "rect": [120, 180, 76, 280],
+      "cols": 1,
+      "rows": 3,
+      "description": "Right side lock (screen left): HairSide sway."
+    },
+    {
+      "id": "sideHairWarpL",
+      "parent": "faceWarp",
+      "rect": [316, 180, 76, 280],
+      "cols": 1,
+      "rows": 3,
+      "description": "Left side lock (screen right): HairSide sway."
+    }
+  ],
+  "parts": [
+    {
+      "id": "hairBack",
+      "parent": "backHairWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 256 104 C 327.4 119.9 374.8 162.6 398 232 C 403.7 264.4 406.3 297.1 406 330 C 413.3 352.1 416.6 374.8 416 398 C 412.3 407.2 406.3 414.6 398 420 L 114 420 C 105.7 414.6 99.7 407.2 96 398 C 95.4 374.8 98.7 352.1 106 330 C 105.7 297.1 108.3 264.4 114 232 C 137.2 162.6 184.6 119.9 256 104 Z",
+        "detail": 14
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 100],
+        "to": [0, 420],
+        "stops": [
+          [0, "#86607f"],
+          [0.35, "#5d3c58"],
+          [1, "#3f2640"]
+        ]
+      },
+      "stroke": { "color": "#2b1729", "width": 1.5 },
+      "z": 0,
+      "description": "Hair behind the head and shoulders."
+    },
+    {
+      "id": "hairBackStrands",
+      "parent": "backHairWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 150 150 C 136.1 192.2 128.1 235.6 126 280 C 128.7 320.1 127.3 360.1 122 400 M 176 124 C 157.5 167.5 146.9 212.8 144 260 C 144.7 306.7 143.3 353.4 140 400 M 362 150 C 375.9 192.2 383.9 235.6 386 280 C 383.3 320.1 384.7 360.1 390 400 M 336 124 C 354.5 167.5 365.1 212.8 368 260 C 367.3 306.7 368.7 353.4 372 400",
+        "detail": 14
+      },
+      "fill": "transparent",
+      "stroke": { "color": "#2b1729", "width": 1.2 },
+      "opacity": 0.5,
+      "z": 1,
+      "mask": ["hairBack"],
+      "description": "Strand lines on the back hair (stroke only), clipped to it."
+    },
+    {
+      "id": "neck",
+      "parent": "neck",
+      "shape": {
+        "type": "path",
+        "d": "M 234 296 L 278 296 L 280 362 C 281 374 290 382 302 386 L 210 386 C 222 382 231 374 232 362 Z",
+        "detail": 12
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 300],
+        "to": [0, 386],
+        "stops": [
+          [0, "#f1c0ae"],
+          [1, "#fde7dc"]
+        ]
+      },
+      "stroke": { "color": "#c98a78", "width": 1.2 },
+      "z": 5
+    },
+    {
+      "id": "neckShadow",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 222 300 C 236 346 276 346 290 300 L 290 346 C 282 354 270 366 256 368 C 242 366 230 354 222 346 Z",
+        "detail": 8
+      },
+      "fill": "#f1c0ae",
+      "opacity": 0.9,
+      "z": 6,
+      "mask": ["neck"],
+      "description": "Shadow the chin casts on the neck; follows the head, clipped to the neck."
+    },
+    {
+      "id": "blouse",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 214 374 C 196 386 150 390 118 406 C 94 418 82 446 78 482 L 68 720 L 444 720 L 434 482 C 430 446 418 418 394 406 C 362 390 316 386 298 374 L 256 404 Z",
+        "detail": 16
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 380],
+        "to": [0, 640],
+        "stops": [
+          [0, "#ffffff"],
+          [1, "#dfe3f0"]
+        ]
+      },
+      "stroke": { "color": "#8a90a8", "width": 1.5 },
+      "z": 10
+    },
+    {
+      "id": "blouseFolds",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 128 470 C 134 530 132 620 128 720 M 384 470 C 378 530 380 620 384 720",
+        "detail": 16
+      },
+      "fill": "transparent",
+      "stroke": { "color": "#dfe3f0", "width": 3 },
+      "z": 11,
+      "description": "Sleeve seams (open subpaths: stroke only)."
+    },
+    {
+      "id": "chest",
+      "parent": "bodyWarp",
+      "shape": { "type": "path", "d": "M 214 374 L 256 452 L 298 374 Z", "detail": 12 },
+      "fill": {
+        "type": "linear",
+        "from": [0, 374],
+        "to": [0, 452],
+        "stops": [
+          [0, "#fde7dc"],
+          [1, "#f8d8ca"]
+        ]
+      },
+      "z": 12,
+      "description": "Skin inside the collar V."
+    },
+    {
+      "id": "collar",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 214 374 C 184 386 142 392 114 408 C 150 442 202 474 256 500 C 310 474 362 442 398 408 C 370 392 328 386 298 374 L 256 450 Z",
+        "detail": 12
+      },
+      "fill": "#2d3f75",
+      "stroke": { "color": "#1c2850", "width": 1.5 },
+      "z": 13,
+      "description": "Sailor collar."
+    },
+    {
+      "id": "collarShadow",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 214 380 C 184 392 142 398 114 414 C 150 448 202 480 256 506 C 310 480 362 448 398 414 C 370 398 328 392 298 380 L 256 456 Z",
+        "detail": 12
+      },
+      "fill": "#dfe3f0",
+      "z": 11,
+      "mask": ["blouse"],
+      "description": "Soft shadow the collar casts on the blouse."
+    },
+    {
+      "id": "collarStripe",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 128 412 C 160 440 206 466 256 490 C 306 466 352 440 384 412",
+        "detail": 10
+      },
+      "fill": "transparent",
+      "stroke": { "color": "#ffffff", "width": 2.5 },
+      "z": 14,
+      "mask": ["collar"]
+    },
+    {
+      "id": "ribbonTails",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 250 468 C 244 492 236 512 228 536 L 240 530 L 246 542 C 250 516 254 494 256 470 Z M 262 468 C 268 492 276 512 284 536 L 272 530 L 266 542 C 262 516 258 494 256 470 Z",
+        "detail": 8
+      },
+      "fill": "#b0304a",
+      "stroke": { "color": "#7d1f33", "width": 1 },
+      "z": 15
+    },
+    {
+      "id": "ribbonLoops",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 252 462 C 238 446 216 446 216 460 C 216 474 236 478 252 468 Z M 260 462 C 274 446 296 446 296 460 C 296 474 276 478 260 468 Z",
+        "detail": 8
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 446],
+        "to": [0, 478],
+        "stops": [
+          [0, "#e2485f"],
+          [1, "#b0304a"]
+        ]
+      },
+      "stroke": { "color": "#7d1f33", "width": 1 },
+      "z": 16
+    },
+    {
+      "id": "ribbonKnot",
+      "parent": "bodyWarp",
+      "shape": { "type": "rect", "x": 248, "y": 457, "w": 16, "h": 14, "radius": 4 },
+      "fill": "#e2485f",
+      "stroke": { "color": "#7d1f33", "width": 1 },
+      "z": 17
+    },
+    {
+      "id": "ears",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 166 246 C 152 238 144 254 147 270 C 150 286 158 296 170 292 Z M 346 246 C 360 238 368 254 365 270 C 362 286 354 296 342 292 Z",
+        "detail": 8
+      },
+      "fill": "#f1c0ae",
+      "stroke": { "color": "#c98a78", "width": 1.2 },
+      "z": 20
+    },
+    {
+      "id": "face",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 256 116 C 320 116 354 160 353 222 C 352 262 346 292 326 318 C 306 340 280 352 256 352 C 232 352 206 340 186 318 C 166 292 160 262 159 222 C 158 160 192 116 256 116 Z",
+        "detail": 12
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 170],
+        "to": [0, 352],
+        "stops": [
+          [0, "#f6cfbf"],
+          [0.4, "#fde7dc"],
+          [1, "#fcded1"]
+        ]
+      },
+      "stroke": { "color": "#c98a78", "width": 1.5 },
+      "z": 21
+    },
+    {
+      "id": "blushR",
+      "parent": "faceWarp",
+      "shape": { "type": "ellipse", "cx": 198, "cy": 300, "rx": 24, "ry": 11, "detail": 4 },
+      "fill": {
+        "type": "radial",
+        "center": [198, 300],
+        "radius": 24,
+        "stops": [
+          [0, "rgba(255,133,149,0.75)"],
+          [1, "rgba(255,133,149,0)"]
+        ]
+      },
+      "opacity": 0.3,
+      "z": 22
+    },
+    {
+      "id": "blushL",
+      "parent": "faceWarp",
+      "shape": { "type": "ellipse", "cx": 314, "cy": 300, "rx": 24, "ry": 11, "detail": 4 },
+      "fill": {
+        "type": "radial",
+        "center": [314, 300],
+        "radius": 24,
+        "stops": [
+          [0, "rgba(255,133,149,0.75)"],
+          [1, "rgba(255,133,149,0)"]
+        ]
+      },
+      "opacity": 0.3,
+      "z": 22
+    },
+    {
+      "id": "eyeWhiteR",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 181 267 C 185 248 199 238 213 238 C 225 238 233 248 236 264 C 231 279 221 286 209 286 C 197 286 186 280 181 267 Z",
+        "tolerance": 0.2,
+        "detail": 5
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 238],
+        "to": [0, 262],
+        "stops": [
+          [0, "#d8d0ec"],
+          [1, "#ffffff"]
+        ]
+      },
+      "z": 23,
+      "description": "Eye white. Its shape morphs closed with the Eye*Open parameter and masks the iris."
+    },
+    {
+      "id": "irisR",
+      "parent": "eyeBallWarp",
+      "shape": { "type": "ellipse", "cx": 210, "cy": 263, "rx": 16, "ry": 21, "detail": 4 },
+      "fill": {
+        "type": "linear",
+        "from": [0, 243],
+        "to": [0, 284],
+        "stops": [
+          [0, "#2a1f58"],
+          [0.45, "#4e3fa3"],
+          [1, "#a898f4"]
+        ]
+      },
+      "stroke": { "color": "#211843", "width": 1.2 },
+      "z": 24,
+      "mask": ["eyeWhiteR"]
+    },
+    {
+      "id": "irisGlowR",
+      "parent": "eyeBallWarp",
+      "shape": { "type": "ellipse", "cx": 210, "cy": 274, "rx": 10, "ry": 6, "detail": 3 },
+      "fill": {
+        "type": "radial",
+        "center": [210, 276],
+        "radius": 11,
+        "stops": [
+          [0, "rgba(214,204,255,0.9)"],
+          [1, "rgba(214,204,255,0)"]
+        ]
+      },
+      "z": 25,
+      "mask": ["eyeWhiteR"]
+    },
+    {
+      "id": "pupilR",
+      "parent": "eyeBallWarp",
+      "shape": { "type": "ellipse", "cx": 210, "cy": 264, "rx": 6.5, "ry": 9.5 },
+      "fill": "#1b1238",
+      "z": 26,
+      "mask": ["eyeWhiteR"]
+    },
+    {
+      "id": "highlightR",
+      "parent": "eyeBallWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 198 254 C 198 246 208 246 208 254 C 208 262 198 262 198 254 Z M 214.6 273 C 214.6 269.8 219.4 269.8 219.4 273 C 219.4 276.2 214.6 276.2 214.6 273 Z",
+        "tolerance": 0.1
+      },
+      "fill": "#ffffff",
+      "z": 27,
+      "mask": ["eyeWhiteR"],
+      "description": "Catch lights (big + small)."
+    },
+    {
+      "id": "lashR",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 236 264 L 234.6 258.3 L 232.8 253.2 L 230.6 248.7 L 227.9 245 L 224.8 242 L 221.2 239.8 L 217.3 238.5 L 213 238 L 207.8 238.5 L 202.7 239.9 L 197.8 242.2 L 193.3 245.4 L 189.2 249.5 L 185.7 254.5 L 182.9 260.3 L 181 267 L 174.3 274.8 L 176.6 266.1 L 178.5 258.6 L 181.2 251.8 L 184.7 245.7 L 189.1 240.5 L 194.5 236.6 L 200.5 233.9 L 206.7 232.6 L 213 232.5 L 218.4 233.7 L 223.2 235.8 L 227.3 238.8 L 230.9 242.4 L 233.6 246.9 L 235.1 252.2 L 236 257.9 L 237 263.8 Z",
+        "detail": 4
+      },
+      "fill": "#2a1828",
+      "z": 28,
+      "description": "Upper lid line; morphs into the closed-eye line."
+    },
+    {
+      "id": "lowerLidR",
+      "parent": "faceWarp",
+      "shape": { "type": "path", "d": "M 191 285 C 200 290 216 290 227 283 C 216 288 200 288 191 285 Z" },
+      "fill": "#b8666f",
+      "opacity": 0.85,
+      "z": 28
+    },
+    {
+      "id": "eyeWhiteL",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 331 267 C 327 248 313 238 299 238 C 287 238 279 248 276 264 C 281 279 291 286 303 286 C 315 286 326 280 331 267 Z",
+        "tolerance": 0.2,
+        "detail": 5
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 238],
+        "to": [0, 262],
+        "stops": [
+          [0, "#d8d0ec"],
+          [1, "#ffffff"]
+        ]
+      },
+      "z": 23,
+      "description": "Eye white. Its shape morphs closed with the Eye*Open parameter and masks the iris."
+    },
+    {
+      "id": "irisL",
+      "parent": "eyeBallWarp",
+      "shape": { "type": "ellipse", "cx": 302, "cy": 263, "rx": 16, "ry": 21, "detail": 4 },
+      "fill": {
+        "type": "linear",
+        "from": [0, 243],
+        "to": [0, 284],
+        "stops": [
+          [0, "#2a1f58"],
+          [0.45, "#4e3fa3"],
+          [1, "#a898f4"]
+        ]
+      },
+      "stroke": { "color": "#211843", "width": 1.2 },
+      "z": 24,
+      "mask": ["eyeWhiteL"]
+    },
+    {
+      "id": "irisGlowL",
+      "parent": "eyeBallWarp",
+      "shape": { "type": "ellipse", "cx": 302, "cy": 274, "rx": 10, "ry": 6, "detail": 3 },
+      "fill": {
+        "type": "radial",
+        "center": [302, 276],
+        "radius": 11,
+        "stops": [
+          [0, "rgba(214,204,255,0.9)"],
+          [1, "rgba(214,204,255,0)"]
+        ]
+      },
+      "z": 25,
+      "mask": ["eyeWhiteL"]
+    },
+    {
+      "id": "pupilL",
+      "parent": "eyeBallWarp",
+      "shape": { "type": "ellipse", "cx": 302, "cy": 264, "rx": 6.5, "ry": 9.5 },
+      "fill": "#1b1238",
+      "z": 26,
+      "mask": ["eyeWhiteL"]
+    },
+    {
+      "id": "highlightL",
+      "parent": "eyeBallWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 304 254 C 304 246 314 246 314 254 C 314 262 304 262 304 254 Z M 292.6 273 C 292.6 269.8 297.4 269.8 297.4 273 C 297.4 276.2 292.6 276.2 292.6 273 Z",
+        "tolerance": 0.1
+      },
+      "fill": "#ffffff",
+      "z": 27,
+      "mask": ["eyeWhiteL"],
+      "description": "Catch lights (big + small)."
+    },
+    {
+      "id": "lashL",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 276 264 L 277.4 258.3 L 279.2 253.2 L 281.4 248.7 L 284.1 245 L 287.2 242 L 290.8 239.8 L 294.7 238.5 L 299 238 L 304.2 238.5 L 309.3 239.9 L 314.2 242.2 L 318.7 245.4 L 322.8 249.5 L 326.3 254.5 L 329.1 260.3 L 331 267 L 337.7 274.8 L 335.4 266.1 L 333.5 258.6 L 330.8 251.8 L 327.3 245.7 L 322.9 240.5 L 317.5 236.6 L 311.5 233.9 L 305.3 232.6 L 299 232.5 L 293.6 233.7 L 288.8 235.8 L 284.7 238.8 L 281.1 242.4 L 278.4 246.9 L 276.9 252.2 L 276 257.9 L 275 263.8 Z",
+        "detail": 4
+      },
+      "fill": "#2a1828",
+      "z": 28,
+      "description": "Upper lid line; morphs into the closed-eye line."
+    },
+    {
+      "id": "lowerLidL",
+      "parent": "faceWarp",
+      "shape": { "type": "path", "d": "M 321 285 C 312 290 296 290 285 283 C 296 288 312 288 321 285 Z" },
+      "fill": "#b8666f",
+      "opacity": 0.85,
+      "z": 28
+    },
+    {
+      "id": "browR",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 184 230 C 192 222 208 218 229 221 C 231 222 231 224 229 225 C 210 223 194 226 185 232 Z"
+      },
+      "fill": "#4a2d46",
+      "z": 60
+    },
+    {
+      "id": "browL",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 328 230 C 320 222 304 218 283 221 C 281 222 281 224 283 225 C 302 223 318 226 327 232 Z"
+      },
+      "fill": "#4a2d46",
+      "z": 60
+    },
+    {
+      "id": "nose",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 257 293 C 258 297 260 300 261 302 C 259 304 255 304 253 303 C 256 302 257 299 257 293 Z"
+      },
+      "fill": "#d99583",
+      "z": 29
+    },
+    {
+      "id": "mouth",
+      "parent": "faceWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 244 322 C 250 320.8 262 320.8 268 322 C 262 323 250 323 244 322 Z",
+        "detail": 3
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 318],
+        "to": [0, 344],
+        "stops": [
+          [0, "#5e1a2a"],
+          [1, "#8c2a3e"]
+        ]
+      },
+      "z": 30,
+      "description": "Mouth interior; MouthOpen x MouthForm path keyforms."
+    },
+    {
+      "id": "teeth",
+      "parent": "faceWarp",
+      "shape": { "type": "rect", "x": 244, "y": 314, "w": 24, "h": 8.5, "radius": 3 },
+      "fill": "#ffffff",
+      "opacity": 0,
+      "z": 31,
+      "mask": ["mouth"]
+    },
+    {
+      "id": "tongue",
+      "parent": "faceWarp",
+      "shape": { "type": "ellipse", "cx": 256, "cy": 326, "rx": 10, "ry": 6, "detail": 3 },
+      "fill": "#e57b8c",
+      "opacity": 0,
+      "z": 31,
+      "mask": ["mouth"]
+    },
+    {
+      "id": "hairSideR",
+      "parent": "sideHairWarpR",
+      "shape": {
+        "type": "path",
+        "d": "M 176 186 C 177.8 226.1 169.8 264.1 152 300 C 139.4 349.9 132.7 400.6 132 452 C 140.4 441.7 147.1 430.3 152 418 C 158.6 423.1 162.6 429.8 164 438 C 176 402.9 180 366.9 176 330 C 186 289.2 192 247.9 194 206 Z",
+        "detail": 10
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 200],
+        "to": [0, 452],
+        "stops": [
+          [0, "#5d3c58"],
+          [1, "#3f2640"]
+        ]
+      },
+      "stroke": { "color": "#2b1729", "width": 1.5 },
+      "z": 45
+    },
+    {
+      "id": "hairSideStrandR",
+      "parent": "sideHairWarpR",
+      "shape": {
+        "type": "path",
+        "d": "M 170 230 C 169 263.7 165 297 158 330 C 153.3 355.8 150.7 381.8 150 408",
+        "detail": 10
+      },
+      "fill": "transparent",
+      "stroke": { "color": "#2b1729", "width": 1.2 },
+      "opacity": 0.6,
+      "z": 46,
+      "mask": ["hairSideR"],
+      "description": "Strand line (open path: stroke only), clipped to the lock."
+    },
+    {
+      "id": "hairSideL",
+      "parent": "sideHairWarpL",
+      "shape": {
+        "type": "path",
+        "d": "M 336 186 C 334.2 226.1 342.2 264.1 360 300 C 372.6 349.9 379.3 400.6 380 452 C 371.6 441.7 364.9 430.3 360 418 C 353.4 423.1 349.4 429.8 348 438 C 336 402.9 332 366.9 336 330 C 326 289.2 320 247.9 318 206 Z",
+        "detail": 10
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 200],
+        "to": [0, 452],
+        "stops": [
+          [0, "#5d3c58"],
+          [1, "#3f2640"]
+        ]
+      },
+      "stroke": { "color": "#2b1729", "width": 1.5 },
+      "z": 45
+    },
+    {
+      "id": "hairSideStrandL",
+      "parent": "sideHairWarpL",
+      "shape": {
+        "type": "path",
+        "d": "M 342 230 C 343 263.7 347 297 354 330 C 358.7 355.8 361.3 381.8 362 408",
+        "detail": 10
+      },
+      "fill": "transparent",
+      "stroke": { "color": "#2b1729", "width": 1.2 },
+      "opacity": 0.6,
+      "z": 46,
+      "mask": ["hairSideL"],
+      "description": "Strand line (open path: stroke only), clipped to the lock."
+    },
+    {
+      "id": "hairFront",
+      "parent": "frontHairWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 148 256 C 132 166 176 86 256 86 C 336 86 380 166 364 256 C 355.5 241.8 350.8 226.5 350 210 C 341.2 221.9 337.2 235.2 338 250 C 328.5 233.3 323.8 215.3 324 196 C 309.9 206.5 301.9 220.5 300 238 C 291.8 220.9 288.4 202.9 290 184 C 274.6 199.5 266.6 218.2 266 240 C 256.5 225.4 251.9 209.4 252 192 C 238.4 203.5 231.1 218.2 230 236 C 221.2 223.4 217.2 209.4 218 194 C 203.8 206.1 195.8 221.4 194 240 C 186.8 229.1 183.5 217.1 184 204 C 167.1 217.9 155.1 235.3 148 256 Z",
+        "detail": 10
+      },
+      "fill": {
+        "type": "linear",
+        "from": [0, 92],
+        "to": [0, 250],
+        "stops": [
+          [0, "#86607f"],
+          [0.45, "#5d3c58"],
+          [1, "#3f2640"]
+        ]
+      },
+      "stroke": { "color": "#2b1729", "width": 1.5 },
+      "z": 50
+    },
+    {
+      "id": "hairFrontStrands",
+      "parent": "frontHairWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 300 110 C 302.2 140.3 310.2 168.9 324 196 M 278 104 C 278 131.3 282 157.9 290 184 M 244 104 C 248.7 133.2 251.3 162.5 252 192 M 214 112 C 219.3 139.1 220.7 166.5 218 194 M 190 128 C 194 153.8 192 179.1 184 204",
+        "detail": 10
+      },
+      "fill": "transparent",
+      "stroke": { "color": "#2b1729", "width": 1.2 },
+      "opacity": 0.55,
+      "z": 51,
+      "mask": ["hairFront"],
+      "description": "Strand separation lines (open paths: stroke only), clipped to the bangs."
+    },
+    {
+      "id": "hairFrontShine",
+      "parent": "frontHairWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 133.6 218.6 C 135 203.7 142.4 191.4 154.9 183.2 C 150.7 197 143.9 208.4 133.6 218.6 Z M 159.5 178 C 166.1 164.6 177.4 155.8 192 152.6 C 183.2 164 172.7 172.2 159.5 178 Z M 198.1 149.4 C 209.1 139.3 222.9 135.1 237.6 137.3 C 225.3 144.8 212.6 148.7 198.1 149.4 Z M 244.5 136.5 C 258.4 131 272.7 132 285.7 139.4 C 271.5 141.9 258.2 141 244.5 136.5 Z M 292.4 141.1 C 307.3 141 320.3 147 329.8 158.6 C 315.6 155.9 303.6 150.2 292.4 141.1 Z M 335.4 162.6 C 349.4 167.8 359.4 178.1 364.1 192.3 C 351.8 184.7 342.6 175.1 335.4 162.6 Z",
+        "tolerance": 0.2
+      },
+      "fill": "#b38bab",
+      "opacity": 0.85,
+      "z": 52,
+      "mask": ["hairFront"],
+      "description": "Angel-ring highlight: lens shapes along an arc, clipped to the bangs."
+    },
+    {
+      "id": "foreheadShadow",
+      "parent": "frontHairWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 148 263 C 132 173 176 93 256 93 C 336 93 380 173 364 263 C 355.5 248.8 350.8 233.5 350 217 C 341.2 228.9 337.2 242.2 338 257 C 328.5 240.3 323.8 222.3 324 203 C 309.9 213.5 301.9 227.5 300 245 C 291.8 227.9 288.4 209.9 290 191 C 274.6 206.5 266.6 225.2 266 247 C 256.5 232.4 251.9 216.4 252 199 C 238.4 210.5 231.1 225.2 230 243 C 221.2 230.4 217.2 216.4 218 201 C 203.8 213.1 195.8 228.4 194 247 C 186.8 236.1 183.5 224.1 184 211 C 167.1 224.9 155.1 242.3 148 263 Z",
+        "detail": 10
+      },
+      "fill": "#f1c0ae",
+      "z": 22,
+      "mask": ["face"],
+      "description": "Shadow of the bangs on the forehead (the bangs outline shifted down, clipped to the face)."
+    },
+    {
+      "id": "flowerPetals",
+      "parent": "frontHairWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 334 166 C 344 164 340 150 334 150 C 328 150 324 164 334 166 Z M 335.9 167.4 C 340.9 176.3 353 168.1 351.1 162.4 C 349.3 156.7 334.7 157.3 335.9 167.4 Z M 335.2 169.6 C 328.3 177.1 339.7 186.1 344.6 182.6 C 349.4 179 344.4 165.4 335.2 169.6 Z M 332.8 169.6 C 323.6 165.4 318.6 179 323.4 182.6 C 328.3 186.1 339.7 177.1 332.8 169.6 Z M 332.1 167.4 C 333.3 157.3 318.7 156.7 316.9 162.4 C 315 168.1 327.1 176.3 332.1 167.4 Z"
+      },
+      "fill": {
+        "type": "radial",
+        "center": [334, 168],
+        "radius": 20,
+        "stops": [
+          [0, "#ffd9e3"],
+          [1, "#ff9cb6"]
+        ]
+      },
+      "stroke": { "color": "#d9607f", "width": 1.2 },
+      "z": 55
+    },
+    {
+      "id": "flowerCenter",
+      "parent": "frontHairWarp",
+      "shape": { "type": "ellipse", "cx": 334, "cy": 168, "rx": 4, "ry": 4 },
+      "fill": "#ffd35c",
+      "stroke": { "color": "#d99a2b", "width": 1 },
+      "z": 56
+    }
+  ],
+  "bindings": [
+    {
+      "id": "headTurn",
+      "target": "warp:faceWarp.offsets",
+      "params": ["AngleX", "AngleY"],
+      "keys": [
+        {
+          "at": [-30, -30],
+          "value": [
+            -5.1, 2.6, -4.7, 3.1, -3.9, 4.1, -4.2, 3.8, -5.1, 2.6, -6, 1.3, -6.3, 1, -5.5, 2,
+            -5.1, 2.6, -5, 2.7, -3.6, 4.5, -3.3, 4.9, -15.1, 10.8, -19.2, 11, -17.4, 7.7, -6.9, 0.2,
+            -6.6, 0.6, -5.2, 2.4, -4.5, 3.4, -3.7, 4.5, -17.4, 12.9, -24.4, 16.1, -27.2, 15.8,
+            -26.4, 13.4, -20.4, 8.8, -6.5, 0.6, -5.7, 1.7, -4.8, 3, -4.5, 3.3, -22.8, 14.3,
+            -28.4, 17.2, -30.2, 17.6, -29.1, 16.3, -24, 12.7, -5.7, 1.8, -5.4, 2.1, -5.4, 2.1,
+            -5.7, 1.8, -24, 12.7, -29.1, 16.3, -30.2, 17.6, -28.4, 17.2, -22.8, 14.3, -4.5, 3.3,
+            -4.8, 3, -5.7, 1.7, -6.5, 0.6, -20.4, 8.8, -26.4, 13.4, -27.2, 15.8, -24.4, 16.1,
+            -17.4, 12.9, -3.7, 4.5, -4.5, 3.4, -5.2, 2.4, -6.6, 0.6, -6.9, 0.2, -17.4, 7.7,
+            -19.2, 11, -15.1, 10.8, -3.3, 4.9, -3.6, 4.5, -5, 2.7, -5.1, 2.6, -5.5, 2, -6.3, 1,
+            -6, 1.3, -5.1, 2.6, -4.2, 3.8, -3.9, 4.1, -4.7, 3.1, -5.1, 2.6, -5.1, 2.6, -5.1, 2.6,
+            -5.1, 2.6, -5.3, 2.3, -5.1, 2.6, -4.9, 2.8, -5.1, 2.6, -5.1, 2.6, -5.1, 2.6
+          ]
+        },
+        {
+          "at": [0, -30],
+          "value": [
+            0, 3, 0.4, 3, 1.2, 3, 0.9, 3, 0, 3, -0.9, 3, -1.2, 3, -0.4, 3, 0, 3, 0.1, 3, 1.5, 3,
+            1.8, 3, 1.2, 10.9, 0, 12.9, -1.2, 10.9, -1.8, 3, -1.5, 3, -0.1, 3, 0.6, 3, 1.4, 3,
+            1.5, 12.7, 1, 17.4, 0, 18.6, -1, 17.4, -1.5, 12.7, -1.4, 3, -0.6, 3, 0.3, 3, 0.6, 3,
+            0.6, 15.9, 0.3, 19.7, 0, 20.7, -0.3, 19.7, -0.6, 15.9, -0.6, 3, -0.3, 3, -0.3, 3,
+            -0.6, 3, -0.6, 15.9, -0.3, 19.7, 0, 20.7, 0.3, 19.7, 0.6, 15.9, 0.6, 3, 0.3, 3, -0.6, 3,
+            -1.4, 3, -1.5, 12.7, -1, 17.4, 0, 18.6, 1, 17.4, 1.5, 12.7, 1.4, 3, 0.6, 3, -0.1, 3,
+            -1.5, 3, -1.8, 3, -1.2, 10.9, 0, 12.9, 1.2, 10.9, 1.8, 3, 1.5, 3, 0.1, 3, 0, 3, -0.4, 3,
+            -1.2, 3, -0.9, 3, 0, 3, 0.9, 3, 1.2, 3, 0.4, 3, 0, 3, 0, 3, 0, 3, 0, 3, -0.2, 3, 0, 3,
+            0.2, 3, 0, 3, 0, 3, 0, 3
+          ]
+        },
+        {
+          "at": [30, -30],
+          "value": [
+            5.1, 2.6, 5.5, 2, 6.3, 1, 6, 1.3, 5.1, 2.6, 4.2, 3.8, 3.9, 4.1, 4.7, 3.1, 5.1, 2.6,
+            5.2, 2.4, 6.6, 0.6, 6.9, 0.2, 17.4, 7.7, 19.2, 11, 15.1, 10.8, 3.3, 4.9, 3.6, 4.5,
+            5, 2.7, 5.7, 1.7, 6.5, 0.6, 20.4, 8.8, 26.4, 13.4, 27.2, 15.8, 24.4, 16.1, 17.4, 12.9,
+            3.7, 4.5, 4.5, 3.4, 5.4, 2.1, 5.7, 1.8, 24, 12.7, 29.1, 16.3, 30.2, 17.6, 28.4, 17.2,
+            22.8, 14.3, 4.5, 3.3, 4.8, 3, 4.8, 3, 4.5, 3.3, 22.8, 14.3, 28.4, 17.2, 30.2, 17.6,
+            29.1, 16.3, 24, 12.7, 5.7, 1.8, 5.4, 2.1, 4.5, 3.4, 3.7, 4.5, 17.4, 12.9, 24.4, 16.1,
+            27.2, 15.8, 26.4, 13.4, 20.4, 8.8, 6.5, 0.6, 5.7, 1.7, 5, 2.7, 3.6, 4.5, 3.3, 4.9,
+            15.1, 10.8, 19.2, 11, 17.4, 7.7, 6.9, 0.2, 6.6, 0.6, 5.2, 2.4, 5.1, 2.6, 4.7, 3.1,
+            3.9, 4.1, 4.2, 3.8, 5.1, 2.6, 6, 1.3, 6.3, 1, 5.5, 2, 5.1, 2.6, 5.1, 2.6, 5.1, 2.6,
+            5.1, 2.6, 4.9, 2.8, 5.1, 2.6, 5.3, 2.3, 5.1, 2.6, 5.1, 2.6, 5.1, 2.6
+          ]
+        },
+        {
+          "at": [-30, 0],
+          "value": [
+            -6, 0, -6, 0.5, -6, 1.6, -6, 1.2, -6, 0, -6, -1.2, -6, -1.6, -6, -0.5, -6, 0, -6, 0.1,
+            -6, 1.9, -6, 2.4, -19.1, 1.6, -22.6, 0, -19.1, -1.6, -6, -2.4, -6, -1.9, -6, -0.1,
+            -6, 0.9, -6, 1.9, -22.2, 2.1, -29.9, 1.3, -32, 0, -29.9, -1.3, -22.2, -2.1, -6, -1.9,
+            -6, -0.9, -6, 0.4, -6, 0.8, -27.5, 0.8, -33.8, 0.5, -35.6, 0, -33.8, -0.5, -27.5, -0.8,
+            -6, -0.8, -6, -0.4, -6, -0.4, -6, -0.8, -27.5, -0.8, -33.8, -0.5, -35.6, 0, -33.8, 0.5,
+            -27.5, 0.8, -6, 0.8, -6, 0.4, -6, -0.9, -6, -1.9, -22.2, -2.1, -29.9, -1.3, -32, 0,
+            -29.9, 1.3, -22.2, 2.1, -6, 1.9, -6, 0.9, -6, -0.1, -6, -1.9, -6, -2.4, -19.1, -1.6,
+            -22.6, 0, -19.1, 1.6, -6, 2.4, -6, 1.9, -6, 0.1, -6, 0, -6, -0.5, -6, -1.6, -6, -1.2,
+            -6, 0, -6, 1.2, -6, 1.6, -6, 0.5, -6, 0, -6, 0, -6, 0, -6, 0, -6, -0.3, -6, 0, -6, 0.3,
+            -6, 0, -6, 0, -6, 0
+          ]
+        },
+        {
+          "at": [0, 0],
+          "value": {}
+        },
+        {
+          "at": [30, 0],
+          "value": [
+            6, 0, 6, -0.5, 6, -1.6, 6, -1.2, 6, 0, 6, 1.2, 6, 1.6, 6, 0.5, 6, 0, 6, -0.1, 6, -1.9,
+            6, -2.4, 19.1, -1.6, 22.6, 0, 19.1, 1.6, 6, 2.4, 6, 1.9, 6, 0.1, 6, -0.9, 6, -1.9,
+            22.2, -2.1, 29.9, -1.3, 32, 0, 29.9, 1.3, 22.2, 2.1, 6, 1.9, 6, 0.9, 6, -0.4, 6, -0.8,
+            27.5, -0.8, 33.8, -0.5, 35.6, 0, 33.8, 0.5, 27.5, 0.8, 6, 0.8, 6, 0.4, 6, 0.4, 6, 0.8,
+            27.5, 0.8, 33.8, 0.5, 35.6, 0, 33.8, -0.5, 27.5, -0.8, 6, -0.8, 6, -0.4, 6, 0.9, 6, 1.9,
+            22.2, 2.1, 29.9, 1.3, 32, 0, 29.9, -1.3, 22.2, -2.1, 6, -1.9, 6, -0.9, 6, 0.1, 6, 1.9,
+            6, 2.4, 19.1, 1.6, 22.6, 0, 19.1, -1.6, 6, -2.4, 6, -1.9, 6, -0.1, 6, 0, 6, 0.5, 6, 1.6,
+            6, 1.2, 6, 0, 6, -1.2, 6, -1.6, 6, -0.5, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0.3, 6, 0, 6, -0.3,
+            6, 0, 6, 0, 6, 0
+          ]
+        },
+        {
+          "at": [-30, 30],
+          "value": [
+            -5.1, -2.5, -5.5, -2, -6.3, -1, -6, -1.3, -5.1, -2.5, -4.2, -3.8, -3.9, -4.1, -4.7, -3.1,
+            -5.1, -2.5, -5.2, -2.4, -6.6, -0.6, -6.9, -0.2, -17.4, -7.7, -19.2, -11, -15.1, -10.8,
+            -3.3, -4.9, -3.6, -4.5, -5, -2.7, -5.7, -1.7, -6.5, -0.6, -20.4, -8.8, -26.4, -13.4,
+            -27.2, -15.8, -24.4, -16.1, -17.4, -12.9, -3.7, -4.5, -4.5, -3.4, -5.4, -2.1, -5.7, -1.8,
+            -24, -12.7, -29.1, -16.3, -30.2, -17.6, -28.4, -17.2, -22.8, -14.3, -4.5, -3.3, -4.8, -3,
+            -4.8, -3, -4.5, -3.3, -22.8, -14.3, -28.4, -17.2, -30.2, -17.6, -29.1, -16.3, -24, -12.7,
+            -5.7, -1.8, -5.4, -2.1, -4.5, -3.4, -3.7, -4.5, -17.4, -12.9, -24.4, -16.1, -27.2, -15.8,
+            -26.4, -13.4, -20.4, -8.8, -6.5, -0.6, -5.7, -1.7, -5, -2.7, -3.6, -4.5, -3.3, -4.9,
+            -15.1, -10.8, -19.2, -11, -17.4, -7.7, -6.9, -0.2, -6.6, -0.6, -5.2, -2.4, -5.1, -2.5,
+            -4.7, -3.1, -3.9, -4.1, -4.2, -3.8, -5.1, -2.5, -6, -1.3, -6.3, -1, -5.5, -2, -5.1, -2.5,
+            -5.1, -2.5, -5.1, -2.5, -5.1, -2.5, -4.9, -2.8, -5.1, -2.5, -5.3, -2.3, -5.1, -2.5,
+            -5.1, -2.5, -5.1, -2.5
+          ]
+        },
+        {
+          "at": [0, 30],
+          "value": [
+            0, -3, -0.4, -3, -1.2, -3, -0.9, -3, 0, -3, 0.9, -3, 1.2, -3, 0.4, -3, 0, -3, -0.1, -3,
+            -1.5, -3, -1.8, -3, -1.2, -10.9, 0, -12.9, 1.2, -10.9, 1.8, -3, 1.5, -3, 0.1, -3,
+            -0.6, -3, -1.4, -3, -1.5, -12.7, -1, -17.4, 0, -18.6, 1, -17.4, 1.5, -12.7, 1.4, -3,
+            0.6, -3, -0.3, -3, -0.6, -3, -0.6, -15.9, -0.3, -19.7, 0, -20.7, 0.3, -19.7, 0.6, -15.9,
+            0.6, -3, 0.3, -3, 0.3, -3, 0.6, -3, 0.6, -15.9, 0.3, -19.7, 0, -20.7, -0.3, -19.7,
+            -0.6, -15.9, -0.6, -3, -0.3, -3, 0.6, -3, 1.4, -3, 1.5, -12.7, 1, -17.4, 0, -18.6,
+            -1, -17.4, -1.5, -12.7, -1.4, -3, -0.6, -3, 0.1, -3, 1.5, -3, 1.8, -3, 1.2, -10.9,
+            0, -12.9, -1.2, -10.9, -1.8, -3, -1.5, -3, -0.1, -3, 0, -3, 0.4, -3, 1.2, -3, 0.9, -3,
+            0, -3, -0.9, -3, -1.2, -3, -0.4, -3, 0, -3, 0, -3, 0, -3, 0, -3, 0.2, -3, 0, -3,
+            -0.2, -3, 0, -3, 0, -3, 0, -3
+          ]
+        },
+        {
+          "at": [30, 30],
+          "value": [
+            5.1, -2.5, 4.7, -3.1, 3.9, -4.1, 4.2, -3.8, 5.1, -2.5, 6, -1.3, 6.3, -1, 5.5, -2,
+            5.1, -2.5, 5, -2.7, 3.6, -4.5, 3.3, -4.9, 15.1, -10.8, 19.2, -11, 17.4, -7.7, 6.9, -0.2,
+            6.6, -0.6, 5.2, -2.4, 4.5, -3.4, 3.7, -4.5, 17.4, -12.9, 24.4, -16.1, 27.2, -15.8,
+            26.4, -13.4, 20.4, -8.8, 6.5, -0.6, 5.7, -1.7, 4.8, -3, 4.5, -3.3, 22.8, -14.3,
+            28.4, -17.2, 30.2, -17.6, 29.1, -16.3, 24, -12.7, 5.7, -1.8, 5.4, -2.1, 5.4, -2.1,
+            5.7, -1.8, 24, -12.7, 29.1, -16.3, 30.2, -17.6, 28.4, -17.2, 22.8, -14.3, 4.5, -3.3,
+            4.8, -3, 5.7, -1.7, 6.5, -0.6, 20.4, -8.8, 26.4, -13.4, 27.2, -15.8, 24.4, -16.1,
+            17.4, -12.9, 3.7, -4.5, 4.5, -3.4, 5.2, -2.4, 6.6, -0.6, 6.9, -0.2, 17.4, -7.7,
+            19.2, -11, 15.1, -10.8, 3.3, -4.9, 3.6, -4.5, 5, -2.7, 5.1, -2.5, 5.5, -2, 6.3, -1,
+            6, -1.3, 5.1, -2.5, 4.2, -3.8, 3.9, -4.1, 4.7, -3.1, 5.1, -2.5, 5.1, -2.5, 5.1, -2.5,
+            5.1, -2.5, 5.3, -2.3, 5.1, -2.5, 4.9, -2.8, 5.1, -2.5, 5.1, -2.5, 5.1, -2.5
+          ]
+        }
+      ],
+      "description": "Pseudo-3D head turn: the face center shifts most, the silhouette least (far side compresses)."
+    },
+    {
+      "id": "headTilt",
+      "target": "bone:head.rotation",
+      "params": ["AngleZ"],
+      "keys": [
+        { "at": [-30], "value": -10 },
+        { "at": [30], "value": 10 }
+      ]
+    },
+    {
+      "id": "neckTilt",
+      "target": "bone:neck.rotation",
+      "params": ["AngleZ"],
+      "keys": [
+        { "at": [-30], "value": -3 },
+        { "at": [30], "value": 3 }
+      ]
+    },
+    {
+      "id": "backHairTurn",
+      "target": "warp:backHairWarp.offsets",
+      "params": ["AngleX"],
+      "keys": [
+        {
+          "at": [-30],
+          "value": [7, 0, 7, 0, 7, 0, 7, 0, 7, 0, 7, 0, 7, 0, 7, 0, 7, 0, 7, 0, 7, 0, 7, 0, 7, 0, 7, 0, 7, 0]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [30],
+          "value": [
+            -7, 0, -7, 0, -7, 0, -7, 0, -7, 0, -7, 0, -7, 0, -7, 0, -7, 0, -7, 0, -7, 0, -7, 0,
+            -7, 0, -7, 0, -7, 0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "backHairPitch",
+      "target": "warp:backHairWarp.offsets",
+      "params": ["AngleY"],
+      "keys": [
+        {
+          "at": [-30],
+          "value": [
+            0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4,
+            0, -4, 0, -4, 0, -4
+          ]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [30],
+          "value": [0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4]
+        }
+      ]
+    },
+    {
+      "id": "backHairSway",
+      "target": "warp:backHairWarp.offsets",
+      "params": ["HairBack"],
+      "keys": [
+        {
+          "at": [-1],
+          "value": [
+            0, 0, 0, 0, 0, 0, 3, 0.2, 3, 0.2, 3, 0.2, 8, 0.6, 8, 0.6, 8, 0.6, 14, 1.1, 14, 1.1,
+            14, 1.1, 20, 1.6, 20, 1.6, 20, 1.6
+          ]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [1],
+          "value": [
+            0, 0, 0, 0, 0, 0, -3, 0.2, -3, 0.2, -3, 0.2, -8, 0.6, -8, 0.6, -8, 0.6, -14, 1.1,
+            -14, 1.1, -14, 1.1, -20, 1.6, -20, 1.6, -20, 1.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "frontHairSway",
+      "target": "warp:frontHairWarp.offsets",
+      "params": ["HairFront"],
+      "keys": [
+        {
+          "at": [-1],
+          "value": [0, 0, 0, 0, 0, 0, 0, 0, 3, 0.2, 3, 0.2, 3, 0.2, 3, 0.2, 9, 0.7, 9, 0.7, 9, 0.7, 9, 0.7]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [1],
+          "value": [
+            0, 0, 0, 0, 0, 0, 0, 0, -3, 0.2, -3, 0.2, -3, 0.2, -3, 0.2, -9, 0.7, -9, 0.7, -9, 0.7,
+            -9, 0.7
+          ]
+        }
+      ]
+    },
+    {
+      "target": "warp:sideHairWarpR.offsets",
+      "params": ["HairSide"],
+      "keys": [
+        {
+          "at": [-1],
+          "value": [0, 0, 0, 0, 5, 0.4, 5, 0.4, 12, 1, 12, 1, 22, 1.8, 22, 1.8]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [1],
+          "value": [0, 0, 0, 0, -5, 0.4, -5, 0.4, -12, 1, -12, 1, -22, 1.8, -22, 1.8]
+        }
+      ]
+    },
+    {
+      "target": "warp:sideHairWarpL.offsets",
+      "params": ["HairSide"],
+      "keys": [
+        {
+          "at": [-1],
+          "value": [0, 0, 0, 0, 5, 0.4, 5, 0.4, 12, 1, 12, 1, 22, 1.8, 22, 1.8]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [1],
+          "value": [0, 0, 0, 0, -5, 0.4, -5, 0.4, -12, 1, -12, 1, -22, 1.8, -22, 1.8]
+        }
+      ]
+    },
+    {
+      "target": "warp:eyeBallWarp.offsets",
+      "params": ["EyeBallX"],
+      "keys": [
+        {
+          "at": [-1],
+          "value": [
+            -6, 0, -6, 0, -6, 0, -6, 0, -6, 0, -6, 0, -6, 0, -6, 0, -6, 0, -6, 0, -6, 0, -6, 0,
+            -6, 0, -6, 0
+          ]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [1],
+          "value": [6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0]
+        }
+      ]
+    },
+    {
+      "target": "warp:eyeBallWarp.offsets",
+      "params": ["EyeBallY"],
+      "keys": [
+        {
+          "at": [-1],
+          "value": [0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [1],
+          "value": [
+            0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4,
+            0, -4, 0, -4
+          ]
+        }
+      ]
+    },
+    {
+      "target": "part:eyeWhiteR.shape.d",
+      "params": ["EyeROpen"],
+      "keys": [
+        {
+          "at": [0],
+          "value": "M 181 267 C 186 276 197 280 209 280 C 221 280 231 276 236 264 C 231 274.8 221 278.8 209 278.8 C 197 278.8 186 274.8 181 267 Z"
+        },
+        {
+          "at": [1],
+          "value": "M 181 267 C 185 248 199 238 213 238 C 225 238 233 248 236 264 C 231 279 221 286 209 286 C 197 286 186 280 181 267 Z"
+        }
+      ],
+      "description": "Closed keyform: the lids meet; the eye white shrinks to a sliver under the lash, hiding everything it masks."
+    },
+    {
+      "target": "part:lashR.shape.d",
+      "params": ["EyeROpen"],
+      "keys": [
+        {
+          "at": [0],
+          "value": "M 236 264 L 233.9 268.1 L 231.4 271.6 L 228.4 274.3 L 225.1 276.5 L 221.5 278.1 L 217.6 279.2 L 213.4 279.8 L 209 280 L 204.6 279.8 L 200.3 279.2 L 196.2 278.3 L 192.4 276.9 L 188.9 275.1 L 185.8 272.8 L 183.1 270.1 L 181 267 L 179 261.3 L 183.2 265.8 L 185.1 268.5 L 187.6 270.7 L 190.5 272.5 L 193.6 274 L 197.1 275.2 L 200.8 276.1 L 204.8 276.8 L 209 277 L 213.1 277 L 217 276.5 L 220.6 275.6 L 223.9 274.2 L 227 272.5 L 230 270.4 L 232.8 267.5 L 235.1 263.6 Z"
+        },
+        {
+          "at": [1],
+          "value": "M 236 264 L 234.6 258.3 L 232.8 253.2 L 230.6 248.7 L 227.9 245 L 224.8 242 L 221.2 239.8 L 217.3 238.5 L 213 238 L 207.8 238.5 L 202.7 239.9 L 197.8 242.2 L 193.3 245.4 L 189.2 249.5 L 185.7 254.5 L 182.9 260.3 L 181 267 L 174.3 274.8 L 176.6 266.1 L 178.5 258.6 L 181.2 251.8 L 184.7 245.7 L 189.1 240.5 L 194.5 236.6 L 200.5 233.9 L 206.7 232.6 L 213 232.5 L 218.4 233.7 L 223.2 235.8 L 227.3 238.8 L 230.9 242.4 L 233.6 246.9 L 235.1 252.2 L 236 257.9 L 237 263.8 Z"
+        }
+      ]
+    },
+    {
+      "target": "part:lowerLidR.opacity",
+      "params": ["EyeROpen"],
+      "keys": [
+        { "at": [0], "value": 0 },
+        { "at": [1], "value": 0.85 }
+      ]
+    },
+    {
+      "target": "part:eyeWhiteL.shape.d",
+      "params": ["EyeLOpen"],
+      "keys": [
+        {
+          "at": [0],
+          "value": "M 331 267 C 326 276 315 280 303 280 C 291 280 281 276 276 264 C 281 274.8 291 278.8 303 278.8 C 315 278.8 326 274.8 331 267 Z"
+        },
+        {
+          "at": [1],
+          "value": "M 331 267 C 327 248 313 238 299 238 C 287 238 279 248 276 264 C 281 279 291 286 303 286 C 315 286 326 280 331 267 Z"
+        }
+      ],
+      "description": "Closed keyform: the lids meet; the eye white shrinks to a sliver under the lash, hiding everything it masks."
+    },
+    {
+      "target": "part:lashL.shape.d",
+      "params": ["EyeLOpen"],
+      "keys": [
+        {
+          "at": [0],
+          "value": "M 276 264 L 278.1 268.1 L 280.6 271.6 L 283.6 274.3 L 286.9 276.5 L 290.5 278.1 L 294.4 279.2 L 298.6 279.8 L 303 280 L 307.4 279.8 L 311.7 279.2 L 315.8 278.3 L 319.6 276.9 L 323.1 275.1 L 326.2 272.8 L 328.9 270.1 L 331 267 L 333 261.3 L 328.8 265.8 L 326.9 268.5 L 324.4 270.7 L 321.5 272.5 L 318.4 274 L 314.9 275.2 L 311.2 276.1 L 307.2 276.8 L 303 277 L 298.9 277 L 295 276.5 L 291.4 275.6 L 288.1 274.2 L 285 272.5 L 282 270.4 L 279.2 267.5 L 276.9 263.6 Z"
+        },
+        {
+          "at": [1],
+          "value": "M 276 264 L 277.4 258.3 L 279.2 253.2 L 281.4 248.7 L 284.1 245 L 287.2 242 L 290.8 239.8 L 294.7 238.5 L 299 238 L 304.2 238.5 L 309.3 239.9 L 314.2 242.2 L 318.7 245.4 L 322.8 249.5 L 326.3 254.5 L 329.1 260.3 L 331 267 L 337.7 274.8 L 335.4 266.1 L 333.5 258.6 L 330.8 251.8 L 327.3 245.7 L 322.9 240.5 L 317.5 236.6 L 311.5 233.9 L 305.3 232.6 L 299 232.5 L 293.6 233.7 L 288.8 235.8 L 284.7 238.8 L 281.1 242.4 L 278.4 246.9 L 276.9 252.2 L 276 257.9 L 275 263.8 Z"
+        }
+      ]
+    },
+    {
+      "target": "part:lowerLidL.opacity",
+      "params": ["EyeLOpen"],
+      "keys": [
+        { "at": [0], "value": 0 },
+        { "at": [1], "value": 0.85 }
+      ]
+    },
+    {
+      "target": "part:browR.shape.d",
+      "params": ["BrowRY"],
+      "keys": [
+        {
+          "at": [-1],
+          "value": "M 184 231 C 192 225 209 224 229 228 C 231 229 231 231 229 232 C 210 230 194 229 185 233 Z"
+        },
+        {
+          "at": [0],
+          "value": "M 184 230 C 192 222 208 218 229 221 C 231 222 231 224 229 225 C 210 223 194 226 185 232 Z"
+        },
+        {
+          "at": [1],
+          "value": "M 184 223 C 191 213 208 208 229 212 C 231 213 231 215 229 216 C 210 213 193 216 185 225 Z"
+        }
+      ]
+    },
+    {
+      "target": "part:browL.shape.d",
+      "params": ["BrowLY"],
+      "keys": [
+        {
+          "at": [-1],
+          "value": "M 328 231 C 320 225 303 224 283 228 C 281 229 281 231 283 232 C 302 230 318 229 327 233 Z"
+        },
+        {
+          "at": [0],
+          "value": "M 328 230 C 320 222 304 218 283 221 C 281 222 281 224 283 225 C 302 223 318 226 327 232 Z"
+        },
+        {
+          "at": [1],
+          "value": "M 328 223 C 321 213 304 208 283 212 C 281 213 281 215 283 216 C 302 213 319 216 327 225 Z"
+        }
+      ]
+    },
+    {
+      "id": "mouthShape",
+      "target": "part:mouth.shape.d",
+      "params": ["MouthOpen", "MouthForm"],
+      "keys": [
+        {
+          "at": [0, -1],
+          "value": "M 246 325 C 251 320.5 261 320.5 266 325 C 261 322 251 322 246 325 Z"
+        },
+        {
+          "at": [1, -1],
+          "value": "M 246 326 C 249 315 263 315 266 326 C 265 341 247 341 246 326 Z"
+        },
+        {
+          "at": [0, 0],
+          "value": "M 244 322 C 250 320.8 262 320.8 268 322 C 262 323 250 323 244 322 Z"
+        },
+        { "at": [1, 0], "value": "M 243 321 C 249 318 263 318 269 321 C 268 342 244 342 243 321 Z" },
+        { "at": [0, 1], "value": "M 242 318 C 249 324 263 324 270 318 C 263 326 249 326 242 318 Z" },
+        { "at": [1, 1], "value": "M 240 316 C 248 320 264 320 272 316 C 268 344 244 344 240 316 Z" }
+      ],
+      "description": "2D path keyforms: every keyform uses the same commands (M C C Z), so numbers interpolate."
+    },
+    {
+      "target": "part:teeth.opacity",
+      "params": ["MouthOpen"],
+      "keys": [
+        { "at": [0.1], "value": 0 },
+        { "at": [0.35], "value": 1 }
+      ]
+    },
+    {
+      "target": "part:tongue.opacity",
+      "params": ["MouthOpen"],
+      "keys": [
+        { "at": [0.1], "value": 0 },
+        { "at": [0.4], "value": 1 }
+      ]
+    },
+    {
+      "target": "part:tongue.shape.cy",
+      "params": ["MouthOpen"],
+      "keys": [
+        { "at": [0], "value": 326 },
+        { "at": [1], "value": 338 }
+      ]
+    },
+    {
+      "target": "part:blushR.opacity",
+      "params": ["Cheek"],
+      "keys": [
+        { "at": [0], "value": 0.3 },
+        { "at": [1], "value": 1 }
+      ]
+    },
+    {
+      "target": "part:blushL.opacity",
+      "params": ["Cheek"],
+      "keys": [
+        { "at": [0], "value": 0.3 },
+        { "at": [1], "value": 1 }
+      ]
+    },
+    {
+      "id": "bodyTurn",
+      "target": "warp:bodyWarp.offsets",
+      "params": ["BodyAngleX"],
+      "keys": [
+        {
+          "at": [-10],
+          "value": [
+            -3, 0, -11.4, 0, -13, 0, -11.4, 0, -3, 0, -2.5, 0, -9.6, 0, -11, 0, -9.6, 0, -2.5, 0,
+            -2.1, 0, -7.8, 0, -8.9, 0, -7.8, 0, -2.1, 0, -1.6, 0, -6, 0, -6.9, 0, -6, 0, -1.6, 0,
+            -1.2, 0, -4.6, 0, -5.2, 0, -4.6, 0, -1.2, 0, -1.2, 0, -4.6, 0, -5.2, 0, -4.6, 0, -1.2, 0
+          ]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [10],
+          "value": [
+            3, 0, 11.4, 0, 13, 0, 11.4, 0, 3, 0, 2.5, 0, 9.6, 0, 11, 0, 9.6, 0, 2.5, 0, 2.1, 0,
+            7.8, 0, 8.9, 0, 7.8, 0, 2.1, 0, 1.6, 0, 6, 0, 6.9, 0, 6, 0, 1.6, 0, 1.2, 0, 4.6, 0,
+            5.2, 0, 4.6, 0, 1.2, 0, 1.2, 0, 4.6, 0, 5.2, 0, 4.6, 0, 1.2, 0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bodyLean",
+      "target": "bone:body.rotation",
+      "params": ["BodyAngleX"],
+      "keys": [
+        { "at": [-10], "value": -92.5 },
+        { "at": [10], "value": -87.5 }
+      ]
+    },
+    {
+      "id": "breathChest",
+      "target": "warp:bodyWarp.offsets",
+      "params": ["Breath"],
+      "keys": [
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [1],
+          "value": {
+            "0": [-3, -3.5],
+            "1": [-1.5, -3.5],
+            "2": [0, -3.5],
+            "3": [1.5, -3.5],
+            "4": [3, -3.5],
+            "5": [-2, -2.5],
+            "6": [-1, -2.5],
+            "7": [0, -2.5],
+            "8": [1, -2.5],
+            "9": [2, -2.5],
+            "10": [-1, -1.2],
+            "11": [-0.5, -1.2],
+            "12": [0, -1.2],
+            "13": [0.5, -1.2],
+            "14": [1, -1.2]
+          }
+        }
+      ]
+    },
+    {
+      "id": "breathNeck",
+      "target": "bone:neck.x",
+      "params": ["Breath"],
+      "keys": [
+        { "at": [0], "value": 220 },
+        { "at": [1], "value": 222.5 }
+      ]
+    }
+  ],
+  "physics": [
+    {
+      "id": "hairFront",
+      "inputs": [
+        { "param": "AngleX", "type": "x", "weight": 0.6 },
+        { "param": "AngleZ", "type": "angle", "weight": 0.33 },
+        { "param": "BodyAngleX", "type": "x", "weight": 1.5 }
+      ],
+      "outputs": [
+        { "param": "HairFront", "type": "angle", "scale": 0.08 }
+      ],
+      "segments": [
+        { "length": 22, "mass": 1 }
+      ],
+      "damping": 0.08,
+      "stiffness": 40,
+      "description": "Short, springy pendulum for the bangs."
+    },
+    {
+      "id": "hairSide",
+      "inputs": [
+        { "param": "AngleX", "type": "x", "weight": 0.8 },
+        { "param": "AngleZ", "type": "angle", "weight": 0.33 },
+        { "param": "BodyAngleX", "type": "x", "weight": 2 }
+      ],
+      "outputs": [
+        { "param": "HairSide", "type": "angle", "scale": 0.06 }
+      ],
+      "segments": [
+        { "length": 40, "mass": 1 },
+        { "length": 40, "mass": 1 }
+      ],
+      "damping": 0.06,
+      "stiffness": 12,
+      "description": "Two-segment chain for the side locks (output: last segment)."
+    },
+    {
+      "id": "hairBack",
+      "inputs": [
+        { "param": "AngleX", "type": "x", "weight": 0.8 },
+        { "param": "AngleZ", "type": "angle", "weight": 0.33 },
+        { "param": "BodyAngleX", "type": "x", "weight": 2 }
+      ],
+      "outputs": [
+        { "param": "HairBack", "type": "angle", "scale": 0.05 }
+      ],
+      "segments": [
+        { "length": 60, "mass": 1 },
+        { "length": 60, "mass": 1.5 }
+      ],
+      "damping": 0.05,
+      "stiffness": 6,
+      "description": "Long, slow chain for the back hair."
+    }
+  ],
+  "animations": [
+    {
+      "id": "idle",
+      "duration": 4,
+      "loop": true,
+      "description": "Breathing with a gentle body/head sway and one blink per loop; loops seamlessly. The sways use ease \"smooth\" (Catmull-Rom through the keys, closed over the loop), so they flow through every key instead of stopping at it.",
+      "tracks": [
+        {
+          "target": "param:Breath",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "smooth" },
+            { "t": 2, "v": 1, "ease": "smooth" },
+            { "t": 4, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:BodyAngleX",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "smooth" },
+            { "t": 1, "v": 2.5, "ease": "smooth" },
+            { "t": 2, "v": 0, "ease": "smooth" },
+            { "t": 3, "v": -2.5, "ease": "smooth" },
+            { "t": 4, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:AngleX",
+          "keys": [
+            { "t": 0, "v": 2, "ease": "smooth" },
+            { "t": 1, "v": 5, "ease": "smooth" },
+            { "t": 2, "v": 2, "ease": "smooth" },
+            { "t": 3, "v": -2, "ease": "smooth" },
+            { "t": 4, "v": 2 }
+          ]
+        },
+        {
+          "target": "param:AngleY",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "smooth" },
+            { "t": 1, "v": 3, "ease": "smooth" },
+            { "t": 2, "v": 0, "ease": "smooth" },
+            { "t": 3, "v": 3, "ease": "smooth" },
+            { "t": 4, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:AngleZ",
+          "keys": [
+            { "t": 0, "v": -2, "ease": "smooth" },
+            { "t": 1, "v": 3, "ease": "smooth" },
+            { "t": 2, "v": 5, "ease": "smooth" },
+            { "t": 3, "v": 0, "ease": "smooth" },
+            { "t": 4, "v": -2 }
+          ]
+        },
+        {
+          "target": "param:EyeBallX",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "smooth" },
+            { "t": 1, "v": 0.15, "ease": "smooth" },
+            { "t": 2, "v": 0, "ease": "smooth" },
+            { "t": 3, "v": -0.15, "ease": "smooth" },
+            { "t": 4, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:EyeLOpen",
+          "keys": [
+            { "t": 0, "v": 1 },
+            { "t": 2.6, "v": 1, "ease": "inQuad" },
+            { "t": 2.68, "v": 0 },
+            { "t": 2.74, "v": 0, "ease": "outQuad" },
+            { "t": 2.92, "v": 1 },
+            { "t": 4, "v": 1 }
+          ]
+        },
+        {
+          "target": "param:EyeROpen",
+          "keys": [
+            { "t": 0, "v": 1 },
+            { "t": 2.6, "v": 1, "ease": "inQuad" },
+            { "t": 2.68, "v": 0 },
+            { "t": 2.74, "v": 0, "ease": "outQuad" },
+            { "t": 2.92, "v": 1 },
+            { "t": 4, "v": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "blink",
+      "duration": 0.5,
+      "loop": false,
+      "description": "One blink (one-shot, starts at t=0): lids meet at t=0.08s, reopen by 0.32s. Starts and ends open (the default), so it layers with once: idle + \"blink,once,start=1.5\" adds a blink and hands the eyes back.",
+      "tracks": [
+        {
+          "target": "param:EyeLOpen",
+          "keys": [
+            { "t": 0, "v": 1, "ease": "inQuad" },
+            { "t": 0.08, "v": 0 },
+            { "t": 0.14, "v": 0, "ease": "outQuad" },
+            { "t": 0.32, "v": 1 }
+          ]
+        },
+        {
+          "target": "param:EyeROpen",
+          "keys": [
+            { "t": 0, "v": 1, "ease": "inQuad" },
+            { "t": 0.08, "v": 0 },
+            { "t": 0.14, "v": 0, "ease": "outQuad" },
+            { "t": 0.32, "v": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wink",
+      "duration": 1,
+      "loop": false,
+      "description": "One-shot wink designed for layering with once: the left eye (screen right) shuts, the other squints, a smile and blush come and go. Every track starts and ends at its parameter default, so idle + \"wink,once,start=1\" hands the face back seamlessly (over a talk layer, which also drives the mouth, use \"wink,add,once,start=1\").",
+      "tracks": [
+        {
+          "target": "param:EyeLOpen",
+          "keys": [
+            { "t": 0, "v": 1, "ease": "inQuad" },
+            { "t": 0.1, "v": 0 },
+            { "t": 0.5, "v": 0, "ease": "outQuad" },
+            { "t": 0.72, "v": 1 }
+          ]
+        },
+        {
+          "target": "param:EyeROpen",
+          "keys": [
+            { "t": 0, "v": 1, "ease": "inOutSine" },
+            { "t": 0.2, "v": 0.75, "ease": "inOutSine" },
+            { "t": 0.55, "v": 0.75, "ease": "inOutSine" },
+            { "t": 0.9, "v": 1 }
+          ]
+        },
+        {
+          "target": "param:BrowLY",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 0.15, "v": -0.5, "ease": "inOutSine" },
+            { "t": 0.55, "v": -0.5, "ease": "inOutSine" },
+            { "t": 0.85, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:BrowRY",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 0.2, "v": 0.4, "ease": "inOutSine" },
+            { "t": 0.6, "v": 0.4, "ease": "inOutSine" },
+            { "t": 0.95, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:MouthForm",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 0.2, "v": 1, "ease": "inOutSine" },
+            { "t": 0.6, "v": 1, "ease": "inOutSine" },
+            { "t": 1, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:Cheek",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 0.25, "v": 0.6, "ease": "inOutSine" },
+            { "t": 0.6, "v": 0.6, "ease": "inOutSine" },
+            { "t": 1, "v": 0 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "talk",
+      "duration": 2,
+      "loop": true,
+      "description": "Cheerful talking designed for mode \"add\": mouth flaps with a smile, small nods and raised brows, every head track centered on the parameter default (0), so look_around + \"talk,add\" keeps the head motion and adds the nods. 2 s divides the 4 s idle and the 6 s look_around, so layered loops close.",
+      "tracks": [
+        {
+          "target": "param:MouthOpen",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 0.133, "v": 0.8, "ease": "inOutSine" },
+            { "t": 0.267, "v": 0.25, "ease": "inOutSine" },
+            { "t": 0.4, "v": 1, "ease": "inOutSine" },
+            { "t": 0.533, "v": 0.1, "ease": "inOutSine" },
+            { "t": 0.667, "v": 0.7, "ease": "inOutSine" },
+            { "t": 0.8, "v": 0.2, "ease": "inOutSine" },
+            { "t": 0.933, "v": 0.9, "ease": "inOutSine" },
+            { "t": 1.067, "v": 0.3, "ease": "inOutSine" },
+            { "t": 1.2, "v": 0.6, "ease": "inOutSine" },
+            { "t": 1.333, "v": 0, "ease": "inOutSine" },
+            { "t": 1.467, "v": 0.75, "ease": "inOutSine" },
+            { "t": 1.6, "v": 0.1, "ease": "inOutSine" },
+            { "t": 1.733, "v": 0.5, "ease": "inOutSine" },
+            { "t": 1.867, "v": 0, "ease": "inOutSine" },
+            { "t": 2, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:MouthForm",
+          "keys": [
+            { "t": 0, "v": 0.5, "ease": "smooth" },
+            { "t": 0.5, "v": 0.8, "ease": "smooth" },
+            { "t": 1, "v": 0.4, "ease": "smooth" },
+            { "t": 1.5, "v": 0.7, "ease": "smooth" },
+            { "t": 2, "v": 0.5 }
+          ]
+        },
+        {
+          "target": "param:AngleY",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "smooth" },
+            { "t": 0.5, "v": -4, "ease": "smooth" },
+            { "t": 1, "v": 2, "ease": "smooth" },
+            { "t": 1.5, "v": -3, "ease": "smooth" },
+            { "t": 2, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:AngleX",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "smooth" },
+            { "t": 0.5, "v": 3, "ease": "smooth" },
+            { "t": 1, "v": 0, "ease": "smooth" },
+            { "t": 1.5, "v": -3, "ease": "smooth" },
+            { "t": 2, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:AngleZ",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "smooth" },
+            { "t": 0.5, "v": 2, "ease": "smooth" },
+            { "t": 1, "v": 0, "ease": "smooth" },
+            { "t": 1.5, "v": -2, "ease": "smooth" },
+            { "t": 2, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:BrowLY",
+          "keys": [
+            { "t": 0, "v": 0.2, "ease": "smooth" },
+            { "t": 0.5, "v": 0.5, "ease": "smooth" },
+            { "t": 1, "v": 0.2, "ease": "smooth" },
+            { "t": 1.5, "v": 0.4, "ease": "smooth" },
+            { "t": 2, "v": 0.2 }
+          ]
+        },
+        {
+          "target": "param:BrowRY",
+          "keys": [
+            { "t": 0, "v": 0.2, "ease": "smooth" },
+            { "t": 0.5, "v": 0.5, "ease": "smooth" },
+            { "t": 1, "v": 0.2, "ease": "smooth" },
+            { "t": 1.5, "v": 0.4, "ease": "smooth" },
+            { "t": 2, "v": 0.2 }
+          ]
+        },
+        {
+          "target": "param:Cheek",
+          "keys": [
+            { "t": 0, "v": 0.3, "ease": "smooth" },
+            { "t": 1, "v": 0.45, "ease": "smooth" },
+            { "t": 2, "v": 0.3 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nod",
+      "duration": 1.2,
+      "loop": false,
+      "description": "A friendly nod: head dips, rebounds, settles; eyes squint and she smiles.",
+      "tracks": [
+        {
+          "target": "param:AngleY",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "outQuad" },
+            { "t": 0.3, "v": -20, "ease": "inOutSine" },
+            { "t": 0.6, "v": 5, "ease": "inOutSine" },
+            { "t": 0.85, "v": -6, "ease": "inOutSine" },
+            { "t": 1.2, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:AngleZ",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 0.4, "v": 4, "ease": "inOutSine" },
+            { "t": 1.2, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:EyeLOpen",
+          "keys": [
+            { "t": 0, "v": 1, "ease": "inOutSine" },
+            { "t": 0.3, "v": 0.55, "ease": "inOutSine" },
+            { "t": 0.8, "v": 0.9, "ease": "inOutSine" },
+            { "t": 1.2, "v": 1 }
+          ]
+        },
+        {
+          "target": "param:EyeROpen",
+          "keys": [
+            { "t": 0, "v": 1, "ease": "inOutSine" },
+            { "t": 0.3, "v": 0.55, "ease": "inOutSine" },
+            { "t": 0.8, "v": 0.9, "ease": "inOutSine" },
+            { "t": 1.2, "v": 1 }
+          ]
+        },
+        {
+          "target": "param:MouthForm",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "outQuad" },
+            { "t": 0.3, "v": 1, "ease": "inOutSine" },
+            { "t": 1.2, "v": 0.6 }
+          ]
+        },
+        {
+          "target": "param:Cheek",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "outQuad" },
+            { "t": 0.4, "v": 0.7, "ease": "inOutSine" },
+            { "t": 1.2, "v": 0.4 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "look_around",
+      "duration": 6,
+      "loop": true,
+      "description": "Eyes lead, head follows: looks left, right and back; blinks while turning. Hair physics swings.",
+      "tracks": [
+        {
+          "target": "param:EyeBallX",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "outQuad" },
+            { "t": 0.3, "v": -0.9, "ease": "inOutSine" },
+            { "t": 1.6, "v": -0.6, "ease": "outQuad" },
+            { "t": 2.3, "v": 0.9, "ease": "inOutSine" },
+            { "t": 3.8, "v": 0.6, "ease": "inOutSine" },
+            { "t": 4.6, "v": 0, "ease": "inOutSine" },
+            { "t": 6, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:AngleX",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 0.9, "v": -26, "ease": "inOutSine" },
+            { "t": 1.8, "v": -22, "ease": "inOutSine" },
+            { "t": 3, "v": 26, "ease": "inOutSine" },
+            { "t": 4, "v": 22, "ease": "inOutSine" },
+            { "t": 5.2, "v": 0, "ease": "inOutSine" },
+            { "t": 6, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:AngleY",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 0.9, "v": 6, "ease": "inOutSine" },
+            { "t": 2.2, "v": -4, "ease": "inOutSine" },
+            { "t": 3.2, "v": 10, "ease": "inOutSine" },
+            { "t": 5.2, "v": 0, "ease": "inOutSine" },
+            { "t": 6, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:EyeBallY",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 0.9, "v": 0.3, "ease": "inOutSine" },
+            { "t": 3.2, "v": 0.5, "ease": "inOutSine" },
+            { "t": 5.2, "v": 0, "ease": "inOutSine" },
+            { "t": 6, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:BodyAngleX",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 1.2, "v": -4, "ease": "inOutSine" },
+            { "t": 3.3, "v": 4, "ease": "inOutSine" },
+            { "t": 5.4, "v": 0, "ease": "inOutSine" },
+            { "t": 6, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:EyeLOpen",
+          "keys": [
+            { "t": 0, "v": 1 },
+            { "t": 2, "v": 1, "ease": "inQuad" },
+            { "t": 2.08, "v": 0 },
+            { "t": 2.14, "v": 0, "ease": "outQuad" },
+            { "t": 2.32, "v": 1 },
+            { "t": 6, "v": 1 }
+          ]
+        },
+        {
+          "target": "param:EyeROpen",
+          "keys": [
+            { "t": 0, "v": 1 },
+            { "t": 2, "v": 1, "ease": "inQuad" },
+            { "t": 2.08, "v": 0 },
+            { "t": 2.14, "v": 0, "ease": "outQuad" },
+            { "t": 2.32, "v": 1 },
+            { "t": 6, "v": 1 }
+          ]
+        }
+      ]
+    }
+  ]
+}

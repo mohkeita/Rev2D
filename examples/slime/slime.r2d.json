@@ -1,0 +1,632 @@
+{
+  "format": "rev2d",
+  "version": 1,
+  "meta": {
+    "name": "slime",
+    "width": 400,
+    "height": 400,
+    "background": "#232c42",
+    "fps": 30,
+    "author": "Rev2D examples",
+    "description": "Squash & stretch mascot: warp keyforms for Squash/Lean, bone lift for Jump, add/multiply blending, ellipse-ry blink, mouth path morph, \"takeoff\"/\"land\" events."
+  },
+  "parameters": [
+    {
+      "id": "Squash",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "group": "Body",
+      "description": "+1 squashed flat and wide, -1 stretched tall and thin."
+    },
+    {
+      "id": "Lean",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "group": "Body",
+      "description": "Top of the body leans left (-1) / right (+1)."
+    },
+    {
+      "id": "Jump",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "group": "Body",
+      "description": "Height above the ground: 0 grounded, 1 = 140 px up."
+    },
+    {
+      "id": "EyeOpen",
+      "min": 0,
+      "max": 1,
+      "default": 1,
+      "group": "Face",
+      "description": "Both eyes: 0 closed (ellipse ry shrinks), 1 open."
+    },
+    {
+      "id": "MouthOpen",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "group": "Face",
+      "description": "0 small smile, 1 open \"wheee\"."
+    },
+    {
+      "id": "Glow",
+      "min": 0,
+      "max": 1,
+      "default": 0.4,
+      "group": "Effects",
+      "description": "Inner glow and sparkles (additive blending)."
+    }
+  ],
+  "bones": [
+    {
+      "id": "root",
+      "x": 200,
+      "y": 330,
+      "length": 0,
+      "description": "Ground contact point (the shadow stays here)."
+    },
+    {
+      "id": "body",
+      "parent": "root",
+      "x": 0,
+      "y": 0,
+      "rotation": -90,
+      "length": 150,
+      "description": "Lifted by Jump; everything but the shadow and floor rides on it."
+    }
+  ],
+  "warps": [
+    {
+      "id": "bodyWarp",
+      "parent": "body",
+      "rect": [92, 176, 216, 160],
+      "cols": 3,
+      "rows": 3,
+      "description": "Squash & stretch and lean lattice. Bottom row = ground line."
+    }
+  ],
+  "parts": [
+    {
+      "id": "floor",
+      "shape": { "type": "rect", "x": -10, "y": 324, "w": 420, "h": 86 },
+      "fill": {
+        "type": "linear",
+        "from": [0, 324],
+        "to": [0, 400],
+        "stops": [
+          [0, "#5b6f96"],
+          [1, "#34405c"]
+        ]
+      },
+      "z": 0,
+      "description": "Static floor (no parent = model space)."
+    },
+    {
+      "id": "shadow",
+      "parent": "root",
+      "shape": { "type": "ellipse", "cx": 200, "cy": 330, "rx": 96, "ry": 14, "detail": 8 },
+      "fill": {
+        "type": "radial",
+        "center": [200, 330],
+        "radius": 96,
+        "stops": [
+          [0, "#1c2438"],
+          [0.7, "#3d4a68"],
+          [1, "#ffffff"]
+        ]
+      },
+      "blend": "multiply",
+      "opacity": 0.9,
+      "z": 1,
+      "description": "Multiply blend darkens the floor; the white rim multiplies to no change. Shrinks and fades with Jump."
+    },
+    {
+      "id": "glow",
+      "parent": "body",
+      "shape": { "type": "ellipse", "cx": 200, "cy": 262, "rx": 150, "ry": 120, "detail": 14 },
+      "fill": {
+        "type": "radial",
+        "center": [200, 262],
+        "radius": 150,
+        "stops": [
+          [0, "rgba(90,255,200,0.55)"],
+          [0.55, "rgba(60,200,220,0.18)"],
+          [1, "rgba(40,120,200,0)"]
+        ]
+      },
+      "blend": "add",
+      "opacity": 0.55,
+      "z": 2,
+      "description": "Additive halo behind the body; Glow drives its opacity (0.55 at the default Glow 0.4)."
+    },
+    {
+      "id": "body",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 104 326 C 96 276 126 186 200 186 C 274 186 304 276 296 326 C 282 336 118 336 104 326 Z",
+        "detail": 10
+      },
+      "fill": {
+        "type": "radial",
+        "center": [170, 226],
+        "radius": 150,
+        "stops": [
+          [0, "#c9fff0"],
+          [0.45, "#5fe3c0"],
+          [1, "#1f9e93"]
+        ]
+      },
+      "stroke": { "color": "#0f5c5c", "width": 3 },
+      "z": 3
+    },
+    {
+      "id": "core",
+      "parent": "bodyWarp",
+      "shape": { "type": "rect", "x": 134, "y": 256, "w": 144, "h": 80, "detail": 6 },
+      "fill": {
+        "type": "radial",
+        "center": [206, 328],
+        "radius": 72,
+        "stops": [
+          [0, "rgba(120,255,220,0.55)"],
+          [1, "rgba(120,255,220,0)"]
+        ]
+      },
+      "blend": "add",
+      "opacity": 0.58,
+      "z": 4,
+      "mask": ["body"],
+      "description": "Additive inner light near the base, clipped to the body. The radial gradient is transparent beyond its 72 px radius, so a rect covering the visible top of that circle (inside bodyWarp) looks like the whole circle."
+    },
+    {
+      "id": "shine",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 134 250 C 132 222 150 204 172 200 C 158 212 148 230 146 252 C 144 260 136 260 134 250 Z",
+        "detail": 6
+      },
+      "fill": "rgba(255,255,255,0.85)",
+      "z": 5,
+      "description": "Glossy rim highlight."
+    },
+    {
+      "id": "shineDot",
+      "parent": "bodyWarp",
+      "shape": { "type": "ellipse", "cx": 150, "cy": 272, "rx": 5, "ry": 7 },
+      "fill": "rgba(255,255,255,0.8)",
+      "z": 5
+    },
+    {
+      "id": "cheeks",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 140 282 C 140 274 164 274 164 282 C 164 290 140 290 140 282 Z M 236 282 C 236 274 260 274 260 282 C 260 290 236 290 236 282 Z",
+        "detail": 4
+      },
+      "fill": "rgba(255,105,150,0.6)",
+      "z": 6
+    },
+    {
+      "id": "eyeL",
+      "parent": "bodyWarp",
+      "shape": { "type": "ellipse", "cx": 172, "cy": 262, "rx": 9, "ry": 14 },
+      "fill": "#12303a",
+      "z": 7,
+      "description": "Blinks by binding shape.ry to EyeOpen."
+    },
+    {
+      "id": "eyeR",
+      "parent": "bodyWarp",
+      "shape": { "type": "ellipse", "cx": 228, "cy": 262, "rx": 9, "ry": 14 },
+      "fill": "#12303a",
+      "z": 7,
+      "description": "Blinks by binding shape.ry to EyeOpen."
+    },
+    {
+      "id": "eyeShineL",
+      "parent": "bodyWarp",
+      "shape": { "type": "ellipse", "cx": 169, "cy": 256, "rx": 3.5, "ry": 4 },
+      "fill": "#ffffff",
+      "z": 8
+    },
+    {
+      "id": "eyeShineR",
+      "parent": "bodyWarp",
+      "shape": { "type": "ellipse", "cx": 225, "cy": 256, "rx": 3.5, "ry": 4 },
+      "fill": "#ffffff",
+      "z": 8
+    },
+    {
+      "id": "mouth",
+      "parent": "bodyWarp",
+      "shape": {
+        "type": "path",
+        "d": "M 188 284 C 192 291 208 291 212 284 C 208 287 192 287 188 284 Z",
+        "tolerance": 0.2
+      },
+      "fill": "#12303a",
+      "z": 7,
+      "description": "Path morph between a small smile and an open mouth (same M C C Z structure)."
+    },
+    {
+      "id": "sparkles",
+      "parent": "body",
+      "shape": {
+        "type": "path",
+        "d": "M 118 185 C 120.4 193.6 120.4 193.6 129 196 C 120.4 198.4 120.4 198.4 118 207 C 115.6 198.4 115.6 198.4 107 196 C 115.6 193.6 115.6 193.6 118 185 Z M 290 206 C 291.8 212.2 291.8 212.2 298 214 C 291.8 215.8 291.8 215.8 290 222 C 288.2 215.8 288.2 215.8 282 214 C 288.2 212.2 288.2 212.2 290 206 Z M 262 162 C 263.3 166.7 263.3 166.7 268 168 C 263.3 169.3 263.3 169.3 262 174 C 260.7 169.3 260.7 169.3 256 168 C 260.7 166.7 260.7 166.7 262 162 Z",
+        "tolerance": 0.2
+      },
+      "fill": "#bffff0",
+      "blend": "add",
+      "opacity": 0.2,
+      "z": 9,
+      "description": "Additive sparkles; opacity follows Glow."
+    }
+  ],
+  "bindings": [
+    {
+      "id": "squashStretch",
+      "target": "warp:bodyWarp.offsets",
+      "params": ["Squash"],
+      "keys": [
+        {
+          "at": [-1],
+          "value": [
+            11, -52, 3.7, -52, -3.7, -52, -11, -52, 14, -34.7, 4.7, -34.7, -4.7, -34.7, -14, -34.7,
+            17, -17.3, 5.7, -17.3, -5.7, -17.3, -17, -17.3, 20, 0, 6.7, 0, -6.7, 0, -20, 0
+          ]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [1],
+          "value": [
+            -16.5, 46, -5.5, 46, 5.5, 46, 16.5, 46, -21, 30.7, -7, 30.7, 7, 30.7, 21, 30.7,
+            -25.5, 15.3, -8.5, 15.3, 8.5, 15.3, 25.5, 15.3, -30, 0, -10, 0, 10, 0, 30, 0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lean",
+      "target": "warp:bodyWarp.offsets",
+      "params": ["Lean"],
+      "keys": [
+        {
+          "at": [-1],
+          "value": [
+            -34, 4, -34, 4, -34, 4, -34, 4, -22, 2, -22, 2, -22, 2, -22, 2, -8, 0, -8, 0, -8, 0,
+            -8, 0, 0, 0, 0, 0, 0, 0, 0, 0
+          ]
+        },
+        {
+          "at": [0],
+          "value": {}
+        },
+        {
+          "at": [1],
+          "value": [
+            34, 4, 34, 4, 34, 4, 34, 4, 22, 2, 22, 2, 22, 2, 22, 2, 8, 0, 8, 0, 8, 0, 8, 0, 0, 0,
+            0, 0, 0, 0, 0, 0
+          ]
+        }
+      ],
+      "description": "Adds to squashStretch (bindings on one property sum their deltas)."
+    },
+    {
+      "target": "bone:body.y",
+      "params": ["Jump"],
+      "keys": [
+        { "at": [0], "value": 0 },
+        { "at": [1], "value": -140 }
+      ],
+      "description": "Bone x/y are in the parent (root) frame: -y is up."
+    },
+    {
+      "target": "part:shadow.shape.rx",
+      "params": ["Jump"],
+      "keys": [
+        { "at": [0], "value": 96 },
+        { "at": [1], "value": 52 }
+      ]
+    },
+    {
+      "target": "part:shadow.shape.ry",
+      "params": ["Jump"],
+      "keys": [
+        { "at": [0], "value": 14 },
+        { "at": [1], "value": 8 }
+      ]
+    },
+    {
+      "target": "part:shadow.opacity",
+      "params": ["Jump"],
+      "keys": [
+        { "at": [0], "value": 0.9 },
+        { "at": [1], "value": 0.35 }
+      ]
+    },
+    {
+      "target": "part:shadow.shape.rx",
+      "params": ["Squash"],
+      "keys": [
+        { "at": [-1], "value": 84 },
+        { "at": [0], "value": 96 },
+        { "at": [1], "value": 112 }
+      ]
+    },
+    {
+      "target": "part:eyeL.shape.ry",
+      "params": ["EyeOpen"],
+      "keys": [
+        { "at": [0], "value": 1.5 },
+        { "at": [1], "value": 14 }
+      ]
+    },
+    {
+      "target": "part:eyeR.shape.ry",
+      "params": ["EyeOpen"],
+      "keys": [
+        { "at": [0], "value": 1.5 },
+        { "at": [1], "value": 14 }
+      ]
+    },
+    {
+      "target": "part:eyeShineL.opacity",
+      "params": ["EyeOpen"],
+      "keys": [
+        { "at": [0.4], "value": 0 },
+        { "at": [0.8], "value": 1 }
+      ]
+    },
+    {
+      "target": "part:eyeShineR.opacity",
+      "params": ["EyeOpen"],
+      "keys": [
+        { "at": [0.4], "value": 0 },
+        { "at": [0.8], "value": 1 }
+      ]
+    },
+    {
+      "target": "part:mouth.shape.d",
+      "params": ["MouthOpen"],
+      "keys": [
+        { "at": [0], "value": "M 188 284 C 192 291 208 291 212 284 C 208 287 192 287 188 284 Z" },
+        { "at": [1], "value": "M 186 282 C 190 280 210 280 214 282 C 214 302 186 302 186 282 Z" }
+      ]
+    },
+    {
+      "target": "part:glow.opacity",
+      "params": ["Glow"],
+      "keys": [
+        { "at": [0], "value": 0.25 },
+        { "at": [1], "value": 1 }
+      ]
+    },
+    {
+      "target": "part:core.opacity",
+      "params": ["Glow"],
+      "keys": [
+        { "at": [0], "value": 0.3 },
+        { "at": [1], "value": 1 }
+      ]
+    },
+    {
+      "target": "part:sparkles.opacity",
+      "params": ["Glow"],
+      "keys": [
+        { "at": [0.25], "value": 0 },
+        { "at": [1], "value": 1 }
+      ]
+    }
+  ],
+  "animations": [
+    {
+      "id": "idle",
+      "duration": 2,
+      "loop": true,
+      "description": "Jelly wobble with a glow pulse and a blink; loops seamlessly.",
+      "tracks": [
+        {
+          "target": "param:Squash",
+          "keys": [
+            { "t": 0, "v": 0.12, "ease": "inOutSine" },
+            { "t": 0.5, "v": -0.12, "ease": "inOutSine" },
+            { "t": 1, "v": 0.12, "ease": "inOutSine" },
+            { "t": 1.5, "v": -0.12, "ease": "inOutSine" },
+            { "t": 2, "v": 0.12 }
+          ]
+        },
+        {
+          "target": "param:Lean",
+          "keys": [
+            { "t": 0, "v": -0.15, "ease": "inOutSine" },
+            { "t": 1, "v": 0.15, "ease": "inOutSine" },
+            { "t": 2, "v": -0.15 }
+          ]
+        },
+        {
+          "target": "param:Glow",
+          "keys": [
+            { "t": 0, "v": 0.3, "ease": "inOutSine" },
+            { "t": 1, "v": 0.7, "ease": "inOutSine" },
+            { "t": 2, "v": 0.3 }
+          ]
+        },
+        {
+          "target": "param:EyeOpen",
+          "keys": [
+            { "t": 0, "v": 1 },
+            { "t": 1.3, "v": 1, "ease": "inQuad" },
+            { "t": 1.36, "v": 0 },
+            { "t": 1.42, "v": 0, "ease": "outQuad" },
+            { "t": 1.56, "v": 1 },
+            { "t": 2, "v": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "blink",
+      "duration": 0.3,
+      "loop": false,
+      "description": "One blink designed as a once-layer: EyeOpen starts and ends at 1 (the default) and nothing else moves, so idle + \"blink,once,start=0.5\" adds a blink and hands the eyes back to idle.",
+      "tracks": [
+        {
+          "target": "param:EyeOpen",
+          "keys": [
+            { "t": 0, "v": 1, "ease": "inQuad" },
+            { "t": 0.06, "v": 0 },
+            { "t": 0.12, "v": 0, "ease": "outQuad" },
+            { "t": 0.26, "v": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jump",
+      "duration": 1.5,
+      "loop": false,
+      "description": "One jump: anticipation squash, stretch on takeoff, apex, stretch while falling, impact squash, wobble settle.",
+      "tracks": [
+        {
+          "target": "param:Squash",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "outQuad" },
+            { "t": 0.28, "v": 0.9, "ease": "inQuad" },
+            { "t": 0.38, "v": -0.9, "ease": "outQuad" },
+            { "t": 0.72, "v": -0.1, "ease": "inQuad" },
+            { "t": 0.98, "v": -0.7, "ease": "linear" },
+            { "t": 1.04, "v": 1, "ease": "outQuad" },
+            { "t": 1.18, "v": -0.35, "ease": "inOutSine" },
+            { "t": 1.32, "v": 0.15, "ease": "inOutSine" },
+            { "t": 1.5, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:Jump",
+          "keys": [
+            { "t": 0, "v": 0 },
+            { "t": 0.36, "v": 0, "ease": "outQuad" },
+            { "t": 0.72, "v": 1, "ease": "inQuad" },
+            { "t": 1.04, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:Lean",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 0.28, "v": -0.3, "ease": "outQuad" },
+            { "t": 0.6, "v": 0.2, "ease": "inOutSine" },
+            { "t": 1.04, "v": 0, "ease": "outQuad" },
+            { "t": 1.2, "v": 0.25, "ease": "inOutSine" },
+            { "t": 1.5, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:EyeOpen",
+          "keys": [
+            { "t": 0, "v": 1 },
+            { "t": 0.22, "v": 1, "ease": "outQuad" },
+            { "t": 0.3, "v": 0.2, "ease": "outQuad" },
+            { "t": 0.42, "v": 1 },
+            { "t": 1, "v": 1, "ease": "outQuad" },
+            { "t": 1.06, "v": 0.1 },
+            { "t": 1.2, "v": 0.1, "ease": "outQuad" },
+            { "t": 1.34, "v": 1 }
+          ]
+        },
+        {
+          "target": "param:MouthOpen",
+          "keys": [
+            { "t": 0.3, "v": 0, "ease": "outQuad" },
+            { "t": 0.45, "v": 1 },
+            { "t": 0.9, "v": 1, "ease": "inQuad" },
+            { "t": 1.04, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:Glow",
+          "keys": [
+            { "t": 0, "v": 0.4 },
+            { "t": 1.02, "v": 0.4, "ease": "outQuad" },
+            { "t": 1.08, "v": 1, "ease": "inOutSine" },
+            { "t": 1.5, "v": 0.4 }
+          ]
+        }
+      ],
+      "events": [
+        { "t": 0.38, "name": "takeoff" },
+        {
+          "t": 1.04,
+          "name": "land",
+          "data": { "impact": 1 }
+        }
+      ]
+    },
+    {
+      "id": "jump_loop",
+      "duration": 1,
+      "loop": true,
+      "description": "Continuous hopping: lands and immediately takes off again (first key = last key).",
+      "tracks": [
+        {
+          "target": "param:Squash",
+          "keys": [
+            { "t": 0, "v": 0.85, "ease": "outQuad" },
+            { "t": 0.1, "v": -0.85, "ease": "outQuad" },
+            { "t": 0.45, "v": -0.1, "ease": "inQuad" },
+            { "t": 0.8, "v": -0.6, "ease": "linear" },
+            { "t": 0.86, "v": 1, "ease": "outQuad" },
+            { "t": 1, "v": 0.85 }
+          ]
+        },
+        {
+          "target": "param:Jump",
+          "keys": [
+            { "t": 0, "v": 0 },
+            { "t": 0.08, "v": 0, "ease": "outQuad" },
+            { "t": 0.45, "v": 0.85, "ease": "inQuad" },
+            { "t": 0.86, "v": 0 },
+            { "t": 1, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:MouthOpen",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "outQuad" },
+            { "t": 0.2, "v": 0.8, "ease": "inOutSine" },
+            { "t": 0.7, "v": 0.8, "ease": "inQuad" },
+            { "t": 0.86, "v": 0 },
+            { "t": 1, "v": 0 }
+          ]
+        },
+        {
+          "target": "param:Glow",
+          "keys": [
+            { "t": 0, "v": 0.8, "ease": "outQuad" },
+            { "t": 0.5, "v": 0.35, "ease": "inQuad" },
+            { "t": 0.86, "v": 0.9, "ease": "outQuad" },
+            { "t": 1, "v": 0.8 }
+          ]
+        }
+      ],
+      "events": [
+        { "t": 0.1, "name": "takeoff" },
+        {
+          "t": 0.86,
+          "name": "land",
+          "data": { "impact": 0.8 }
+        }
+      ]
+    }
+  ]
+}

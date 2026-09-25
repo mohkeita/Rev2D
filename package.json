@@ -1,0 +1,77 @@
+{
+  "name": "rev2d",
+  "version": "0.1.0",
+  "description": "AI-friendly 2D rigging & animation toolkit (Live2D/Spine-like): text-first model format, deterministic headless renderer, CLI, MCP server and live-reload editor.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "rev2d": "./bin/rev2d.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "rev2d-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./core": {
+      "rev2d-source": "./src/core/index.ts",
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./render": {
+      "rev2d-source": "./src/render/index.ts",
+      "types": "./dist/render/index.d.ts",
+      "default": "./dist/render/index.js"
+    },
+    "./render/browser": {
+      "rev2d-source": "./src/render/browser.ts",
+      "types": "./dist/render/browser.d.ts",
+      "default": "./dist/render/browser.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.map",
+    "bin",
+    "docs",
+    "examples",
+    "README.md",
+    "AGENTS.md",
+    "llms.txt",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "rev2d": "tsx src/cli/main.ts",
+    "build": "tsc -p tsconfig.build.json && npm run editor:build",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "prepublishOnly": "npm run clean && npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "editor:dev": "vite --config editor/vite.config.ts",
+    "editor:build": "vite build --config editor/vite.config.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "playwright-core": "^1.63.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}
