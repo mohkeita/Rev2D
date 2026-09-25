@@ -175,6 +175,13 @@ export const editorCommandSchema = z
       viewBox: z.union([z.literal('fit'), z.array(z.number()).length(4)]).describe(`"fit" or ${rectDescription}.`),
     }),
     z.strictObject({ type: z.literal('reload') }),
+    z.strictObject({
+      type: z.literal('open'),
+      file: z
+        .string()
+        .min(1)
+        .describe("Model file to open (relative to the working directory, or absolute); it must lie inside the editor's workspace root."),
+    }),
     z.strictObject({ type: z.literal('message'), text: z.string().min(1).describe('Shown to the human in the editor.') }),
   ])
   .describe('Command for the editor UI; see the tool description for the variants.');

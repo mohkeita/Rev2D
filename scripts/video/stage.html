@@ -1,0 +1,943 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rev2D video stage</title>
+<!--
+  Deterministic compositing stage for the Rev2D demo media (driven by scripts/video/compose.mjs).
+
+  Everything shown is real Rev2D output captured by scripts/video/0*.mjs into out/video/assets/
+  (frame sequences from `rev2d frames`, renders / sheets, verbatim command output, CDP screencast
+  frames of the real editor). This page only lays them out and animates the layout.
+
+  URL:  /scripts/video/stage.html?program=<master|showcase|verify|live|hero|gifLive|poster|verifyStill>
+  API:  await window.__ready            -> {w, h, duration, scenes: [{id, start, end}]}
+        await window.__setTime(seconds) -> renders that instant (resolves once every image is decoded)
+  No CSS transitions / animations: every frame is a pure function of the time.
+-->
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #161a24;
+  --surface2: #1c2130;
+  --line: #273043;
+  --line2: #323c52;
+  --text: #e8ecf6;
+  --muted: #a3adc4;
+  --dim: #6d7890;
+  --accent: #7aa2ff;
+  --accent-soft: rgba(122, 162, 255, 0.14);
+  --teal: #5eead4;
+  --ok: #7ee2a8;
+  --warn: #f5c26b;
+  --sans: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  --ko: "Malgun Gothic", "Segoe UI", sans-serif;
+  --mono: "Cascadia Mono", Consolas, "Malgun Gothic", monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); }
+body { position: relative; overflow: hidden; color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
+#stage { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+#stage::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(900px 520px at 12% -10%, rgba(122, 162, 255, 0.10), transparent 70%),
+    radial-gradient(700px 500px at 105% 110%, rgba(138, 92, 255, 0.07), transparent 70%);
+}
+.abs { position: absolute; }
+.scene { position: absolute; inset: 0; display: none; will-change: opacity; }
+
+/* type */
+.head { position: absolute; left: 64px; top: 38px; right: 260px; }
+.head .en { font-weight: 600; font-size: 34px; line-height: 1.18; letter-spacing: -0.01em; color: var(--text); }
+.head .ko { font-family: var(--ko); font-size: 19px; line-height: 1.4; color: var(--muted); margin-top: 6px; }
+.head .en b { color: var(--accent); font-weight: 600; }
+.mono { font-family: var(--mono); }
+.ko-text { font-family: var(--ko); }
+
+.chip { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 13px; border-radius: 999px; border: 1px solid var(--line2); background: rgba(255, 255, 255, 0.03); color: var(--muted); font-size: 14px; white-space: nowrap; }
+.chip.accent { border-color: rgba(122, 162, 255, 0.45); background: var(--accent-soft); color: #cddbff; }
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38); }
+.cmd { font-family: var(--mono); font-size: 13px; line-height: 1.5; color: #cfd7ea; background: #0b0e15; border: 1px solid #232a3b; border-radius: 10px; padding: 9px 12px; white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere; }
+.cmd .ps { color: var(--accent); margin-right: 8px; }
+.label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+
+/* brand bug */
+#bug { position: absolute; right: 44px; top: 44px; display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; color: #dfe6f7; letter-spacing: 0.01em; }
+#bug .sub { font-weight: 400; font-size: 13px; color: var(--dim); }
+
+/* media frames */
+.frame { position: absolute; overflow: hidden; border-radius: 14px; border: 1px solid var(--line); background: #0b0d13; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4); }
+#stage img { position: absolute; display: block; }
+.cam { position: absolute; left: 0; top: 0; width: 1600px; height: 900px; transform-origin: 0 0; }
+.cam > img { position: absolute; left: 0; top: 0; width: 1600px; height: 900px; }
+.tag { position: absolute; left: 10px; bottom: 10px; font-family: var(--mono); font-size: 12px; color: #e9eefb; background: rgba(10, 12, 18, 0.72); border: 1px solid rgba(255, 255, 255, 0.08); padding: 4px 9px; border-radius: 7px; white-space: nowrap; }
+.rec { position: absolute; right: 10px; bottom: 10px; left: auto; font-size: 11px; color: #ffd0d0; }
+.rec::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ff5d5d; margin-right: 6px; vertical-align: 1px; }
+
+/* terminal */
+.term { position: absolute; border-radius: 14px; border: 1px solid #262e40; background: #0a0c12; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45); overflow: hidden; }
+.term-bar { position: absolute; left: 0; right: 0; top: 0; height: 36px; display: flex; align-items: center; gap: 7px; padding: 0 14px; background: #121622; border-bottom: 1px solid #20283a; }
+.term-bar i { width: 11px; height: 11px; border-radius: 50%; background: #2b3346; display: inline-block; }
+.term-bar span { margin-left: 8px; font-family: var(--mono); font-size: 12px; color: var(--dim); }
+.term-body { position: absolute; left: 0; right: 0; top: 36px; bottom: 0; padding: 12px 16px 14px; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 34px); mask-image: linear-gradient(to bottom, transparent 0, #000 34px); }
+.term-inner { font-family: var(--mono); font-size: var(--tf, 13px); line-height: 1.5; color: #c9d1e3; white-space: pre-wrap; word-break: break-all; }
+.term-inner .cl { color: #f1f4fb; margin-top: 0.55em; }
+.term-inner .cl:first-child { margin-top: 0; }
+.term-inner .ps { color: var(--accent); }
+.term-inner .out { color: #aeb8cd; }
+.term-inner .okw { color: var(--ok); }
+.term-inner .c { color: #5d6780; }
+.term-inner .elide { color: #6d7890; font-style: italic; }
+.term-inner .cur { display: inline-block; width: 0.6em; height: 1.15em; vertical-align: -0.2em; background: #dbe3f5; margin-left: 1px; }
+
+/* code */
+.code { font-family: var(--mono); font-size: 12.6px; line-height: 1.6; color: #cfd7ea; }
+.code .ln { display: inline-block; width: 38px; text-align: right; margin-right: 16px; color: #4d5770; }
+.code .row { position: relative; padding: 0 10px; border-radius: 6px; white-space: pre; }
+.code .hl { position: absolute; left: 0; right: 0; top: 0; bottom: 0; border-radius: 6px; background: rgba(122, 162, 255, 0.16); box-shadow: inset 3px 0 0 var(--accent); opacity: 0; }
+.code .k { color: #8fb0ff; }
+.code .s { color: #a6e3a1; }
+.code .n { color: #ffb86b; }
+.code .p { color: #7c86a0; }
+.code .dots { color: #4d5770; }
+
+/* lists */
+.steps .st { position: absolute; left: 0; right: 0; border-radius: 14px; border: 1px solid transparent; padding: 14px 16px 14px 62px; }
+.steps .num { position: absolute; left: 16px; top: 15px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line2); color: var(--muted); font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.steps .t { font-size: 19px; font-weight: 600; color: var(--text); }
+.steps .tk { font-family: var(--ko); font-size: 14px; color: var(--muted); margin-top: 2px; }
+.steps .cmd { margin-top: 8px; font-size: 11.5px; padding: 6px 10px; }
+
+.tool { position: absolute; height: 38px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); font-family: var(--mono); font-size: 14px; color: #d6def0; display: flex; align-items: center; padding: 0 12px; white-space: nowrap; }
+.tool.hot { border-color: rgba(122, 162, 255, 0.7); background: rgba(122, 162, 255, 0.16); color: #fff; }
+
+.fact { position: absolute; top: 0; width: 220px; text-align: center; }
+.fact .v { font-size: 46px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+.fact .l { font-size: 16px; color: var(--muted); margin-top: 2px; }
+.fact .lk { font-family: var(--ko); font-size: 14px; color: var(--dim); margin-top: 4px; }
+
+.cap { position: absolute; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); padding: 14px 18px; overflow: hidden; }
+.cap .n { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 0.04em; }
+.cap .en { font-size: 22px; font-weight: 600; margin-top: 4px; }
+.cap .ko { font-family: var(--ko); font-size: 16px; color: var(--muted); margin-top: 3px; }
+.cap .meta { position: absolute; right: 18px; top: 15px; font-family: var(--mono); font-size: 12px; color: var(--dim); }
+.cap .meta.ok { color: var(--ok); }
+.cap.small { padding: 10px 13px; }
+.cap.small .n, .cap.small .meta { font-size: 10px; }
+.cap.small .meta { right: 13px; top: 11px; }
+.cap.small .en { font-size: 16.5px; margin-top: 3px; }
+.cap.small .ko { font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script src="/out/video/compose/stage-data.js"></script>
+<script>
+(() => {
+  'use strict';
+  const D = window.STAGE_DATA;
+  const params = new URLSearchParams(location.search);
+  const PROGRAM = params.get('program') || 'master';
+
+  // ---------- helpers ----------
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+  const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+  const ramp = (s, a, b) => clamp((s - a) / (b - a));
+  const win = (s, a, b, f = ease) => f(ramp(s, a, b));
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  function h(tag, props, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (k === 'class') el.className = v;
+      else if (k === 'style') el.style.cssText = v;
+      else if (k === 'html') el.innerHTML = v;
+      else el.setAttribute(k, v);
+    }
+    for (const kid of kids.flat()) {
+      if (kid == null || kid === false) continue;
+      el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    }
+    return el;
+  }
+  const pos = (x, y, w, hgt) => `left:${x}px;top:${y}px;` + (w != null ? `width:${w}px;` : '') + (hgt != null ? `height:${hgt}px;` : '');
+
+  let pending = [];
+  function setImg(img, url) {
+    if (img._src === url) return;
+    img._src = url;
+    img.src = url;
+    pending.push(img.decode().catch(() => {}));
+  }
+  function show(el, k, dy = 0, dx = 0, sc = 1) {
+    el.style.opacity = String(k);
+    el.style.visibility = k <= 0.001 ? 'hidden' : 'visible';
+    const t = [];
+    if (dx || dy) t.push(`translate(${dx}px, ${dy}px)`);
+    if (sc !== 1) t.push(`scale(${sc})`);
+    el.style.transform = t.join(' ');
+  }
+  /** fade + rise in at t0 */
+  function enter(el, s, t0, d = 0.5, dy = 16) {
+    const k = win(s, t0, t0 + d, easeOut);
+    show(el, k, (1 - k) * dy);
+    return k;
+  }
+  function logo(size) {
+    const id = 'g' + Math.random().toString(36).slice(2, 8);
+    const svg = `<svg width="${size}" height="${size}" viewBox="0 0 52 52" style="display:block;flex:none;filter:drop-shadow(0 6px 18px rgba(76,157,255,.35))">
+      <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6fb2ff"/><stop offset=".6" stop-color="#3b6fe0"/><stop offset="1" stop-color="#8a5cff"/></linearGradient></defs>
+      <rect width="52" height="52" rx="14" fill="url(#${id})"/>
+      <rect x="0.5" y="0.5" width="51" height="51" rx="13.5" fill="none" stroke="rgba(255,255,255,.12)"/>
+      <rect x="13" y="24" width="26" height="4" rx="2" fill="#fff" transform="rotate(-45 26 26)"/>
+      <circle cx="35.5" cy="16.5" r="4.5" fill="#fff"/><circle cx="16.5" cy="35.5" r="4.5" fill="#fff"/></svg>`;
+    return h('span', { style: 'display:inline-block;line-height:0', html: svg });
+  }
+  function headline(parent, en, ko, extraStyle = '') {
+    const el = h('div', { class: 'head', style: extraStyle }, h('div', { class: 'en', html: en }), h('div', { class: 'ko' }, ko));
+    parent.append(el);
+    return el;
+  }
+  function envelope(s, dur, fin = 0.35, fout = 0.35) {
+    return Math.min(win(s, 0, fin), 1 - win(s, dur - fout, dur));
+  }
+
+  // frame sequences from `rev2d frames`
+  function seq(id, s, offset = 0) {
+    const c = D.showcase[id];
+    const i = ((Math.floor(s * 30 + 1e-6) + offset) % c.frames + c.frames) % c.frames;
+    return `${c.base}/frame_${String(i).padStart(4, '0')}.png`;
+  }
+  // CDP screencast frames of the real editor: the last frame at or before video time vt
+  function screencast(tl, vt) {
+    const f = tl.frames;
+    let lo = 0, hi = f.length - 1;
+    if (vt <= f[0].t) return `${tl.base}/${f[0].file}`;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (f[mid].t <= vt) lo = mid; else hi = mid - 1;
+    }
+    return `${tl.base}/${f[lo].file}`;
+  }
+  /** camera over a 1600x900 capture: keys [{at, dur, r:[x,y,w,h]}] applied in order from `start` */
+  function cameraRect(start, keys, vt) {
+    let cur = start.slice();
+    for (const k of keys) {
+      if (vt < k.at) break;
+      const e = win(vt, k.at, k.at + k.dur);
+      cur = cur.map((v, i) => lerp(v, k.r[i], e));
+    }
+    return cur;
+  }
+  function applyCam(cam, paneW, r) {
+    const k = paneW / r[2];
+    cam.style.transform = `scale(${k}) translate(${-r[0]}px, ${-r[1]}px)`;
+  }
+  function fmtClock(t) {
+    const m = Math.floor(t / 60);
+    const s = t - m * 60;
+    return `${m}:${s.toFixed(1).padStart(4, '0')}`;
+  }
+
+  // ---------- live-edit timeline (shared by the master scene, the clip and the GIF) ----------
+  const LIVE = (() => {
+    const cues = D.live.cues;
+    const segs = [[1.4, 10.5], [12.2, 14.6], [16.75, 22.3]]; // real recording time, jump-cut between
+    const intro = 0.45;
+    const segLen = segs.reduce((a, [x, y]) => a + (y - x), 0);
+    const finalAt = intro + segLen; // scene time where the "AI sees what you see" beat starts
+    const finalDur = 2.5;
+    const dur = finalAt + finalDur;
+    // typing schedule: the command is fully typed exactly when it really started (cue.t)
+    let prevEnd = 0;
+    const sched = cues.map((c) => {
+      const len = c.command.length + 2;
+      let start = Math.max(prevEnd + 0.3, c.t - len / 75);
+      if (c.t - start < 0.22) start = c.t - 0.22;
+      prevEnd = c.tEnd;
+      return { ...c, typeStart: start };
+    });
+    function vtAt(s) {
+      let x = s - intro;
+      if (x < 0) return segs[0][0];
+      for (const [a, b] of segs) {
+        if (x < b - a) return a + x;
+        x -= b - a;
+      }
+      return Math.min(segs[segs.length - 1][1] + x, D.live.timeline.duration - 0.05);
+    }
+    const V = [252, 38, 1024, 576];
+    const cam = [
+      { at: 5.75, dur: 0.7, r: [290, 36, 1000, 562.5] },
+      { at: 9.0, dur: 0.6, r: [470, 18, 1130, 635.6] },
+      { at: 12.35, dur: 0.6, r: [200, 0, 1400, 787.5] },
+      { at: 18.3, dur: 0.6, r: [0, 0, 1600, 900] },
+      { at: 20.15, dur: 0.6, r: [700, 390, 900, 506.25] },
+      { at: segs[2][1] + 0.05, dur: 0.7, r: V },
+    ];
+    const captions = {
+      'a-validate': ['Validate the model', '모델 검증'],
+      'b-info': [`Find the hair parts: ${D.live.hairParts.length} found`, `머리카락 파트 찾기: ${D.live.hairParts.length}개`],
+      'c-recolor': ['Recolor the hair — the open editor turns teal', '머리색 변경 — 열린 에디터가 바로 청록색으로'],
+      'd-params': ['Pose the character in the open editor', '열린 에디터에서 바로 포즈 지정'],
+      'e-play': ['Play the talk animation', 'talk 애니메이션 재생'],
+      'e-pause': ['Pause it', '일시 정지'],
+      'f-screenshot': ['Screenshot exactly what the human sees', '사람이 보는 화면을 그대로 스크린샷'],
+      'g-message': ['Tell the human', '사람에게 메시지 전달'],
+    };
+    return { cues: sched, segs, intro, finalAt, finalDur, dur, vtAt, cam, captions, V };
+  })();
+
+  function termHtml(vt, opts = {}) {
+    const parts = [`<div class="c"># editor open: rev2d edit ${esc(D.live.modelPath)}</div>`];
+    let busy = false;
+    let lastDone = true;
+    for (const c of LIVE.cues) {
+      if (vt < c.typeStart) break;
+      const typingEnd = c.t;
+      const k = clamp((vt - c.typeStart) / Math.max(0.01, typingEnd - c.typeStart));
+      const full = c.command;
+      const n = Math.floor(full.length * k);
+      const typing = vt < typingEnd;
+      const cursor = typing ? '<span class="cur"></span>' : '';
+      parts.push(`<div class="cl"><span class="ps">$ </span>${esc(full.slice(0, n))}${cursor}</div>`);
+      if (vt >= c.tEnd) {
+        parts.push(`<div class="out">${formatOut(c, opts)}</div>`);
+        lastDone = true;
+      } else {
+        lastDone = false;
+        busy = true;
+      }
+    }
+    if (lastDone && !busy) {
+      const blink = Math.floor(vt * 2.2) % 2 === 0;
+      parts.push(`<div class="cl"><span class="ps">$ </span>${blink ? '<span class="cur"></span>' : ''}</div>`);
+    }
+    return parts.join('');
+  }
+  function formatOut(c, opts) {
+    let text = (c.stdout || '') + (c.stderr || '');
+    text = text.replace(/\s+$/, '');
+    if (c.id === 'b-info') {
+      const lines = text.split('\n');
+      const keep = opts.infoLines ?? 9;
+      return esc(lines.slice(0, keep).join('\n')) + `\n<span class="elide">… ${lines.length - keep} more lines of JSON</span>`;
+    }
+    return esc(text).replace(/^ok\b/gm, '<span class="okw">ok</span>').replace(/(\s)ok(\s+#)/g, '$1<span class="okw">ok</span>$2');
+  }
+  function activeCue(vt) {
+    let cur = null;
+    for (const c of LIVE.cues) if (vt >= c.typeStart) cur = c;
+    return cur;
+  }
+
+  /** the live-edit layout, parameterised so the 1280x720 scene and the 800 px GIF share it */
+  function buildLive(root, L) {
+    const head = L.head ? headline(root, L.head[0], L.head[1], L.headStyle || '') : null;
+    const head2 = L.head2 ? headline(root, L.head2[0], L.head2[1], L.headStyle || '') : null;
+    const term = h('div', { class: 'term', style: pos(...L.term) + `--tf:${L.termFont}px` },
+      h('div', { class: 'term-bar' }, h('i'), h('i'), h('i'), h('span', {}, 'terminal · rev2d CLI')),
+      h('div', { class: 'term-body' }, h('div', { class: 'term-inner' })));
+    if (L.termBar === false) term.querySelector('.term-bar span').textContent = 'terminal';
+    const termInner = term.querySelector('.term-inner');
+    const pane = h('div', { class: 'frame', style: pos(...L.editor) });
+    const cam = h('div', { class: 'cam' });
+    const img = h('img');
+    cam.append(img);
+    pane.append(cam);
+    const rec = h('div', { class: 'tag rec' }, '');
+    pane.append(rec);
+    const paneTag = h('div', { class: 'tag' }, 'the real Rev2D editor (Chrome)');
+    pane.append(paneTag);
+    const cap = h('div', { class: 'cap', style: pos(...L.cap) },
+      h('div', { class: 'n' }, ''), h('div', { class: 'en' }, ''), h('div', { class: 'ko' }, ''), h('div', { class: 'meta' }, ''));
+    if (L.capClass) cap.classList.add(L.capClass);
+    const [capN, capEn, capKo, capMeta] = cap.children;
+    // final beat: the AI's screenshot beside the editor
+    const aiBox = h('div', { class: 'abs', style: pos(L.term[0], L.term[1], L.term[2], L.term[3]) });
+    const aiW = L.term[2];
+    const aiH = Math.round(aiW * 500 / 896);
+    const aiFrame = h('div', { class: 'frame', style: pos(0, Math.round((L.editor[3] - aiH) / 2) + (L.editor[1] - L.term[1]), aiW, aiH) + 'background:#efe6f2' },
+      h('img', { src: D.live.aiView, style: `left:0;top:0;width:${aiW}px;height:${aiH}px` }));
+    const aiTag = h('div', { class: 'tag' }, 'ai-view.png — returned to the AI');
+    aiFrame.append(aiTag);
+    const shotCmd = LIVE.cues.find((q) => q.id === 'f-screenshot');
+    const aiLbl = h('div', { class: 'abs mono', style: `left:0;top:${Math.round((L.editor[3] - aiH) / 2) + (L.editor[1] - L.term[1]) - 34}px;width:${aiW}px;font-size:${L.lblFont || 12.5}px;color:var(--muted)` }, h('span', { style: 'color:var(--accent)' }, '$ '), shotCmd.command);
+    aiBox.append(aiLbl, aiFrame);
+    root.append(term, pane, cap, aiBox);
+    const tagFix = L.tagFont ? [rec, paneTag, aiTag].forEach((t) => (t.style.fontSize = L.tagFont + 'px')) : null;
+
+    return (s, dur) => {
+      const vt = LIVE.vtAt(s);
+      const fin = win(s, LIVE.finalAt, LIVE.finalAt + 0.6);
+      if (head) {
+        const hk = win(s, 0, 0.5, easeOut);
+        const out = head2 ? clamp(1 - fin * 2) : 1;
+        show(head, hk * out, (1 - hk) * 16 - 6 * (1 - out));
+        if (head2) {
+          const k2 = clamp(fin * 2 - 1);
+          show(head2, k2, (1 - k2) * 10);
+        }
+      }
+      const kTerm = enter(term, s, 0.1, 0.5, 18);
+      show(term, kTerm * (1 - fin), (1 - kTerm) * 18);
+      enter(pane, s, 0.18, 0.5, 18);
+      enter(cap, s, 0.3, 0.5, 12);
+      show(aiBox, fin, (1 - fin) * 14);
+      const html = termHtml(vt, { infoLines: L.infoLines });
+      if (termInner._html !== html) { termInner._html = html; termInner.innerHTML = html; }
+      setImg(img, screencast(D.live.timeline, vt));
+      applyCam(cam, L.editor[2], cameraRect([0, 0, 1600, 900], LIVE.cam, vt));
+      rec.textContent = `recording ${fmtClock(vt)}`;
+      // step caption: the current command, then (final beat) the punchline
+      let n, en, ko, meta = '', metaCls = 'meta';
+      const c = activeCue(vt);
+      if (fin >= 0.5) {
+        n = 'rev2d editor screenshot'; en = 'Rendered from exactly what the human is looking at'; ko = '사람이 보고 있는 화면 그대로 렌더링';
+      } else if (c) {
+        n = `step ${LIVE.cues.indexOf(c) + 1} / ${LIVE.cues.length}`;
+        [en, ko] = LIVE.captions[c.id] || [c.label, ''];
+        if (vt >= c.tEnd) { meta = `exit ${c.exitCode} · ${c.durationMs} ms`; metaCls = 'meta ok'; }
+        else if (vt >= c.t) meta = 'running…';
+        else meta = 'typing…';
+      } else {
+        n = 'live edit'; en = 'Real commands, real output, the real editor'; ko = '실제 명령 · 실제 출력 · 실제 에디터';
+      }
+      capN.textContent = n; capEn.textContent = en; capKo.textContent = ko; capMeta.textContent = meta; capMeta.className = metaCls;
+      const tk = fin <= 0 || fin >= 1 ? 1 : fin < 0.5 ? 1 - fin * 2 : (fin - 0.5) * 2;
+      for (const el of [capN, capEn, capKo, capMeta]) el.style.opacity = String(tk);
+      // while the camera sits on the AI toast, the pane labels step aside
+      const tz = win(vt, 20.05, 20.35) * (1 - win(vt, LIVE.segs[2][1], LIVE.segs[2][1] + 0.3));
+      paneTag.style.opacity = String((1 - fin) * (1 - tz));
+      rec.style.opacity = String(1 - tz);
+    };
+  }
+
+  // ---------- scenes ----------
+  const SCENES = {};
+
+  SCENES.title = (root) => {
+    const chip = h('div', { class: 'chip accent abs', style: pos(96, 150) }, 'open source · MIT');
+    const word = h('div', { class: 'abs', style: pos(92, 196) + 'display:flex;align-items:center;gap:22px' }, logo(76),
+      h('div', { style: 'font-size:96px;font-weight:700;letter-spacing:-0.025em;line-height:1' }, 'Rev2D'));
+    const tag = h('div', { class: 'abs', style: pos(96, 312, 660) + 'font-size:36px;font-weight:600;line-height:1.22;letter-spacing:-0.01em' },
+      'Live2D/Spine-style 2D rigging,', h('br'), h('span', { style: 'color:var(--accent)' }, 'built for AI agents'));
+    const ko = h('div', { class: 'abs ko-text', style: pos(96, 412, 660) + 'font-size:23px;color:var(--muted)' }, 'AI 에이전트를 위한 Live2D·Spine 스타일 2D 리깅 툴');
+    const feats = h('div', { class: 'abs', style: pos(96, 478, 640) + 'display:flex;flex-wrap:wrap;gap:10px' },
+      ...['one JSON model', 'headless renderer', 'CLI', 'MCP server', 'live web editor'].map((x) => h('span', { class: 'chip' }, x)));
+    const card = h('div', { class: 'frame', style: pos(800, 96, 384, 480) + 'border-radius:22px;background:#efe6f2' });
+    const img = h('img', { style: 'left:0;top:0;width:384px;height:480px' });
+    card.append(img);
+    const cap = h('div', { class: 'abs mono', style: pos(800, 590, 384) + 'text-align:center;font-size:13px;color:var(--dim)' }, 'examples/hana · idle — rendered by rev2d frames');
+    root.append(chip, word, tag, ko, feats, card, cap);
+    return (s) => {
+      enter(chip, s, 0.1); enter(word, s, 0.2); enter(tag, s, 0.35); enter(ko, s, 0.5); enter(feats, s, 0.65);
+      const k = win(s, 0.15, 0.8, easeOut);
+      show(card, k, 0, (1 - k) * 30, 0.97 + 0.03 * k);
+      enter(cap, s, 0.8);
+      setImg(img, seq('hana-idle', s));
+    };
+  };
+
+  const SHOW_CELLS = [
+    { id: 'hana-look_around', label: 'hana · look_around', fit: { w: 360, x: 0, y: -26, h: 450 } },
+    { id: 'slime-jump_loop', label: 'slime · jump_loop', fit: { w: 360, x: 0, y: -45, h: 360 } },
+    { id: 'robot-arm-reach', label: 'robot-arm · reach', fit: { w: 360, x: 0, y: 0, h: 270 } },
+    { id: 'textured-flutter', label: 'textured · flutter', fit: { w: 360, x: 0, y: 0, h: 270 } },
+  ];
+  function montage(root, x0, y0, cw, ch, gap, opts = {}) {
+    const cells = SHOW_CELLS.map((c, i) => {
+      const cx = x0 + (i % 2) * (cw + gap);
+      const cy = y0 + Math.floor(i / 2) * (ch + gap);
+      const k = cw / 360;
+      const el = h('div', { class: 'frame cell', style: pos(cx, cy, cw, ch) + (opts.flat ? 'border-radius:0;border:0;box-shadow:none' : '') });
+      const img = h('img', { style: `left:${c.fit.x * k}px;top:${c.fit.y * k}px;width:${c.fit.w * k}px;height:${c.fit.h * k}px` });
+      el.append(img);
+      if (opts.labels !== false) {
+        const t = h('div', { class: 'tag' }, c.label);
+        if (opts.tagFont) t.style.fontSize = opts.tagFont + 'px';
+        el.append(t);
+      }
+      root.append(el);
+      return { el, img, c };
+    });
+    return cells;
+  }
+
+  SCENES.showcase = (root) => {
+    const head = headline(root, 'Four example rigs,<br><b>one file format</b>', '네 가지 예제 리그, 하나의 파일 포맷', 'right:auto;width:420px');
+    const items = [
+      ['hana', 'Live2D-style bust: warp-grid head turn, eye & mouth morphs, hair physics'],
+      ['slime', 'squash & stretch with warp keyforms'],
+      ['robot-arm', 'Spine-style skeleton: two-bone IK, skinned cable'],
+      ['textured', 'bitmap textures: atlas crops bent by warps'],
+    ];
+    const list = h('div', { class: 'abs', style: pos(64, 222, 384) });
+    const rows = items.map(([n, d]) => {
+      const r = h('div', { style: 'margin-bottom:22px' }, h('div', { class: 'mono', style: 'font-size:17px;color:var(--text);font-weight:600' }, n), h('div', { style: 'font-size:15px;color:var(--muted);margin-top:3px;line-height:1.4' }, d));
+      list.append(r);
+      return r;
+    });
+    const note = h('div', { class: 'abs', style: pos(64, 612, 400) + 'font-size:14px;color:var(--dim);line-height:1.45' }, 'Rendered headless by ', h('span', { class: 'mono', style: 'color:var(--muted)' }, 'rev2d frames'), ' at 30 fps.');
+    root.append(list, note);
+    const cells = montage(root, 484, 112, 360, 270, 14);
+    return (s) => {
+      enter(head, s, 0.05);
+      rows.forEach((r, i) => enter(r, s, 0.25 + i * 0.12, 0.45, 10));
+      enter(note, s, 0.8);
+      cells.forEach(({ el, img, c }, i) => {
+        const k = win(s, 0.1 + i * 0.1, 0.65 + i * 0.1, easeOut);
+        show(el, k, (1 - k) * 18, 0, 0.98 + 0.02 * k);
+        setImg(img, seq(c.id, s));
+      });
+    };
+  };
+
+  function codeRow(n, text, cls = '') {
+    // tiny JSON tokenizer: keys, strings, numbers, punctuation
+    let html = '';
+    const re = /("(?:[^"\\]|\\.)*")(\s*:)?|(-?\d+(?:\.\d+)?)|([{}\[\],:])|(\s+|[^"\d{}\[\],:\s-]+|-)/g;
+    let m;
+    while ((m = re.exec(text))) {
+      if (m[1]) html += m[2] ? `<span class="k">${esc(m[1])}</span>${esc(m[2])}` : `<span class="s">${esc(m[1])}</span>`;
+      else if (m[3]) html += `<span class="n">${m[3]}</span>`;
+      else if (m[4]) html += `<span class="p">${esc(m[4])}</span>`;
+      else html += esc(m[5]);
+    }
+    return h('div', { class: 'row ' + cls }, h('div', { class: 'hl' }), h('span', { class: 'ln' }, n == null ? '' : String(n)), h('span', { html }));
+  }
+
+  SCENES.json = (root) => {
+    const head = headline(root, 'One JSON file is <b>the whole model</b>', '모델 전체가 JSON 파일 하나');
+    const J = D.json;
+    const panel = h('div', { class: 'card abs', style: pos(64, 134, 606, 518) + 'padding:0;overflow:hidden' });
+    const bar = h('div', { class: 'mono', style: 'height:40px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted);background:#131722' }, J.file);
+    const body = h('div', { class: 'code', style: 'padding:12px 8px' });
+    const rowsA = [];
+    const rowsB = [];
+    body.append(codeRow(J.paramsHeader.n, J.paramsHeader.text, 'ctx'));
+    body.append(h('div', { class: 'row' }, h('span', { class: 'ln dots' }, '⋮')));
+    for (const l of J.param) { const r = codeRow(l.n, l.text); rowsA.push(r); body.append(r); }
+    body.append(h('div', { class: 'row' }, h('span', { class: 'ln dots' }, '⋮')));
+    body.append(codeRow(J.bindingsHeader.n, J.bindingsHeader.text, 'ctx'));
+    body.append(h('div', { class: 'row' }, h('span', { class: 'ln dots' }, '⋮')));
+    for (const l of J.binding) { const r = codeRow(l.n, l.text); rowsB.push(r); body.append(r); }
+    panel.append(bar, body);
+    // right: what it does
+    const right = h('div', { class: 'abs', style: pos(700, 134, 516) });
+    const lbl = h('div', { class: 'label' }, 'what that binding does');
+    const imgBox = h('div', { class: 'frame', style: 'position:relative;margin-top:12px;width:516px;height:231px;background:#2a2b31' });
+    imgBox.append(h('img', { src: J.sweep, style: 'left:0;top:0;width:516px;height:231px' }));
+    const map = h('div', { style: 'display:flex;margin-top:12px' },
+      ...[['AngleZ = −30', 'head −10°'], ['AngleZ = 0', 'head 0°'], ['AngleZ = +30', 'head +10°']].map(([a, b]) =>
+        h('div', { style: 'flex:1;text-align:center' }, h('div', { class: 'mono', style: 'font-size:14px;color:var(--text)' }, a), h('div', { class: 'mono', style: 'font-size:13px;color:var(--accent);margin-top:2px' }, '→ ' + b))));
+    const cmd = h('div', { class: 'cmd', style: 'margin-top:16px;font-size:12px' }, h('span', { class: 'ps' }, '$'), J.sweepCmd);
+    right.append(lbl, imgBox, map, cmd);
+    const counts = h('div', { class: 'abs', style: pos(700, 540, 516) },
+      h('div', { class: 'mono', style: 'font-size:12px;color:var(--dim);margin-bottom:9px' }, h('span', { style: 'color:var(--accent)' }, '$ '), J.infoCmd, '  → counts'),
+      h('div', { style: 'display:flex;flex-wrap:wrap;gap:7px' }, ...J.counts.map(([k, v]) => h('span', { class: 'chip', style: 'height:28px;font-size:13px' }, h('b', { style: 'color:var(--text)' }, String(v)), k))));
+    root.append(panel, right, counts);
+    const hlA = rowsA.filter((r, i) => i === 1).map((r) => r.firstChild);
+    const hlB = rowsB.filter((r, i) => [2, 3, 5, 6].includes(i)).map((r) => r.firstChild);
+    return (s, dur) => {
+      enter(head, s, 0.05);
+      enter(panel, s, 0.2, 0.5, 18);
+      enter(right, s, 0.45, 0.5, 18);
+      enter(counts, s, 0.9, 0.5, 10);
+      const a = win(s, 1.0, 1.4) * (1 - win(s, 2.6, 3.0));
+      const b = win(s, 2.8, 3.2);
+      hlA.forEach((x) => (x.style.opacity = String(a)));
+      hlB.forEach((x) => (x.style.opacity = String(b)));
+    };
+  };
+
+  SCENES.verify = (root) => {
+    const head = headline(root, 'The AI <b>checks its own work</b>', 'AI가 스스로 결과를 검증합니다');
+    const V = D.verify;
+    const defs = [
+      { en: 'Draw the rig over the render', ko: '렌더 위에 리그를 겹쳐 확인', cmd: V.overlay.cmd, at: 0.5 },
+      { en: 'Sweep a 2D head turn, 3 × 3', ko: '머리 회전을 3×3으로 한눈에', cmd: V.sweep.cmd, at: 3.0 },
+      { en: 'Every expression in one image', ko: '모든 표정을 이미지 한 장에', cmd: V.overview.cmd, at: 5.5 },
+      { en: 'Check the loop without watching it', ko: '보지 않고도 루프를 수치로 검사', cmd: V.analyze.cmd, at: 8.0 },
+    ];
+    const steps = h('div', { class: 'abs steps', style: pos(56, 128, 520, 560) });
+    const rowEls = defs.map((d, i) => {
+      const el = h('div', { class: 'st', style: `top:${i * 136}px` },
+        h('div', { class: 'num' }, String(i + 1)), h('div', { class: 't' }, d.en), h('div', { class: 'tk' }, d.ko),
+        h('div', { class: 'cw', style: 'overflow:hidden' }, h('div', { class: 'cmd' }, h('span', { class: 'ps' }, '$'), d.cmd)));
+      steps.append(el);
+      return el;
+    });
+    const panel = h('div', { class: 'frame', style: pos(600, 120, 616, 566) + 'background:#1b1d24' });
+    const views = [];
+    // the real stdout of each step (first lines; for analyze the loop-seam lines)
+    const NL = String.fromCharCode(10);
+    const firstLines = (t, n) => t.replace(/\s+$/, '').split(NL).slice(0, n).join(NL);
+    const seam = V.analyze.text.split(NL).filter((l) => /close the loop|0% differ/.test(l)).map((l) => l.trim()).join(NL);
+    const outs = [firstLines(V.overlay.stdout, 1), firstLines(V.sweep.stdout, 2), firstLines(V.overview.stdout, 2), seam];
+    const outBox = h('div', { class: 'abs', style: pos(56, 566, 520, 120) });
+    const outEls = outs.map((t) => {
+      const el = h('div', { class: 'abs', style: 'left:0;top:0;width:520px' },
+        h('div', { class: 'label', style: 'margin-bottom:6px' }, outs.indexOf(t) === 3 ? 'stdout · loop seam' : 'stdout'),
+        h('div', { class: 'mono', style: 'font-size:12px;line-height:1.5;color:var(--ok);white-space:pre-wrap;overflow-wrap:anywhere' }, t));
+      outBox.append(el);
+      return el;
+    });
+    root.append(outBox);
+    // 1 overlay (768x960)
+    { const v = h('div', { class: 'abs', style: 'inset:0' }); v.append(h('img', { src: V.overlay.path, style: 'left:82px;top:-1px;width:453px;height:566px' })); views.push(v); }
+    // 2 sweep (1568x2000)
+    { const v = h('div', { class: 'abs', style: 'inset:0' }); v.append(h('img', { src: V.sweep.path, style: 'left:86px;top:0;width:444px;height:566px' })); views.push(v); }
+    // 3 overview (1583x2441) — panned top to bottom
+    const ovImg = h('img', { src: V.overview.path, style: 'left:0;top:0;width:616px;height:950px' });
+    { const v = h('div', { class: 'abs', style: 'inset:0' }); v.append(ovImg); views.push(v); }
+    // 4 analyze text
+    {
+      const v = h('div', { class: 'abs', style: 'inset:0;background:#0a0c12;padding:16px 18px' });
+      const lines = V.analyze.text.replace(/\s+$/, '').split('\n');
+      const pre = h('div', { class: 'mono', style: 'font-size:11.6px;line-height:1.4;color:#aeb8cd;white-space:pre' });
+      pre.innerHTML = lines.map((l) => {
+        const e = esc(l);
+        if (/^[A-Z][A-Z ]+(\(|$)/.test(l)) return `<span style="color:#f1f4fb;font-weight:600">${e}</span>`;
+        if (/0% differ|close the loop|never clamped/.test(l)) return `<span style="color:var(--ok)">${e}</span>`;
+        return e;
+      }).join('\n');
+      v.append(h('div', { class: 'mono', style: 'font-size:11.6px;color:#f1f4fb;margin-bottom:6px' }, h('span', { style: 'color:var(--accent)' }, '$ '), V.analyze.cmd), pre);
+      views.push(v);
+    }
+    views.forEach((v) => panel.append(v));
+    const tags = ['output: hana-overlay.png (768×960)', 'output: hana-sweep-anglex-angley.png (9 cells)', 'output: hana-overview.png (30 cells)', 'output: stdout · exit 0'];
+    const tag = h('div', { class: 'abs mono', style: 'right:64px;top:94px;font-size:12.5px;color:var(--dim);text-align:right' }, '');
+    root.append(steps, panel, tag);
+    let measured = false;
+    return (s, dur) => {
+      if (!measured) {
+        // accordion: only the active step shows its command; measure the collapsed row and the command block once
+        measured = true;
+        for (const el of rowEls) {
+          const cw = el.querySelector('.cw');
+          el._cmdH = cw.scrollHeight;
+          cw.style.height = '0px';
+          el._baseH = el.offsetHeight;
+        }
+      }
+      enter(head, s, 0.05);
+      enter(panel, s, 0.25, 0.5, 18);
+      let cur = 0;
+      defs.forEach((d, i) => { if (s >= d.at - 0.25) cur = i; });
+      let y = 0;
+      rowEls.forEach((el, i) => {
+        const a = defs[i].at - 0.25;
+        const b = i + 1 < defs.length ? defs[i + 1].at - 0.25 : 99;
+        const e = (i === 0 ? 1 : win(s, a, a + 0.4)) * (1 - win(s, b, b + 0.4));
+        const cw = el.querySelector('.cw');
+        cw.style.height = `${el._cmdH * e}px`;
+        cw.style.opacity = String(e);
+        el.style.top = `${y}px`;
+        y += el._baseH + el._cmdH * e + 10;
+        const k = win(s, 0.2 + i * 0.1, 0.65 + i * 0.1, easeOut);
+        el.style.opacity = String(k * (0.42 + 0.58 * e));
+        el.style.transform = `translateY(${(1 - k) * 10}px)`;
+        el.style.background = `rgba(122,162,255,${0.08 * e})`;
+        el.style.borderColor = `rgba(122,162,255,${0.38 * e})`;
+        const num = el.querySelector('.num');
+        num.style.background = `rgba(122,162,255,${e})`;
+        num.style.color = e > 0.5 ? '#0b1020' : 'var(--muted)';
+        num.style.borderColor = e > 0.5 ? 'var(--accent)' : 'var(--line2)';
+      });
+      outEls.forEach((el, i) => {
+        const a = defs[i].at + 0.3;
+        const b = i + 1 < defs.length ? defs[i + 1].at - 0.25 : 99;
+        const k = win(s, a, a + 0.35) * (1 - win(s, b, b + 0.3));
+        show(el, k, (1 - k) * 6);
+      });
+      views.forEach((v, i) => {
+        const a = defs[i].at - 0.25;
+        const b = i + 1 < defs.length ? defs[i + 1].at - 0.25 : 99;
+        // dip transition: the old view leaves before the new one arrives (two dense images never overlap)
+        const kin = i === 0 ? 1 : win(s, a + 0.12, a + 0.42);
+        const kout = 1 - win(s, b - 0.06, b + 0.12);
+        const k = kin * kout;
+        show(v, k, 0, 0, 0.985 + 0.015 * kin);
+      });
+      tag.textContent = tags[cur];
+      enter(tag, s, 0.4);
+      // pan the overview sheet downwards
+      const p = win(s, defs[2].at + 0.2, defs[3].at - 0.35);
+      ovImg.style.top = `${-(950 - 566) * p}px`;
+    };
+  };
+
+  SCENES.live = (root) => buildLive(root, {
+    head: ['AI edits through the CLI — <b>the open editor follows live</b>', 'AI가 CLI로 수정하면, 열린 에디터가 실시간으로 반영됩니다'],
+    head2: ['The AI <b>sees what you see</b>', 'AI도 사람과 같은 화면을 봅니다'],
+    term: [48, 128, 462, 540],
+    termFont: 13,
+    editor: [526, 128, 706, 397],
+    cap: [526, 541, 706, 127],
+    infoLines: 8,
+  });
+
+  SCENES.files = (root) => {
+    const head = headline(root, 'A real editor <b>for humans, too</b>', '사람을 위한 에디터도 함께', 'right:auto;width:560px');
+    const W = 1000, H = 562;
+    const pane = h('div', { class: 'frame', style: pos(140, 128, W, H) });
+    const cam = h('div', { class: 'cam' });
+    const img = h('img');
+    cam.append(img);
+    pane.append(cam);
+    const tag = h('div', { class: 'tag' }, 'the real editor: File menu (New · Open · Recent · Save As · Import · Close) → start screen');
+    pane.append(tag);
+    root.append(pane);
+    const T0 = 21.55; // real recording time at scene start (File click at 21.87, Close at 23.66)
+    const A = [0, 0, 1136, 639];
+    const B = [200, 176, 1136, 639];
+    return (s, dur) => {
+      enter(head, s, 0.05);
+      enter(pane, s, 0.1, 0.5, 14);
+      const vt = T0 + Math.max(0, s - 0.15);
+      setImg(img, screencast(D.files.timeline, vt));
+      applyCam(cam, W, cameraRect(A, [{ at: 23.75, dur: 0.7, r: B }], vt));
+    };
+  };
+
+  SCENES.mcp = (root) => {
+    const head = headline(root, 'Plug into <b>Claude Code</b> or any MCP client', 'Claude Code 등 MCP 클라이언트에 바로 연결');
+    const M = D.mcp;
+    const reg = h('div', { class: 'cmd abs', style: pos(64, 130, 1152) + 'font-size:16px;padding:13px 18px' }, h('span', { class: 'ps' }, '$'), M.register);
+    const lbl = h('div', { class: 'abs label', style: pos(64, 206) }, `${M.tools.length} tools · tools/list over stdio`);
+    const grid = h('div', { class: 'abs', style: pos(64, 232, 640, 440) });
+    const tools = M.tools.map((t, i) => {
+      const el = h('div', { class: 'tool', style: pos((i % 2) * 318, Math.floor(i / 2) * 47, 306) }, t);
+      grid.append(el);
+      return el;
+    });
+    const call = h('div', { class: 'card abs', style: pos(736, 206, 480, 466) + 'padding:16px 18px;overflow:hidden' });
+    const a = M.call.arguments;
+    const J = (v) => typeof v === 'string' ? `<span style="color:#a6e3a1">"${esc(v)}"</span>` : `<span style="color:#ffb86b">${v}</span>`;
+    const K = (k) => `<span style="color:#8fb0ff">"${esc(k)}"</span>`;
+    const inner = (o) => Object.entries(o).map(([k, v]) => `${K(k)}: ${J(v)}`).join(', ');
+    const req = h('div', { class: 'mono', style: 'font-size:12.5px;line-height:1.6;color:#cfd7ea;white-space:pre' });
+    const NL = String.fromCharCode(10);
+    req.innerHTML = `<span style="color:var(--dim)">→ tools/call</span>  <span style="color:#fff;font-weight:600">${esc(M.call.name)}</span>` + NL + '{' + NL +
+      Object.entries(a).map(([k, v]) => `  ${K(k)}: ${typeof v === 'object' ? `{ ${inner(v)} }` : J(v)}`).join(',' + NL) + NL + '}';
+    const resp = h('div', { class: 'mono', style: 'margin-top:12px;font-size:12.5px;color:var(--dim)' }, `← image/png ${M.image.width}×${M.image.height} + text`);
+    const imgWrap = h('div', { class: 'frame', style: 'position:absolute;left:18px;top:168px;width:216px;height:270px;background:#efe6f2' });
+    imgWrap.append(h('img', { src: M.image.path, style: 'left:0;top:0;width:216px;height:270px' }));
+    const txt = h('div', { class: 'abs mono', style: 'left:252px;top:172px;width:210px;font-size:11.5px;line-height:1.55;color:#aeb8cd;white-space:pre-wrap' }, M.call.textHead);
+    call.append(req, resp, imgWrap, txt);
+    root.append(reg, lbl, grid, call);
+    return (s, dur) => {
+      enter(head, s, 0.05);
+      enter(reg, s, 0.25);
+      enter(lbl, s, 0.55);
+      tools.forEach((el, i) => {
+        enter(el, s, 0.6 + i * 0.05, 0.35, 8);
+        el.classList.toggle('hot', M.tools[i] === M.call.name && s > 1.5);
+      });
+      enter(call, s, 1.5, 0.5, 16);
+      enter(imgWrap, s, 2.2, 0.5, 10);
+      enter(txt, s, 2.5, 0.5, 6);
+      enter(resp, s, 2.0, 0.4, 6);
+    };
+  };
+
+  SCENES.outro = (root) => {
+    const F = D.facts;
+    const word = h('div', { class: 'abs', style: 'left:0;right:0;top:150px;display:flex;justify-content:center;align-items:center;gap:22px' }, logo(72),
+      h('div', { style: 'font-size:90px;font-weight:700;letter-spacing:-0.025em;line-height:1' }, 'Rev2D'));
+    const line = h('div', { class: 'abs', style: 'left:0;right:0;top:262px;text-align:center;font-size:30px;font-weight:600;color:var(--text)' },
+      'open source · ', h('span', { style: 'color:var(--accent)' }, 'MIT'));
+    const ko = h('div', { class: 'abs ko-text', style: 'left:0;right:0;top:310px;text-align:center;font-size:20px;color:var(--muted)' }, '오픈소스 · MIT 라이선스');
+    const facts = [
+      [String(F.cli), 'CLI commands', 'CLI 명령'],
+      [String(F.mcpTools), 'MCP tools', 'MCP 도구'],
+      [String(F.examples.length), 'example models', '예제 모델'],
+      [F.tests.passed.toLocaleString('en-US'), 'tests passing', '테스트 통과'],
+    ];
+    const row = h('div', { class: 'abs', style: pos(160, 392, 960, 130) });
+    const fEls = facts.map(([v, l, lk], i) => {
+      const el = h('div', { class: 'fact', style: `left:${i * 240 + 10}px` }, h('div', { class: 'v' }, v), h('div', { class: 'l' }, l), h('div', { class: 'lk' }, lk));
+      row.append(el);
+      return el;
+    });
+    const tail = h('div', { class: 'abs', style: 'left:0;right:0;top:572px;text-align:center;font-size:17px;color:var(--muted)' },
+      'one JSON model · headless renderer · CLI · MCP server · live web editor');
+    root.append(word, line, ko, row, tail);
+    return (s) => {
+      enter(word, s, 0.05); enter(line, s, 0.25); enter(ko, s, 0.35);
+      fEls.forEach((el, i) => enter(el, s, 0.55 + i * 0.1, 0.45, 12));
+      enter(tail, s, 1.0);
+    };
+  };
+
+  // README hero: 2x2 montage (loops seamlessly at 8 s: idle 4 s, slime 1 s, reach 4 s, flutter 1.6 s)
+  SCENES.hero = (root) => {
+    const cells = [
+      { id: 'hana-idle', label: 'hana', fit: { w: 360, x: 0, y: -26, h: 450 } },
+      { id: 'slime-jump_loop', label: 'slime', fit: { w: 360, x: 0, y: -45, h: 360 } },
+      { id: 'robot-arm-reach', label: 'robot-arm', fit: { w: 360, x: 0, y: 0, h: 270 } },
+      { id: 'textured-flutter', label: 'textured', fit: { w: 360, x: 0, y: 0, h: 270 } },
+    ].map((c, i) => {
+      const el = h('div', { class: 'cell abs', style: pos((i % 2) * 360, Math.floor(i / 2) * 270, 360, 270) + 'overflow:hidden' });
+      const img = h('img', { style: `left:${c.fit.x}px;top:${c.fit.y}px;width:${c.fit.w}px;height:${c.fit.h}px` });
+      const t = h('div', { class: 'tag', style: 'font-size:11px;left:8px;bottom:8px;padding:3px 7px' }, c.label);
+      el.append(img, t);
+      root.append(el);
+      return { img, c };
+    });
+    const sep = h('div', { class: 'abs', style: 'left:359px;top:0;width:2px;height:540px;background:#0f1117' });
+    const sep2 = h('div', { class: 'abs', style: 'left:0;top:269px;width:720px;height:2px;background:#0f1117' });
+    root.append(sep, sep2);
+    return (s) => cells.forEach(({ img, c }) => setImg(img, seq(c.id, s)));
+  };
+
+  SCENES.gifLive = (root) => {
+    const top = h('div', { class: 'abs', style: pos(14, 10, 780) },
+      h('div', { style: 'font-size:17px;font-weight:600' }, 'An AI runs rev2d commands → ', h('span', { style: 'color:var(--accent)' }, 'the open editor updates live')),
+      h('div', { class: 'ko-text', style: 'font-size:12.5px;color:var(--muted);margin-top:2px' }, 'AI가 rev2d 명령을 실행하면 열린 에디터가 실시간으로 반영됩니다'));
+    root.append(top);
+    const upd = buildLive(root, {
+      term: [8, 62, 322, 390],
+      termFont: 10.5,
+      editor: [338, 62, 454, 255],
+      cap: [338, 327, 454, 125],
+      capClass: 'small',
+      infoLines: 6,
+      tagFont: 10,
+      lblFont: 11,
+    });
+    return (s, dur) => { show(top, 1); upd(s, dur); };
+  };
+
+  SCENES.poster = (root) => {
+    const F = D.facts;
+    const mit = h('div', { class: 'chip accent abs', style: pos(84, 150) }, 'open source · MIT');
+    const word = h('div', { class: 'abs', style: pos(80, 196) + 'display:flex;align-items:center;gap:20px' }, logo(70),
+      h('div', { style: 'font-size:92px;font-weight:700;letter-spacing:-0.025em;line-height:1' }, 'Rev2D'));
+    const tag = h('div', { class: 'abs', style: pos(84, 308, 560) + 'font-size:34px;font-weight:600;line-height:1.22;letter-spacing:-0.01em' },
+      'Live2D/Spine-style 2D rigging,', h('br'), h('span', { style: 'color:var(--accent)' }, 'built for AI agents'));
+    const ko = h('div', { class: 'abs ko-text', style: pos(84, 404, 580) + 'font-size:21px;color:var(--muted)' }, 'AI 에이전트를 위한 Live2D·Spine 스타일 2D 리깅 툴');
+    const feats = h('div', { class: 'abs', style: pos(84, 462, 580) + 'display:flex;flex-wrap:wrap;gap:8px' },
+      ...['one JSON model', 'headless renderer', 'CLI', 'MCP server', 'live web editor'].map((x) => h('span', { class: 'chip', style: 'font-size:13.5px;padding:0 11px' }, x)));
+    const facts = h('div', { class: 'abs', style: pos(84, 612, 1112) + 'display:flex;gap:34px;font-size:16px;color:var(--muted)' },
+      ...[[F.cli, 'CLI commands'], [F.mcpTools, 'MCP tools'], [F.examples.length, 'example models'], [F.tests.passed.toLocaleString('en-US'), 'tests passing']].map(([v, l]) =>
+        h('span', {}, h('b', { style: 'color:var(--text);font-size:20px;margin-right:7px' }, String(v)), l)));
+    const rule = h('div', { class: 'abs', style: pos(84, 586, 1112, 1) + 'background:var(--line)' });
+    root.append(word, tag, ko, feats, mit, rule, facts);
+    const posterCells = montage(root, 676, 128, 264, 198, 12, { tagFont: 11 });
+    const at = [0.8, 0.4, 1.33, 0.5];
+    return (s) => posterCells.forEach(({ img, c }, i) => setImg(img, seq(c.id, at[i])));
+  };
+
+  // README still, 1600x900: overlay render | 3x3 sweep sheet | analyze (verbatim lines)
+  SCENES.verifyStill = (root) => {
+    const head = headline(root, 'How the AI <b>checks its own work</b>', 'AI가 스스로 결과를 검증하는 방법', 'top:40px;left:56px');
+    head.querySelector('.en').style.fontSize = '46px';
+    head.querySelector('.ko').style.fontSize = '24px';
+    const V = D.verify;
+    const y0 = 172, H = 560, gap = 30, top = y0 + 92;
+    const cols = [
+      { cmd: 'rev2d render --overlay bones,warps,labels,grid', k: '렌더 위에 리그(본·워프·라벨)를 겹쳐 확인', img: V.overlay.path, w: 768, hgt: 960 },
+      { cmd: 'rev2d sheet --sweep AngleX=-30:30:3 --sweep AngleY=-30:30:3', k: '머리 회전을 3×3 그리드로 한눈에', img: V.sweep.path, w: 1568, hgt: 2000 },
+    ];
+    let x = 56;
+    for (const c of cols) {
+      const w = Math.round(H * c.w / c.hgt);
+      const fr = h('div', { class: 'frame', style: pos(x, top, w, H) + 'background:#1b1d24' }, h('img', { src: c.img, style: `left:0;top:0;width:${w}px;height:${H}px` }));
+      const lab = h('div', { class: 'abs', style: pos(x, y0, w) },
+        h('div', { class: 'mono', style: 'font-size:15px;line-height:1.4;color:var(--text)' }, c.cmd),
+        h('div', { class: 'ko-text', style: 'font-size:16px;color:var(--muted);margin-top:4px' }, c.k));
+      root.append(fr, lab);
+      x += w + gap;
+    }
+    const aw = 1544 - x;
+    const lines = V.analyze.text.replace(/\s+$/, '').split('\n');
+    const want = (l, i) => i === 0 || /^PHYSICS|never clamped|^LOOP SEAM|close the loop|0% differ|^BOUNDS|visible parts over all frames/.test(l);
+    const keep = lines.filter((l, i) => want(l, i) || (l.trim() === '' && i > 0 && want(lines[i + 1] || 'x', i + 1)));
+    const box = h('div', { class: 'frame', style: pos(x, top, aw, H) + 'background:#0a0c12;padding:22px 24px' });
+    const pre = h('div', { class: 'mono', style: 'font-size:14px;line-height:1.6;color:#aeb8cd;white-space:pre-wrap;overflow-wrap:anywhere' });
+    pre.innerHTML = keep.map((l) => {
+      const e = esc(l);
+      if (/^[A-Z][A-Z ]+(\(|$)/.test(l)) return `<span style="color:#f1f4fb;font-weight:600">${e}</span>`;
+      if (/0% differ|close the loop|never clamped/.test(l)) return `<span style="color:var(--ok)">${e}</span>`;
+      return e;
+    }).join('\n');
+    box.append(pre);
+    const lab = h('div', { class: 'abs', style: pos(x, y0, aw) },
+      h('div', { class: 'mono', style: 'font-size:15px;line-height:1.4;color:var(--text)' }, 'rev2d analyze --anim idle --warmup 8'),
+      h('div', { class: 'ko-text', style: 'font-size:16px;color:var(--muted);margin-top:4px' }, '보지 않고도 물리·루프 이음새를 수치로 검사'));
+    root.append(box, lab);
+    const foot = h('div', { class: 'abs', style: pos(56, 848, 1488) + 'font-size:16px;color:var(--dim)' },
+      'Real rev2d output on examples/hana (analyze lines excerpted). Also: sheet --overview, inspect --track, hit, diff.');
+    root.append(foot);
+    return () => {};
+  };
+
+  // ---------- programs ----------
+  const PROGRAMS = {
+    master: { w: 1280, h: 720, bug: true, scenes: [['title', 4.5], ['showcase', 7], ['json', 6.5], ['verify', 11], ['live', LIVE.dur], ['files', 3.9], ['mcp', 7.5], ['outro', 5]] },
+    showcase: { w: 1280, h: 720, bug: true, scenes: [['showcase', 10]] },
+    verify: { w: 1280, h: 720, bug: true, scenes: [['verify', 11]] },
+    live: { w: 1280, h: 720, bug: true, scenes: [['live', LIVE.dur]] },
+    hero: { w: 720, h: 540, bug: false, loop: true, scenes: [['hero', 8]] },
+    gifLive: { w: 800, h: 460, bug: false, scenes: [['gifLive', LIVE.dur]] },
+    poster: { w: 1280, h: 720, bug: false, still: true, scenes: [['poster', 1]] },
+    verifyStill: { w: 1600, h: 900, bug: true, still: true, scenes: [['verifyStill', 1]] },
+  };
+  const P = PROGRAMS[PROGRAM];
+  if (!P) throw new Error('unknown program ' + PROGRAM);
+  document.body.style.width = P.w + 'px';
+  document.body.style.height = P.h + 'px';
+  const stage = document.getElementById('stage');
+  let t0 = 0;
+  const scenes = P.scenes.map(([id, dur]) => {
+    const root = h('div', { class: 'scene', 'data-scene': id });
+    stage.append(root);
+    const update = SCENES[id](root, dur);
+    const sc = { id, dur, start: t0, end: t0 + dur, root, update };
+    t0 += dur;
+    return sc;
+  });
+  const duration = t0;
+  let bug = null;
+  if (P.bug) {
+    bug = h('div', { id: 'bug' }, logo(24), h('span', {}, 'Rev2D'));
+    stage.append(bug);
+  }
+
+  window.__setTime = async (t) => {
+    pending = [];
+    for (const sc of scenes) {
+      const s = t - sc.start;
+      const on = P.still || P.loop ? true : s >= -1e-6 && s <= sc.dur + 1e-6;
+      sc.root.style.display = on ? 'block' : 'none';
+      if (!on) continue;
+      const env = P.still || P.loop || PROGRAM === 'gifLive' ? 1 : envelope(s, sc.dur);
+      sc.root.style.opacity = String(env);
+      sc.update(P.still ? 99 : s, sc.dur);
+    }
+    if (bug) {
+      const cur = scenes.find((sc) => t >= sc.start && t < sc.end) || scenes[scenes.length - 1];
+      const hide = cur.id === 'title' || cur.id === 'outro';
+      const s = t - cur.start;
+      const k = hide ? 0 : envelope(s, cur.dur);
+      bug.style.opacity = String(P.still ? 1 : k);
+    }
+    await Promise.all(pending);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return true;
+  };
+  window.__ready = (async () => {
+    await document.fonts.ready;
+    return { program: PROGRAM, w: P.w, h: P.h, duration, loop: !!P.loop, still: !!P.still, scenes: scenes.map((s) => ({ id: s.id, start: s.start, end: s.end })), live: { segs: LIVE.segs, finalAt: LIVE.finalAt, dur: LIVE.dur } };
+  })();
+})();
+</script>
+</body>
+</html>

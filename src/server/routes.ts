@@ -1,6 +1,7 @@
 /**
  * /api/* endpoints of the editor protocol. Each handler either writes a response or throws an
- * HttpError / ApiError that the server turns into a JSON error body.
+ * HttpError / ApiError that the server turns into a JSON error body. The workspace endpoints (file
+ * management) live in workspace-routes.ts.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
@@ -16,17 +17,47 @@ import { HttpError, readJson, sendJson } from './http.js';
 import type { ModelStore } from './model-store.js';
 import { MAX_SCREENSHOT_PIXELS, parseCommand, parseEditorState, parseScreenshotQuery } from './protocol.js';
 import type { SseHub } from './sse.js';
+import { samePath, type RecentFiles, type WorkspaceRoot } from './workspace.js';
+import {
+  getDownload,
+  getFiles,
+  getTemplates,
+  getWorkspace,
+  openCommand,
+  postClose,
+  postImport,
+  postNew,
+  postOpen,
+  postSaveAs,
+  requireStore,
+} from './workspace-routes.js';
 
 export type ChangeOrigin = 'external' | 'editor';
+/** Who switched the open model: the editor UI (workspace endpoints) or an AI (EditorCommand "open"). */
+export type FileOrigin = 'editor' | 'ai';
 
 export interface ApiContext {
-  store: ModelStore;
+  /** The open model, or null while none is open (the UI shows its start screen). */
+  store: ModelStore | null;
+  /** Workspace root every file-management path is confined to. */
+  root: WorkspaceRoot;
+  recent: RecentFiles;
   sse: SseHub;
   maxBodyBytes: number;
-  /** Latest view state published by the editor UI. */
+  /** Body limit of POST /api/import (files travel base64-encoded). */
+  maxImportBytes: number;
+  /** Latest view state published by the editor UI for the open model (reset when it is switched). */
   state: EditorState | null;
-  /** Broadcast a model-changed event (and refresh the watched file set). */
-  modelChanged(origin: ChangeOrigin, mtimeMs: number, files: string[]): void;
+  /** Broadcast a model-changed event for `store` (ignored once another model is open) and refresh the watched file set. */
+  modelChanged(store: ModelStore, origin: ChangeOrigin, mtimeMs: number, files: string[]): void;
+  /**
+   * Make `store` the open model (null: close it): resets the view state, retargets the watcher and
+   * the registry entry, records the file as recently opened and broadcasts "file-changed". Returns
+   * how many event streams received it. Only call inside `exclusive`.
+   */
+  switchTo(store: ModelStore | null, origin: FileOrigin): Promise<number>;
+  /** Run a workspace operation (open, new, save as, import, close) after every earlier one finished. */
+  exclusive<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 type Handler = (ctx: ApiContext, req: IncomingMessage, res: ServerResponse, url: URL) => Promise<void> | void;
@@ -38,6 +69,15 @@ const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
   '/api/command': { POST: postCommand },
   '/api/screenshot': { GET: screenshot },
   '/api/info': { GET: info },
+  '/api/workspace': { GET: getWorkspace },
+  '/api/files': { GET: getFiles },
+  '/api/open': { POST: postOpen },
+  '/api/new': { POST: postNew },
+  '/api/save-as': { POST: postSaveAs },
+  '/api/close': { POST: postClose },
+  '/api/import': { POST: postImport },
+  '/api/download': { GET: getDownload },
+  '/api/templates': { GET: getTemplates },
 };
 
 const TEXTURE_PREFIX = '/api/texture/';
@@ -65,16 +105,34 @@ export async function handleApi(ctx: ApiContext, req: IncomingMessage, res: Serv
   return handler(ctx, req, res, url);
 }
 
+/** 409 when a request names a model file (`file`) other than the open one: the model was switched meanwhile. */
+function checkSameFile(ctx: ApiContext, store: ModelStore, file: unknown, what: string): void {
+  if (file === undefined || file === null || file === '') return;
+  if (typeof file !== 'string') throw new HttpError(400, `"file" must be a string (the model the ${what} is for)`, 'send the file of GET /api/model, or omit it');
+  const abs = path.resolve(ctx.root.dir, file);
+  if (!samePath(abs, store.file)) {
+    throw new HttpError(
+      409,
+      `the ${what} is for ${abs}, but the editor now has ${store.file} open`,
+      'the open model was switched (SSE event "file-changed"); load the open model (GET /api/model) and try again',
+      { file: store.file },
+    );
+  }
+}
+
 // ----------------------------------------------------------------------------- model file
 
 async function getModel(ctx: ApiContext, _req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const { text, mtimeMs } = await ctx.store.read();
-  sendJson(res, 200, { file: ctx.store.file, text, mtimeMs });
+  const store = requireStore(ctx);
+  const { text, mtimeMs } = await store.read();
+  sendJson(res, 200, { file: store.file, text, mtimeMs });
 }
 
 async function putModel(ctx: ApiContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const body = await readJson(req, ctx.maxBodyBytes);
-  const b = (typeof body === 'object' && body !== null && !Array.isArray(body) ? body : {}) as { text?: unknown; doc?: unknown; baseMtimeMs?: unknown };
+  const b = (typeof body === 'object' && body !== null && !Array.isArray(body) ? body : {}) as { text?: unknown; doc?: unknown; baseMtimeMs?: unknown; file?: unknown };
+  const store = requireStore(ctx);
+  checkSameFile(ctx, store, b.file, 'write');
   const hasText = b.text !== undefined;
   const hasDoc = b.doc !== undefined;
   if (hasText === hasDoc) {
@@ -94,12 +152,12 @@ async function putModel(ctx: ApiContext, req: IncomingMessage, res: ServerRespon
   }
   let text = hasText ? (b.text as string) : formatModelJson(b.doc);
   // Formatted writes keep the file's line endings (a CRLF checkout must not turn into a whole-file diff).
-  if (hasDoc && (await usesCrlf(ctx.store))) text = text.replace(/\n/g, '\r\n');
+  if (hasDoc && (await usesCrlf(store))) text = text.replace(/\n/g, '\r\n');
   const { diagnostics } = parseModelText(text);
   const ok = !hasErrors(diagnostics);
   const force = ['1', 'true'].includes(url.searchParams.get('force') ?? '');
   if (!ok && !force) {
-    const { mtimeMs } = await ctx.store.read().catch(() => ({ mtimeMs: 0 }));
+    const { mtimeMs } = await store.read().catch(() => ({ mtimeMs: 0 }));
     sendJson(res, 200, {
       ok,
       written: false,
@@ -109,8 +167,8 @@ async function putModel(ctx: ApiContext, req: IncomingMessage, res: ServerRespon
     });
     return;
   }
-  const mtimeMs = await ctx.store.write(text, base);
-  ctx.modelChanged('editor', mtimeMs, [ctx.store.file]);
+  const mtimeMs = await store.write(text, base);
+  ctx.modelChanged(store, 'editor', mtimeMs, [store.file]);
   sendJson(res, 200, { ok, written: true, diagnostics, mtimeMs });
 }
 
@@ -128,7 +186,7 @@ async function texture(ctx: ApiContext, res: ServerResponse, rawId: string): Pro
   } catch {
     throw new HttpError(400, `malformed texture id ${JSON.stringify(rawId)}`);
   }
-  const bytes = await ctx.store.texture(id);
+  const bytes = await requireStore(ctx).texture(id);
   res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': bytes.length, 'Cache-Control': 'no-store' });
   res.end(bytes);
 }
@@ -136,11 +194,13 @@ async function texture(ctx: ApiContext, res: ServerResponse, rawId: string): Pro
 // ----------------------------------------------------------------------------- live bridge
 
 async function events(ctx: ApiContext, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const { mtimeMs } = await ctx.store.read().catch(() => ({ mtimeMs: 0 }));
-  ctx.sse.open(req, res, { event: 'hello', data: { file: ctx.store.file, mtimeMs } });
+  const store = ctx.store;
+  const { mtimeMs } = store ? await store.read().catch(() => ({ mtimeMs: 0 })) : { mtimeMs: 0 };
+  ctx.sse.open(req, res, { event: 'hello', data: { file: store?.file ?? null, mtimeMs, root: ctx.root.dir } });
 }
 
 function getState(ctx: ApiContext, _req: IncomingMessage, res: ServerResponse): void {
+  requireStore(ctx);
   if (!ctx.state) {
     throw new HttpError(404, 'no editor state yet', 'the editor UI publishes its view state once it is open in a browser; screenshots use the default pose until then');
   }
@@ -148,13 +208,25 @@ function getState(ctx: ApiContext, _req: IncomingMessage, res: ServerResponse): 
 }
 
 async function postState(ctx: ApiContext, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  ctx.state = parseEditorState(await readJson(req, ctx.maxBodyBytes), ctx.store.file);
+  const body = await readJson(req, ctx.maxBodyBytes);
+  const store = requireStore(ctx);
+  // A tab that has not followed a switch yet must not publish its old model's view as the new one's.
+  const file = (body as { file?: unknown } | null)?.file;
+  if (typeof file === 'string' && path.isAbsolute(file)) checkSameFile(ctx, store, file, 'view state');
+  ctx.state = parseEditorState(body, store.file);
   res.writeHead(204, { 'Cache-Control': 'no-store' });
   res.end();
 }
 
 async function postCommand(ctx: ApiContext, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const command = parseCommand(await readJson(req, ctx.maxBodyBytes));
+  if (command.type === 'open') {
+    // Handled here: the server switches the model and every tab follows the "file-changed" event.
+    const { result, delivered } = await openCommand(ctx, command.file);
+    sendJson(res, 200, { delivered, file: result.file, mtimeMs: result.mtimeMs, notes: result.notes });
+    return;
+  }
+  if (command.type !== 'message') requireStore(ctx);
   const delivered = ctx.sse.broadcast('command', command);
   sendJson(res, 200, { delivered });
 }
@@ -162,7 +234,7 @@ async function postCommand(ctx: ApiContext, req: IncomingMessage, res: ServerRes
 // ----------------------------------------------------------------------------- rendering
 
 async function info(ctx: ApiContext, _req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const m = await ctx.store.loaded();
+  const m = await requireStore(ctx).loaded();
   sendJson(res, 200, { info: m.model ? modelInfo(m.model) : null, diagnostics: m.diagnostics });
 }
 
@@ -232,7 +304,7 @@ function defaultScale(viewBox: Rect): number {
 
 async function screenshot(ctx: ApiContext, _req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const q = parseScreenshotQuery(url.searchParams);
-  const m = await ctx.store.loaded();
+  const m = await requireStore(ctx).loaded();
   if (!m.rig || hasErrors(m.diagnostics)) {
     throw new HttpError(422, 'the model has errors and cannot be rendered', 'fix the listed errors (GET /api/info shows all diagnostics)', {
       diagnostics: m.diagnostics.filter((d) => d.severity === 'error'),

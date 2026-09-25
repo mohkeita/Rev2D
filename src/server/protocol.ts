@@ -1,9 +1,10 @@
 /**
- * Validation of editor-protocol payloads: view state (POST /api/state), commands (POST /api/command)
- * and screenshot query parameters. Errors are HttpErrors naming the offending field and the fix.
+ * Validation of editor-protocol payloads: view state (POST /api/state), commands (POST /api/command),
+ * workspace requests (POST /api/open|new|save-as|import) and screenshot query parameters. Errors are
+ * HttpErrors naming the offending field and the fix.
  */
 import { z } from 'zod';
-import type { EditorCommand, EditorState } from '../node/editor-registry.js';
+import type { EditorCommand, EditorState, ImportRequest, NewRequest, OpenRequest, SaveAsRequest } from '../node/editor-registry.js';
 import { OVERLAY_LAYERS } from '../api/index.js';
 import type { OverlayLayer } from '../render/index.js';
 import { HttpError } from './http.js';
@@ -81,6 +82,10 @@ const COMMANDS: Record<EditorCommand['type'], { schema: z.ZodType<EditorCommand>
     shape: '{"type":"focus","viewBox":[x,y,w,h] (w, h > 0) | "fit"}',
   },
   reload: { schema: z.strictObject({ type: z.literal('reload') }), shape: '{"type":"reload"}' },
+  open: {
+    schema: z.strictObject({ type: z.literal('open'), file: z.string().min(1, 'expected a non-empty path') }),
+    shape: '{"type":"open","file":"<model path: absolute, or relative to the workspace root>"}',
+  },
   message: { schema: z.strictObject({ type: z.literal('message'), text: z.string() }), shape: '{"type":"message","text":"<text>"}' },
 };
 
@@ -96,6 +101,83 @@ export function parseCommand(body: unknown): EditorCommand {
   const r = spec.schema.safeParse(body);
   if (!r.success) throw new HttpError(400, `invalid "${type}" command: ${issuesText(r.error)}`, `expected ${spec.shape}`);
   return r.data;
+}
+
+// ----------------------------------------------------------------------------- workspace requests
+
+const FilePath = z.string().min(1, 'expected a non-empty path');
+const CanvasSize = z.number().int('expected an integer').positive('expected a size > 0').max(8192, 'expected at most 8192');
+
+function parseRequest<T>(what: string, schema: z.ZodType<T>, body: unknown, shape: string): T {
+  const r = schema.safeParse(body);
+  if (!r.success) throw new HttpError(400, `invalid ${what} request: ${issuesText(r.error)}`, `expected ${shape}`);
+  return r.data;
+}
+
+export function parseOpenRequest(body: unknown): OpenRequest {
+  return parseRequest('open', z.strictObject({ file: FilePath }), body, '{"file": "<model path: absolute, or relative to the workspace root>"}');
+}
+
+export function parseNewRequest(body: unknown): NewRequest {
+  return parseRequest(
+    'new',
+    z.strictObject({
+      file: FilePath,
+      template: z.string().min(1).optional(),
+      name: z.string().optional(),
+      width: CanvasSize.optional(),
+      height: CanvasSize.optional(),
+      overwrite: z.boolean().optional(),
+    }),
+    body,
+    '{"file": "<path>.r2d.json", "template"?: "<name from GET /api/templates, default blank>", "name"?: "<meta.name>", "width"?: 1..8192, "height"?: 1..8192, "overwrite"?: <boolean>}',
+  );
+}
+
+export function parseSaveAsRequest(body: unknown): SaveAsRequest {
+  const req = parseRequest(
+    'save-as',
+    z.strictObject({
+      file: FilePath,
+      doc: z.unknown().optional(),
+      text: z.string().optional(),
+      overwrite: z.boolean().optional(),
+    }),
+    body,
+    '{"file": "<path>.r2d.json", "doc"?: {<model>} | "text"?: "<raw JSON/JSONC>" (neither: the open model file as it is on disk), "overwrite"?: <boolean>}',
+  );
+  if (req.doc !== undefined && req.text !== undefined) {
+    throw new HttpError(400, 'invalid save-as request: send "doc" or "text", not both', 'doc = the model object (formatted on write), text = the raw file contents');
+  }
+  if (req.doc !== undefined && (typeof req.doc !== 'object' || req.doc === null || Array.isArray(req.doc))) {
+    throw new HttpError(400, 'invalid save-as request: "doc" must be a JSON object (the whole model)', 'or send the raw file contents as "text"');
+  }
+  return req;
+}
+
+/** Most files one import may carry. */
+export const MAX_IMPORT_FILES = 64;
+
+export function parseImportRequest(body: unknown): ImportRequest {
+  const req = parseRequest(
+    'import',
+    z.strictObject({
+      dir: z.string().optional(),
+      files: z
+        .array(z.strictObject({ name: z.string().min(1, 'expected a file name'), text: z.string().optional(), base64: z.string().optional() }))
+        .min(1, 'expected at least one file')
+        .max(MAX_IMPORT_FILES, `expected at most ${MAX_IMPORT_FILES} files`),
+      overwrite: z.boolean().optional(),
+    }),
+    body,
+    '{"dir"?: "<target directory relative to the workspace root>", "files": [{"name": "hero.r2d.json", "text": "<JSON>"}, {"name": "hero.png", "base64": "<PNG bytes>"}], "overwrite"?: <boolean>}',
+  );
+  req.files.forEach((f, i) => {
+    if ((f.text === undefined) === (f.base64 === undefined)) {
+      throw new HttpError(400, `invalid import request: files.${i} (${JSON.stringify(f.name)}) needs exactly one of "text" (UTF-8) or "base64"`, 'models may be sent as text or base64, PNG textures as base64');
+    }
+  });
+  return req;
 }
 
 // ----------------------------------------------------------------------------- screenshots

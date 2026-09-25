@@ -113,8 +113,8 @@ with `InMemoryTransport`). Both live in `src/mcp/server.ts`.
 | `rev2d_apply_ops` | `path`, `ops`, `dry_run?`, `allow_invalid?`, `render_after?` (`true` or render options) | Per-op results, validation of the result, JSON `{ok, written, changed, dryRun, file, results, diagnostics}`, optional render. See below. |
 | `rev2d_create_model` | `path`, `template?` (`blank` or an example), `name?`, `width?`, `height?`, `overwrite?` | Writes the model (and copies example textures), returns its outline. Refuses to overwrite without `overwrite: true`. |
 | `rev2d_diff_images` | `a`, `b`, `threshold?`, `save_to?` | Differing pixel count, max/mean delta, and a visualization (differences in red). |
-| `rev2d_editor_state` | `model?`, `url?` | What the human sees in a running editor: time, playing, animation layers (as layer strings you can pass back, e.g. `["idle","blink,add,once,start=1"]`), non-default params, the params the human pinned (explicit values that beat animation and physics), physics toggle, selection, overlay, hidden parts, view; full state as JSON. |
-| `rev2d_editor_command` | `command`, `model?`, `url?` | Sends `setParams`, `play`, `pause`, `seek`, `setAnimations` (layers with `weight`, `mode`, `start`, `hold`), `select`, `setOverlay`, `focus`, `reload` or `message` to the editor tabs; ids and layer options are checked against the model first. |
+| `rev2d_editor_state` | `model?`, `url?` | What the human sees in a running editor: the model it has open and its workspace root (or that no model is open: start screen, with the recent files), time, playing, animation layers (as layer strings you can pass back, e.g. `["idle","blink,add,once,start=1"]`), non-default params, the params the human pinned (explicit values that beat animation and physics), physics toggle, selection, overlay, hidden parts, view; full state as JSON. |
+| `rev2d_editor_command` | `command`, `model?`, `url?` | Sends `setParams`, `play`, `pause`, `seek`, `setAnimations` (layers with `weight`, `mode`, `start`, `hold`), `select`, `setOverlay`, `focus`, `reload` or `message` to the editor tabs; ids and layer options are checked against the model first. `{type: "open", file}` switches the editor to another model of its workspace (the tabs follow). |
 | `rev2d_editor_screenshot` | `model?`, `url?`, `overlay?`, `scale?`, `viewBox?` | PNG of exactly what the editor shows (rendered by the editor server from its current state) + the state summary. |
 
 "pose" = `time?` (seconds), `animations?` (layer strings or objects, see Conventions),
@@ -140,11 +140,25 @@ carries one example per op and `rev2d_docs {topic: "ops"}` the full catalogue.
 
 ### Editor bridge
 
-The editor tools talk to an editor started by the human with `rev2d edit <model>`. Running editors
-register themselves in `~/.rev2d/editors/`; the tools use the one at `url`, else the one editing
-`model`, else the newest editor of a file under the working directory (else the newest editor). When
-none is running the tools say so and suggest the exact `rev2d edit` command to give the user. Files
-written by `rev2d_apply_ops` are live-reloaded by the editor, so the human sees every edit.
+The editor tools talk to an editor started by the human with `rev2d edit [model]`. Running editors
+register themselves in `~/.rev2d/editors/` under the file they have open **now**; the tools use the
+one at `url`, else the one that has `model` open, else the newest editor of a file under the working
+directory (else the newest editor). When none is running the tools say so and suggest the exact
+`rev2d edit` command to give the user. Files written by `rev2d_apply_ops` are live-reloaded by the
+editor, so the human sees every edit.
+
+- **Workspace**: an editor works inside a workspace root (`rev2d edit --root <dir>`; default: the
+  model's directory, else the directory it was started in). The human opens, creates, saves as,
+  closes, imports and downloads models from its File menu; `rev2d_editor_state` names the open model
+  and the root, or reports the start screen (no model open) with the recent files instead of failing.
+- **Opening a model**: `rev2d_editor_command {command: {type: "open", file}}` switches the editor to
+  another model (a relative `file` resolves against the working directory, like every path of this
+  server). The editor server opens it, resets the view state and updates its registry entry; every
+  tab follows; commands sent right after it (`setParams`, `play`, `select`, ...) apply to the newly
+  opened model once a tab has loaded it. Files outside the workspace root (also through symbolic links) are refused with HTTP
+  403 and a hint; a missing file is 404; a JSON file that is not a Rev2D model is 422. To show a new
+  model, create it inside the root with `rev2d_create_model`, then open it. While no model is open,
+  the other commands and `rev2d_editor_screenshot` fail with `HTTP 409: no model is open` and a hint.
 
 - Ids in commands are checked against the model the editor has open (`GET /api/model`) with
   did-you-mean hints. `select` takes what the editor resolves: bare ids (`"mouth"`) or `kind:id` refs

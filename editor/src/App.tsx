@@ -4,11 +4,14 @@
  * buttons), and both are remembered per browser; on small windows the panels shrink (CSS clamps) so
  * the viewport keeps most of the space.
  */
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties, type DragEvent } from 'react';
 import { DEFAULT_PANELS, errorCount, warningCount, type OverlayLayer, type PanelName, type PanelState } from './state/app.js';
 import { useApp, useSession } from './state/context.js';
 import type { Session } from './state/session.js';
 import { stepZoom } from './view/camera.js';
+import { FileDialogs } from './files/FileDialogs.js';
+import { fileShortcut } from './files/shortcuts.js';
+import { StartScreen } from './files/StartScreen.js';
 import { Diagnostics } from './panels/Diagnostics.js';
 import { Inspector } from './panels/Inspector.js';
 import { Outliner } from './panels/Outliner.js';
@@ -75,10 +78,13 @@ export function App() {
   const panels = useApp((s) => s.panels);
   useEffect(() => saveLayout(layout, panels), [layout, panels]);
   useShortcuts(session);
+  useUnloadWarning(session);
+  const drop = useFileDrop(session);
   const file = useApp((s) => s.file);
   const unsaved = useApp((s) => s.unsaved);
+  const status = useApp((s) => s.status);
   useEffect(() => {
-    document.title = file ? `${unsaved ? '● ' : ''}${basename(file)} — Rev2D` : 'Rev2D Editor';
+    document.title = file ? `${unsaved ? '● ' : ''}${basename(file)} • Rev2D` : 'Rev2D';
   }, [file, unsaved]);
 
   const style = {
@@ -87,9 +93,23 @@ export function App() {
     '--bottom-h': `${layout.bottom}px`,
   } as CSSProperties;
 
+  if (status === 'empty') {
+    return (
+      <div className="app is-empty" {...drop.handlers}>
+        <Toolbar />
+        <StartScreen />
+        <StatusBar />
+        <Toasts />
+        <ShortcutsHelp />
+        <FileDialogs />
+        {drop.active && <DropOverlay />}
+      </div>
+    );
+  }
+
   const closed = (Object.keys(panels) as PanelName[]).filter((p) => !panels[p]).map((p) => ` ${p}-closed`).join('');
   return (
-    <div className={`app${closed}`} style={style}>
+    <div className={`app${closed}`} style={style} {...drop.handlers}>
       <Toolbar />
       <div className="workspace">
         <Outliner />
@@ -107,8 +127,74 @@ export function App() {
       <Toasts />
       <ShortcutsHelp />
       <LoadFailure />
+      <FileDialogs />
+      {drop.active && <DropOverlay />}
     </div>
   );
+}
+
+function DropOverlay() {
+  return (
+    <div className="drop-overlay" aria-hidden="true">
+      <div className="drop-card">
+        <Icon name="upload" size={28} />
+        <strong>Drop to import</strong>
+        <span>A model .json and its PNG textures are copied into the workspace and opened.</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Files dragged from the computer onto the window open the import dialog. File drags are always
+ * taken (preventDefault), also while a dialog is open: otherwise the browser would navigate to the
+ * dropped file and the page (with any unsaved edit) would be gone.
+ */
+function useFileDrop(session: Session): { active: boolean; handlers: Record<string, (e: DragEvent<HTMLDivElement>) => void> } {
+  const [depth, setDepth] = useState(0);
+  const hasFiles = (e: DragEvent): boolean => [...(e.dataTransfer?.types ?? [])].includes('Files');
+  const enabled = (): boolean => session.get().workspace !== null && !session.get().dialog && !session.get().unsavedPrompt;
+  return {
+    active: depth > 0 && enabled(),
+    handlers: {
+      onDragEnter: (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        setDepth((d) => d + 1);
+      },
+      onDragOver: (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = enabled() ? 'copy' : 'none';
+      },
+      onDragLeave: (e) => {
+        if (!hasFiles(e)) return;
+        setDepth((d) => Math.max(0, d - 1));
+      },
+      onDrop: (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        setDepth(0);
+        const files = [...e.dataTransfer.files];
+        if (files.length && enabled()) session.openDialog({ kind: 'import', files });
+      },
+    },
+  };
+}
+
+/** The browser asks before leaving the page while an edit is not on disk (or still being written). */
+function useUnloadWarning(session: Session): void {
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent): void => {
+      const s = session.get();
+      if (!s.unsaved && !s.saving) return;
+      e.preventDefault();
+      // Older browsers need returnValue set to show the prompt.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [session]);
 }
 
 function RightPanel({ fraction, onResize }: { fraction: number; onResize: (f: number) => void }) {
@@ -219,15 +305,39 @@ function Splitter({
 
 const OVERLAY_KEYS: Record<string, OverlayLayer> = { b: 'bones', m: 'mesh', w: 'warps', x: 'bounds', l: 'labels', g: 'grid' };
 
+/** Keys pressed in a dialog or a menu belong to it. */
+function inOverlay(target: EventTarget | null): boolean {
+  const el = target as { closest?: (sel: string) => unknown } | null;
+  return typeof el?.closest === 'function' && el.closest('[aria-modal="true"], [role="menu"]') !== null;
+}
+
+/** File shortcuts (Ctrl+S, Ctrl+Shift+S, Ctrl+O, Alt+N); they also work while typing in a field. */
+function runFileShortcut(session: Session, which: NonNullable<ReturnType<typeof fileShortcut>>): void {
+  const s = session.get();
+  if (which === 'save') {
+    if (s.status === 'ready') void session.save();
+    return;
+  }
+  if (!s.workspace) {
+    session.toast('info', 'This editor server cannot switch files (it has no workspace API); update rev2d.');
+    return;
+  }
+  if (which === 'saveAs') session.openDialog({ kind: 'saveAs' });
+  else session.openDialog({ kind: which });
+}
+
 /** Global keyboard shortcuts (see ShortcutsHelp for the list). */
 function useShortcuts(session: Session): void {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
+      const st = session.get();
+      if (inOverlay(e.target) || st.dialog || st.unsavedPrompt) return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
-      if (mod && key === 's') {
+      const file = fileShortcut(e);
+      if (file) {
         e.preventDefault();
-        void session.save();
+        runFileShortcut(session, file);
         return;
       }
       if (isTypingTarget(e.target)) return;
@@ -305,7 +415,7 @@ function useShortcuts(session: Session): void {
       document.body.classList.remove('is-space-held');
     };
     const onKeyUp = (e: KeyboardEvent): void => {
-      if (e.key !== ' ' || !keyState.space) return;
+      if (e.key !== ' ' || !keyState.space || inOverlay(e.target)) return;
       releaseSpace();
       // A tap toggles playback; a press used for space+drag panning does not.
       if (!keyState.spaceUsed && !isTypingTarget(e.target)) session.togglePlay();

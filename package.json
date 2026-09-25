@@ -37,8 +37,11 @@
     "!dist/**/*.map",
     "bin",
     "docs",
+    "!docs/media",
+    "!docs/SOCIAL.md",
     "examples",
     "README.md",
+    "README.ko.md",
     "AGENTS.md",
     "llms.txt",
     "LICENSE"

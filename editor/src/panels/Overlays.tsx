@@ -1,5 +1,6 @@
 /** Floating UI layers: toasts, the keyboard shortcut sheet and the load-failure screen. */
 import { useEffect } from 'react';
+import { FILE_SHORTCUTS } from '../files/shortcuts.js';
 import { useApp, useSession } from '../state/context.js';
 import { Icon } from '../ui/icons.js';
 
@@ -14,6 +15,13 @@ export function Toasts() {
           <div className="toast-body">
             {t.source && <span className="toast-source">{t.source}</span>}
             <span className="toast-text">{t.text}</span>
+            {t.details && t.details.length > 0 && (
+              <ul className="toast-details">
+                {t.details.map((d, i) => (
+                  <li key={i}>{d}</li>
+                ))}
+              </ul>
+            )}
           </div>
           {t.action && (
             <button
@@ -36,6 +44,16 @@ export function Toasts() {
 }
 
 const SHORTCUTS: Array<[string, Array<[string, string]>]> = [
+  [
+    'File',
+    [
+      [FILE_SHORTCUTS.new.replace('+', ' + '), 'New model (the browser keeps Ctrl + N)'],
+      [FILE_SHORTCUTS.open.replace('+', ' + '), 'Open a model'],
+      [FILE_SHORTCUTS.save.replace('+', ' + '), 'Save (edits are saved as you make them)'],
+      [FILE_SHORTCUTS.saveAs.replace(/\+/g, ' + '), 'Save As: continue in a copy'],
+      ['Drop files', 'Import a model .json and its PNGs'],
+    ],
+  ],
   [
     'Viewport',
     [
@@ -70,7 +88,6 @@ const SHORTCUTS: Array<[string, Array<[string, string]>]> = [
   [
     'Editing',
     [
-      ['Ctrl + S', 'Save the document'],
       ['Ctrl + Z', 'Undo inspector edit'],
       ['Ctrl + Shift + Z  Ctrl + Y', 'Redo'],
       ['Ctrl + Enter', 'Apply inspector JSON (Ctrl + S also applies while editing it)'],
@@ -133,7 +150,10 @@ export function LoadFailure() {
   const session = useSession();
   const status = useApp((s) => s.status);
   const error = useApp((s) => s.loadError);
-  if (status !== 'failed') return null;
+  const canSwitch = useApp((s) => s.workspace !== null);
+  const dialogOpen = useApp((s) => s.dialog !== null);
+  // A file dialog opened from here goes on top of this screen.
+  if (status !== 'failed' || dialogOpen) return null;
   return (
     <div className="modal-backdrop is-opaque">
       <div className="modal modal-narrow" role="alertdialog" aria-label="Model failed to load" data-testid="load-failure">
@@ -145,6 +165,16 @@ export function LoadFailure() {
         <p className="mono error-text">{error}</p>
         <p className="muted">Check that the Rev2D editor server is still running and can read the model file, then retry.</p>
         <div className="modal-actions">
+          {canSwitch && (
+            <>
+              <button className="button" onClick={() => void session.closeModel()}>
+                Close it
+              </button>
+              <button className="button" onClick={() => session.openDialog({ kind: 'open' })}>
+                Open another model…
+              </button>
+            </>
+          )}
           <button className="button button-primary" onClick={() => void session.reload('reset', true)}>
             Retry
           </button>

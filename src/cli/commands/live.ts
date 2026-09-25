@@ -1,11 +1,12 @@
 /** Live editing: edit (start the editor server), editor state|command|screenshot (talk to it), mcp. */
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
+import path from 'node:path';
 import type { Diagnostic, Model } from '../../core/types.js';
 import { suggest } from '../../core/address.js';
-import { parseJsonc } from '../../core/validate.js';
+import { parseJsonc, parseModelText } from '../../core/validate.js';
 import { loadModelFile } from '../../node/load.js';
-import { findEditor, listEditors, type EditorCommand, type EditorEntry, type EditorLayer, type EditorState } from '../../node/editor-registry.js';
+import { editorHasFile, findEditor, listEditors, type EditorCommand, type EditorEntry, type EditorLayer, type EditorState, type WorkspaceInfo } from '../../node/editor-registry.js';
 import { formatLayerSpec, parseLayerSpec, parseLayerSyntax, splitLayerList } from '../../api/layers.js';
 import { UsageError, type FlagSpec } from '../args.js';
 import type { Command } from '../command.js';
@@ -38,13 +39,25 @@ function openBrowser(ctx: Ctx, url: string): void {
   }
 }
 
+/** A directory for messages: "." for the working directory, else as ctx.display shows paths. */
+function displayDir(ctx: Ctx, dir: string): string {
+  return path.relative(ctx.cwd, ctx.resolve(dir)) === '' ? '.' : ctx.display(dir);
+}
+
+/** Whether absolute `file` lies inside directory `dir` (lexically; the server also checks real paths). */
+function isInsideDir(dir: string, file: string): boolean {
+  const rel = path.relative(dir, file);
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+}
+
 export const edit: Command = {
   name: 'edit',
   group: 'live',
-  summary: 'start the live-reloading web editor for a model',
-  usage: 'edit <model> [--port n] [--host h] [--allow-host name]... [--no-open] [--json]',
-  args: ['<model>'],
+  summary: 'start the live-reloading web editor (a model, or a workspace to open / create models in)',
+  usage: 'edit [model | dir] [--root dir] [--port n] [--host h] [--allow-host name]... [--no-open] [--json]',
+  args: ['[model]'],
   flags: [
+    { name: 'root', type: 'string', arg: 'dir', description: "workspace root: the editor opens, creates, saves and imports files only inside it (default: the model's directory, else the current directory)" },
     { name: 'port', type: 'int', min: 0, max: 65535, arg: 'n', description: `port (default ${DEFAULT_PORT}; 0 picks a free port)` },
     { name: 'host', type: 'string', arg: 'address', description: 'interface to bind (default 127.0.0.1; anything else exposes file writes to the network)' },
     { name: 'allow-host', type: 'string', repeat: true, arg: 'name', description: 'also answer requests addressed to this host name (e.g. my-pc.local with --host 0.0.0.0); other names are rejected as a DNS-rebinding guard' },
@@ -52,14 +65,34 @@ export const edit: Command = {
   ],
   json: true,
   description: [
-    'Serves the editor UI and the editor protocol (/api/model, /api/events, /api/state, /api/command, /api/screenshot). External changes to the file reload the editor; edits in the editor are written back to the file.',
-    'Registers itself so "rev2d editor ..." and the MCP server can find it. Runs until Ctrl+C. With --json prints NDJSON lines {"event":"listening","url","file","ui":{"mode","detail"}} and {"event":"stopped"}.',
+    'Serves the editor UI and the editor protocol (/api/model, /api/events, /api/state, /api/command, /api/screenshot and the workspace endpoints /api/workspace, /api/files, /api/open, /api/new, /api/save-as, /api/close, /api/import, /api/download, /api/templates). External changes to the file reload the editor; edits in the editor are written back to the file.',
+    'File management: the File menu opens, creates (from a template), saves as, closes, imports (from your computer) and downloads models. Every file lives inside the workspace root (--root; default: the model\'s directory, else the current directory); paths outside it, also through symbolic links, are refused. Without a model (or with a directory) the editor starts on its start screen. Recently opened files are kept in ~/.rev2d/recent.json.',
+    'Registers itself so "rev2d editor ..." and the MCP server can find it (by the file it has open now). Runs until Ctrl+C. With --json prints NDJSON lines {"event":"listening","url","file","root","ui":{"mode","detail"}} (file is null without a model) and {"event":"stopped"}.',
   ],
-  examples: ['rev2d edit hero.r2d.json', 'rev2d edit hero.r2d.json --port 0 --no-open'],
+  examples: ['rev2d edit hero.r2d.json', 'rev2d edit', 'rev2d edit models/hero.r2d.json --root .', 'rev2d edit hero.r2d.json --port 0 --no-open'],
   async run(ctx) {
     const file = ctx.args.positionals[0];
-    const abs = ctx.resolve(file);
-    if (!existsSync(abs)) throw new CliError(`${ctx.display(file)} does not exist`, { hint: `create it first: rev2d new ${ctx.display(file)}` });
+    const rootArg = ctx.args.str('root');
+    let abs: string | null = file !== undefined ? ctx.resolve(file) : null;
+    let root: string | null = rootArg !== undefined ? ctx.resolve(rootArg) : null;
+    if (abs && statSync(abs, { throwIfNoEntry: false })?.isDirectory()) {
+      // "rev2d edit models/": that directory is the workspace, with no model open yet.
+      if (root) throw new UsageError(`${ctx.display(file!)} is a directory`, 'give a model file together with --root, or the directory alone ("rev2d edit <dir>" makes it the workspace root)');
+      root = abs;
+      abs = null;
+    }
+    if (abs && !existsSync(abs)) throw new CliError(`${ctx.display(file!)} does not exist`, { hint: `create it first: rev2d new ${ctx.display(file!)} (or start without a model: rev2d edit, then File > New)` });
+    if (root) {
+      const st = statSync(root, { throwIfNoEntry: false });
+      if (!st) throw new CliError(`workspace root ${ctx.display(rootArg!)} does not exist`, { hint: 'create the directory first, or choose another --root' });
+      if (!st.isDirectory()) throw new CliError(`workspace root ${ctx.display(rootArg!)} is not a directory`, { hint: '--root takes the directory the editor may open and save files in' });
+    }
+    root ??= abs ? path.dirname(abs) : ctx.cwd;
+    if (abs && !isInsideDir(root, abs)) {
+      throw new CliError(`${ctx.display(file!)} is outside the workspace root ${displayDir(ctx, root)}`, {
+        hint: "the root must contain the model: choose a --root above it, or leave --root out (default: the model's directory)",
+      });
+    }
     const host = ctx.args.str('host') ?? '127.0.0.1';
     const port = ctx.args.num('port') ?? DEFAULT_PORT;
     // The server answers requests addressed to loopback names and its bind address(es) only
@@ -67,21 +100,23 @@ export const edit: Command = {
     const allowedHosts = ctx.args.csv('allow-host');
     if (!isLoopback(host)) {
       const names = allowedHosts.length ? '' : ' by IP address (add --allow-host <name> to also accept a host name)';
-      ctx.err(`note: --host ${host} makes the editor (which can write ${ctx.display(file)}) reachable from other machines${names}`);
+      ctx.err(`note: --host ${host} makes the editor (which can write files in ${displayDir(ctx, root)}) reachable from other machines${names}`);
     }
-    const running = listEditors(abs);
-    if (running.length) {
-      ctx.err(`note: ${ctx.display(file)} is already open in an editor at ${running.map((e) => e.url).join(', ')}; "rev2d editor ..." talks to the newest one`);
+    if (abs) {
+      const running = listEditors(abs);
+      if (running.length) {
+        ctx.err(`note: ${ctx.display(file!)} is already open in an editor at ${running.map((e) => e.url).join(', ')}; "rev2d editor ..." talks to the newest one`);
+      }
+      const errors = (await loadModelFile(abs)).diagnostics.filter((d) => d.severity === 'error').length;
+      if (errors) ctx.err(`note: ${ctx.display(file!)} has ${errors} error${errors === 1 ? '' : 's'}; the editor lists them under Problems ("rev2d validate ${ctx.display(file!)}" prints them)`);
     }
-    const errors = (await loadModelFile(abs)).diagnostics.filter((d) => d.severity === 'error').length;
-    if (errors) ctx.err(`note: ${ctx.display(file)} has ${errors} error${errors === 1 ? '' : 's'}; the editor lists them under Problems ("rev2d validate ${ctx.display(file)}" prints them)`);
     const stop = stopSignal(ctx.io);
     try {
       let server;
       try {
         // Loaded on demand: the server pulls in the editor build/dev tooling, which other commands never need.
         const { startEditorServer } = await import('../../server/index.js');
-        server = await startEditorServer({ file: abs, port, host, allowedHosts, log: (m) => ctx.err(`editor: ${m}`) });
+        server = await startEditorServer({ ...(abs ? { file: abs } : {}), root, port, host, allowedHosts, log: (m) => ctx.err(`editor: ${m}`) });
       } catch (e) {
         const err = e as NodeJS.ErrnoException & { cause?: NodeJS.ErrnoException };
         const inUse = err.code === 'EADDRINUSE' || err.cause?.code === 'EADDRINUSE';
@@ -90,9 +125,10 @@ export const edit: Command = {
         });
       }
       if (ctx.json) {
-        ctx.io.stdout.write(JSON.stringify({ event: 'listening', url: server.url, file: abs, ui: server.ui }) + '\n');
+        ctx.io.stdout.write(JSON.stringify({ event: 'listening', url: server.url, file: abs, root: server.root, ui: server.ui }) + '\n');
       } else {
-        ctx.out(`editing ${ctx.display(file)}`, `  ${server.url}`, 'press Ctrl+C to stop');
+        ctx.out(abs ? `editing ${ctx.display(file!)}` : 'editor started with no model open', `  ${server.url}`, `workspace root: ${displayDir(ctx, server.root)}`, 'press Ctrl+C to stop');
+        if (!abs) ctx.notes(['open or create a model in the browser (File menu), or with "rev2d editor command --open <model>"']);
         if (server.ui.mode === 'none') ctx.err(`note: the editor UI is unavailable (${server.ui.detail}); the /api endpoints still work`);
       }
       if (ctx.args.bool('open') !== false) (ctx.io.openUrl ?? ((u: string) => openBrowser(ctx, u)))(server.url);
@@ -110,22 +146,63 @@ export const edit: Command = {
 // ----------------------------------------------------------------------------- editor client
 
 const TARGET_FLAGS: FlagSpec[] = [
-  { name: 'model', type: 'string', arg: 'file', description: 'talk to the editor of this model (default: the most recently started editor)' },
+  {
+    name: 'model',
+    type: 'string',
+    arg: 'file',
+    description: 'talk to the editor of this model: the one that has it open, else the one whose workspace root contains it; a directory selects the editor of that workspace (default: the most recently started editor)',
+  },
   { name: 'url', type: 'string', arg: 'url', description: `editor base URL, e.g. http://127.0.0.1:${DEFAULT_PORT} (skips discovery)` },
 ];
 
-function locateEditor(ctx: Ctx): EditorEntry {
+interface Located {
+  entry: EditorEntry;
+  /**
+   * Absolute path of --model when it names a file this editor does not have open: the editor was
+   * chosen because its workspace root contains the file.
+   */
+  notOpen: string | null;
+}
+
+/** "http://127.0.0.1:4777 (hero.r2d.json open, workspace root .)" for lists of running editors. */
+function describeEditor(ctx: Ctx, e: EditorEntry): string {
+  const open = e.file ? `${ctx.display(e.file)} open` : 'no model open';
+  return `${e.url} (${open}${e.root ? `, workspace root ${displayDir(ctx, e.root)}` : ''})`;
+}
+
+/**
+ * The editor to talk to: --url; else by --model (a file: the editor that has it open, else the one
+ * whose workspace root contains it, e.g. an editor on its start screen; a directory: the editor of
+ * that workspace); else by `openFile` (the model an "open" command names) the same way; else the
+ * most recently started editor.
+ */
+function locateEditor(ctx: Ctx, openFile?: string): Located {
   const model = ctx.args.str('model');
   const url = ctx.args.str('url');
   if (url !== undefined && !/^https?:\/\/[^/]+/.test(url)) throw new UsageError(`--url must be an http(s) URL, got "${url}"`, `e.g. --url http://127.0.0.1:${DEFAULT_PORT}`);
-  const entry = findEditor({ url, file: model !== undefined ? ctx.resolve(model) : undefined });
+  const target = model !== undefined ? ctx.resolve(model) : undefined;
+  const isDir = target !== undefined && (statSync(target, { throwIfNoEntry: false })?.isDirectory() ?? false);
+  if (url !== undefined) return { entry: findEditor({ url, file: isDir ? undefined : target })!, notOpen: null };
+  const entry =
+    target !== undefined
+      ? findEditor(isDir ? { root: target } : { file: target })
+      : ((openFile !== undefined ? findEditor({ file: openFile }) : null) ?? findEditor());
   if (!entry) {
+    const running = listEditors();
+    const start = `start one with "rev2d edit ${model !== undefined ? ctx.display(model) : '<model>'}", or pass --url http://127.0.0.1:${DEFAULT_PORT}`;
     throw new CliError(model !== undefined ? `no running editor for ${ctx.display(model)}` : 'no running editor found', {
-      hint: `start one with "rev2d edit <model>", or pass --url http://127.0.0.1:${DEFAULT_PORT}`,
+      hint: running.length ? `running editors: ${running.map((e) => describeEditor(ctx, e)).join(', ')}; or ${start}` : start,
     });
   }
-  return entry;
+  return { entry, notOpen: target !== undefined && !isDir && !editorHasFile(entry, target) ? target : null };
 }
+
+/** What --model found when the editor does not have that file open: "the editor at U has Y open, not X". */
+function notOpenText(ctx: Ctx, { entry, notOpen }: Located): string {
+  return `the editor at ${entry.url} has ${entry.file ? ctx.display(entry.file) : 'no model'} open, not ${ctx.display(notOpen!)}`;
+}
+
+const rootText = (ctx: Ctx, entry: EditorEntry) => (entry.root ? `its workspace root ${displayDir(ctx, entry.root)} contains the file` : 'its workspace contains the file');
 
 async function request(entry: EditorEntry, pathname: string, init: { method?: string; body?: unknown } = {}): Promise<Response> {
   try {
@@ -175,33 +252,66 @@ function pngSize(bytes: Buffer): [number, number] | null {
   return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
 }
 
+/** The editor's workspace (GET /api/workspace), or null for an editor that predates file management. */
+async function fetchWorkspace(entry: EditorEntry): Promise<WorkspaceInfo | null> {
+  const res = await request(entry, '/api/workspace');
+  if (res.status === 404) return null;
+  if (!res.ok) throw await editorError(res, `the editor at ${entry.url} did not describe its workspace`);
+  return (await res.json()) as WorkspaceInfo;
+}
+
 export const editorState: Command = {
   name: 'editor state',
   group: 'live',
-  summary: 'what the human sees in the running editor: params, time, animations, selection, overlay, view box',
+  summary: 'what the human sees in the running editor: open model, params, time, animations, selection, overlay, view box',
   usage: 'editor state [--model f] [--url u] [--json]',
   args: [],
   flags: TARGET_FLAGS,
   json: true,
-  description: ['--json prints {editor: {url, file, pid}, state: EditorState}.'],
+  description: [
+    'Names the model the editor has open and its workspace root. With no model open (start screen) it says so and exits 0.',
+    '--model finds the editor that has the file open, else the one whose workspace root contains it (e.g. an editor on its start screen); a note then says the file is not open. A directory selects the editor of that workspace.',
+    '--json prints {editor: {url, file, root, pid}, state: EditorState}; file and state are null when no model is open.',
+  ],
   examples: ['rev2d editor state', 'rev2d editor state --model hero.r2d.json --json'],
   async run(ctx) {
-    const entry = locateEditor(ctx);
+    const located = locateEditor(ctx);
+    const { entry } = located;
+    const workspace = await fetchWorkspace(entry);
+    const current = workspace ? workspace.current : entry.file || null;
+    const root = workspace?.root ?? null;
+    // --model named a file of this editor's workspace that it does not have open: say so (stderr).
+    if (located.notOpen !== null) {
+      ctx.notes([`${notOpenText(ctx, located)} (it was chosen because ${rootText(ctx, entry)}); open it with "rev2d editor command --open ${ctx.display(located.notOpen)}"`]);
+    }
+    if (workspace && !current) {
+      if (ctx.json) {
+        ctx.printJson({ editor: { url: entry.url, file: null, root, pid: entry.pid }, state: null });
+        return 0;
+      }
+      ctx.out(`editor ${entry.url}  no model open (start screen)`, `workspace root: ${displayDir(ctx, workspace.root)}`);
+      if (workspace.recent.length) ctx.out(`recent: ${workspace.recent.map((f) => ctx.display(f)).join(', ')}`);
+      if (located.notOpen === null) ctx.notes(['open a model with "rev2d editor command --open <model>"']);
+      return 0;
+    }
     const res = await request(entry, '/api/state');
     if (res.status === 404) {
-      throw new CliError(`the editor at ${entry.url} has not published its view state yet`, { hint: 'open the editor URL in a browser; the page publishes its state once it has loaded' });
+      throw new CliError(`the editor at ${entry.url} has not published its view state yet${current ? ` (model: ${ctx.display(current)})` : ''}`, {
+        hint: 'open the editor URL in a browser; the page publishes its state once it has loaded',
+      });
     }
     if (!res.ok) throw await editorError(res, `the editor at ${entry.url} did not return its state`);
     const state = (await res.json()) as EditorState;
     if (ctx.json) {
-      ctx.printJson({ editor: { url: entry.url, file: entry.file || state.file, pid: entry.pid }, state });
+      ctx.printJson({ editor: { url: entry.url, file: current ?? state.file, root, pid: entry.pid }, state });
       return 0;
     }
     // Layer strings, so they can be passed back to --anims / --anim.
     const anims = state.animations.map((a) => formatLayerSpec(a));
     const params = Object.entries(state.params);
     ctx.out(
-      `editor ${entry.url}  ${ctx.display(state.file || entry.file)}`,
+      `editor ${entry.url}  ${ctx.display(current ?? state.file)}`,
+      ...(root ? [`workspace root: ${displayDir(ctx, root)}`] : []),
       `time ${num(state.time)}s (${state.playing ? 'playing' : 'paused'})  animations: ${anims.join(', ') || '-'}`,
       `selection: ${state.selection.join(', ') || '-'}`,
       `overlay: ${state.overlay.join(', ') || '-'}`,
@@ -213,9 +323,13 @@ export const editorState: Command = {
   },
 };
 
-const COMMAND_TYPES: EditorCommand['type'][] = ['setParams', 'play', 'pause', 'seek', 'setAnimations', 'select', 'setOverlay', 'focus', 'reload', 'message'];
+const COMMAND_TYPES: EditorCommand['type'][] = ['setParams', 'play', 'pause', 'seek', 'setAnimations', 'select', 'setOverlay', 'focus', 'reload', 'open', 'message'];
 
-function checkCommand(value: unknown, source: string): EditorCommand {
+/**
+ * A JSON command, checked for its type. The file of an "open" command is resolved against the
+ * current directory like every CLI path (the server takes absolute paths or root-relative ones).
+ */
+function checkCommand(ctx: Ctx, value: unknown, source: string): EditorCommand {
   const type = (value as { type?: unknown } | null)?.type;
   if (!value || typeof value !== 'object' || Array.isArray(value) || typeof type !== 'string') {
     throw new UsageError(`${source}: expected an editor command object like {"type": "pause"}`, `types: ${COMMAND_TYPES.join(', ')}`);
@@ -223,12 +337,21 @@ function checkCommand(value: unknown, source: string): EditorCommand {
   if (!(COMMAND_TYPES as string[]).includes(type)) {
     throw new UsageError(`${source}: unknown editor command type "${type}"`, suggest(type, COMMAND_TYPES) ?? `types: ${COMMAND_TYPES.join(', ')}`);
   }
+  if (type === 'open') {
+    const file = (value as { file?: unknown }).file;
+    if (typeof file !== 'string' || !file.trim()) throw new UsageError(`${source}: an "open" command needs "file", the model to open`, 'e.g. \'{"type":"open","file":"hero.r2d.json"}\' (or --open hero.r2d.json)');
+    return { ...(value as object), type: 'open', file: ctx.resolve(file) };
+  }
   return value as EditorCommand;
 }
 
+/** The model the editor has open: its registered file, else (e.g. with --url) GET /api/model; null when none/invalid. */
 async function editorModel(entry: EditorEntry): Promise<Model | null> {
-  if (!entry.file || !existsSync(entry.file)) return null;
-  return (await loadModelFile(entry.file)).model;
+  if (entry.file) return existsSync(entry.file) ? (await loadModelFile(entry.file)).model : null;
+  const res = await request(entry, '/api/model');
+  if (!res.ok) return null;
+  const { text } = (await res.json()) as { text?: unknown };
+  return typeof text === 'string' ? parseModelText(text).model : null;
 }
 
 /** Commands from the sugar flags, in a fixed, documented order. */
@@ -240,6 +363,7 @@ function sugarCommands(ctx: Ctx, model: Model | null): EditorCommand[] {
     for (const id of ids) if (!options.includes(id)) throw new UsageError(`unknown ${kind} "${id}"`, idHint(id, options, `${kind}s`));
   };
   const animIds = model?.animations.map((x) => x.id);
+  if (a.has('open')) cmds.push({ type: 'open', file: ctx.resolve(a.str('open')!) });
   if (a.bool('reload')) cmds.push({ type: 'reload' });
   if (a.has('anims')) {
     const animations = a.list('anims').flatMap(splitLayerList).filter(Boolean).map((spec) => editorLayer(spec, model));
@@ -309,10 +433,11 @@ function looseParams(values: string[]): Record<string, number> {
 export const editorCommand: Command = {
   name: 'editor command',
   group: 'live',
-  summary: 'drive the running editor: set params, play/pause/seek, select, overlays, focus, messages',
-  usage: "editor command ['<EditorCommand json>'] [--params A=1,B=2] [--reset] [--play [id]] [--pause] [--seek t] [--anims layers] [--select ids] [--overlay list] [--focus fit|x,y,w,h] [--message text] [--reload] [--model f] [--url u] [--json]",
+  summary: 'drive the running editor: open a model, set params, play/pause/seek, select, overlays, focus, messages',
+  usage: "editor command ['<EditorCommand json>'] [--open file] [--params A=1,B=2] [--reset] [--play [id]] [--pause] [--seek t] [--anims layers] [--select ids] [--overlay list] [--focus fit|x,y,w,h] [--message text] [--reload] [--model f] [--url u] [--json]",
   args: ['[json]'],
   flags: [
+    { name: 'open', type: 'string', arg: 'file', description: "open this model in the editor (it must lie inside the editor's workspace root; relative to the current directory); sent first, the other flags then apply to it" },
     { name: 'params', type: 'string', repeat: true, arg: 'A=1,B=2', description: 'setParams: set parameter values (checked against the model)' },
     { name: 'reset', type: 'boolean', description: 'with --params: reset all other parameters to defaults first (alone: reset all)' },
     { name: 'play', type: 'string', optionalValue: true, arg: 'id', description: 'play (optionally switching to animation <id>)' },
@@ -328,10 +453,14 @@ export const editorCommand: Command = {
   ],
   json: true,
   description: [
-    'Send one command as JSON (an object or an array of objects, see EditorCommand in docs/CLI.md) and/or use the sugar flags, which are sent in this order: reload, anims, params/reset, seek, play/pause, select, overlay, focus, message.',
+    'Send one command as JSON (an object or an array of objects, see EditorCommand in docs/CLI.md) and/or use the sugar flags, which are sent in this order: open, reload, anims, params/reset, seek, play/pause, select, overlay, focus, message.',
+    '{"type":"open","file"} (or --open) switches the editor to another model of its workspace: the server opens it and every editor window follows. Relative paths resolve against the current directory. Without --model / --url the command goes to the editor that has the file open or whose workspace root contains it (else the most recently started one).',
+    'When --model finds an editor only by its workspace root (it has another model, or none, open), commands are refused unless they open a model: add --open.',
     'Prints how many editor windows received each command; 0 means no browser has the editor open.',
   ],
   examples: [
+    'rev2d editor command --open models/cat.r2d.json',
+    `rev2d editor command '{"type":"open","file":"hero.r2d.json"}'`,
     'rev2d editor command --params AngleX=30,EyeOpen=0 --select head',
     'rev2d editor command --play idle',
     `rev2d editor command '{"type":"focus","viewBox":"fit"}'`,
@@ -344,24 +473,43 @@ export const editorCommand: Command = {
       const parsed = parseJsonc(raw);
       if (!parsed.ok) throw new UsageError(`command JSON is invalid: ${parsed.error.message}`, 'e.g. \'{"type":"setParams","params":{"AngleX":30}}\'');
       const list = Array.isArray(parsed.value) ? parsed.value : [parsed.value];
-      list.forEach((c, i) => commands.push(checkCommand(c, list.length > 1 ? `command ${i}` : 'command')));
+      list.forEach((c, i) => commands.push(checkCommand(ctx, c, list.length > 1 ? `command ${i}` : 'command')));
     }
-    const entry = locateEditor(ctx);
+    const opening = ctx.args.str('open');
+    // Without --model / --url, a model to open selects the editor whose workspace holds it.
+    const openFile = opening !== undefined ? ctx.resolve(opening) : commands.find((c): c is Extract<EditorCommand, { type: 'open' }> => c.type === 'open')?.file;
+    const located = locateEditor(ctx, openFile);
+    const { entry } = located;
+    if (located.notOpen !== null && openFile === undefined) {
+      throw new CliError(`${notOpenText(ctx, located)}; nothing was sent`, {
+        hint: `add --open ${ctx.display(located.notOpen)} to switch the editor to it first (${rootText(ctx, entry)})`,
+      });
+    }
     const needsModel = ['anims', 'params', 'play', 'select'].some((f) => ctx.args.has(f));
-    commands.push(...sugarCommands(ctx, needsModel ? await editorModel(entry) : null));
-    if (!commands.length) throw new UsageError('no command given', 'pass a command as JSON or use flags such as --params, --play, --pause, --seek, --select, --message');
-    const sent: Array<{ command: EditorCommand; delivered: number }> = [];
+    // With --open, the other flags apply to (and are checked against) the model being opened.
+    const model = !needsModel ? null : opening !== undefined ? (await loadModelFile(ctx.resolve(opening))).model : await editorModel(entry);
+    commands.push(...sugarCommands(ctx, model));
+    if (!commands.length) throw new UsageError('no command given', 'pass a command as JSON or use flags such as --open, --params, --play, --pause, --seek, --select, --message');
+    const sent: Array<{ command: EditorCommand; delivered: number; file?: string; notes?: string[] }> = [];
     for (const command of commands) {
       const res = await request(entry, '/api/command', { method: 'POST', body: command });
       if (!res.ok) throw await editorError(res, `the editor rejected ${command.type}`, sent.length ? `${sent.length} earlier command(s) were delivered` : undefined);
-      const body = (await res.json()) as { delivered?: number };
-      sent.push({ command, delivered: body.delivered ?? 0 });
+      const body = (await res.json()) as { delivered?: number; file?: string; notes?: string[] };
+      sent.push(command.type === 'open' ? { command, delivered: body.delivered ?? 0, file: body.file, notes: body.notes ?? [] } : { command, delivered: body.delivered ?? 0 });
     }
     if (ctx.json) {
       ctx.printJson({ url: entry.url, sent });
       return 0;
     }
-    for (const s of sent) ctx.out(`sent ${s.command.type} -> ${s.delivered} editor window${s.delivered === 1 ? '' : 's'}`);
+    for (const s of sent) {
+      const windows = `${s.delivered} editor window${s.delivered === 1 ? '' : 's'}`;
+      if (s.command.type === 'open') {
+        ctx.out(`opened ${ctx.display(s.file ?? s.command.file)} in the editor at ${entry.url} -> ${windows}`);
+        if (s.notes?.length) ctx.notes(s.notes);
+      } else {
+        ctx.out(`sent ${s.command.type} -> ${windows}`);
+      }
+    }
     if (sent.some((s) => s.delivered === 0)) ctx.notes([`no browser has the editor open; open ${entry.url}`]);
     return 0;
   },
@@ -398,6 +546,7 @@ export const editorScreenshot: Command = {
   description: [
     'Rendered server-side from the editor\'s published view state (the same renderer as "rev2d render"). Without flags it shows what the human sees: their pose, overlays and visible region.',
     '--json prints {file, width, height, url, source, viewBox, scale, time, ignored}: source is "editor-state", or "default-pose" when no browser has published a state yet; ignored lists state ids that no longer exist in the model.',
+    'When --model finds the editor only by its workspace root (it has another model open), the screenshot is refused: open the file first with "rev2d editor command --open".',
   ],
   examples: [
     'rev2d editor screenshot -o out/editor.png',
@@ -415,7 +564,11 @@ export const editorScreenshot: Command = {
       const parsed = vb.trim() === 'canvas' ? 'canvas' : parseViewBox(vb);
       query.set('viewBox', typeof parsed === 'string' ? parsed : parsed.join(','));
     }
-    const entry = locateEditor(ctx);
+    const located = locateEditor(ctx);
+    const { entry } = located;
+    if (located.notOpen !== null) {
+      throw new CliError(notOpenText(ctx, located), { hint: `open it first: rev2d editor command --open ${ctx.display(located.notOpen)} (${rootText(ctx, entry)})` });
+    }
     const qs = query.toString();
     const res = await request(entry, `/api/screenshot${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw await editorError(res, 'the editor could not take a screenshot');

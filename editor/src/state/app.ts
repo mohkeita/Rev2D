@@ -3,6 +3,8 @@
  * RenderList, textures) live in the Session, not here.
  */
 import type { Diagnostic, Model } from '../../../src/core/index.js';
+import type { WorkspaceInfo } from '../../../src/node/editor-registry.js';
+import type { GuardState } from '../files/guard.js';
 import type { Camera, ViewportSize } from '../view/camera.js';
 import type { RawDoc } from './doc.js';
 import type { LayerOptions } from './playback.js';
@@ -33,6 +35,8 @@ export interface Toast {
   /** Small caption, e.g. "AI" for messages sent through the bridge. */
   source?: string;
   action?: ToastAction;
+  /** Secondary lines (e.g. the server's notes about a file operation). */
+  details?: string[];
 }
 
 /**
@@ -60,9 +64,30 @@ export interface BridgeActivity {
   at: number;
 }
 
+/** The file dialog on screen (File menu, start screen, shortcuts). */
+export type FileDialog =
+  | { kind: 'open' }
+  /** New model; `template` preselects one (the start screen's example cards). */
+  | { kind: 'new'; template?: string }
+  | { kind: 'saveAs' }
+  /** Files picked with "Import from computer", waiting for a target folder. */
+  | { kind: 'import'; files: File[] };
+
+/** The unsaved-changes prompt (see files/guard.ts); null while no prompt is shown. */
+export type UnsavedPrompt = Exclude<GuardState, { phase: 'idle' }>;
+
 export interface AppState {
+  // ---- workspace
+  /** Workspace root, open model and recent files (null until known, or when the server has no workspace API). */
+  workspace: WorkspaceInfo | null;
+  dialog: FileDialog | null;
+  unsavedPrompt: UnsavedPrompt | null;
+  /** A file operation in progress ("Opening hana.r2d.json…"): dialogs disable their buttons. */
+  fileBusy: string | null;
+
   // ---- file & model
-  status: 'loading' | 'ready' | 'failed';
+  /** 'empty': the server has no model open (start screen). */
+  status: 'loading' | 'ready' | 'failed' | 'empty';
   loadError: string | null;
   connection: 'connecting' | 'live' | 'offline';
   file: string;
@@ -152,6 +177,10 @@ export const DEFAULT_OVERLAYS: OverlayLayer[] = ['bones'];
 
 export function initialState(): AppState {
   return {
+    workspace: null,
+    dialog: null,
+    unsavedPrompt: null,
+    fileBusy: null,
     status: 'loading',
     loadError: null,
     connection: 'connecting',

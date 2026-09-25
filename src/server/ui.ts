@@ -163,6 +163,8 @@ npm run editor:build</pre>
 <li><a href="/api/screenshot">GET /api/screenshot</a> - server-side render (PNG)</li>
 <li><a href="/api/state">GET /api/state</a> - editor view state</li>
 <li>GET /api/events - live change events (SSE)</li>
+<li><a href="/api/workspace">GET /api/workspace</a> - workspace root, open model, recent files</li>
+<li><a href="/api/files">GET /api/files</a> - files of the workspace (POST /api/open, /api/new, /api/save-as, /api/close, /api/import manage them)</li>
 </ul></body></html>
 `;
   res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(html), 'Cache-Control': 'no-store' });

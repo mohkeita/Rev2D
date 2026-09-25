@@ -1,8 +1,11 @@
 /**
- * Bridge to a running editor (`rev2d edit <model>`): read what the human sees, drive the view, take
- * screenshots. Editors are discovered through ~/.rev2d/editors (src/node/editor-registry.ts) and
- * spoken to over the editor HTTP protocol (/api/model, /api/state, /api/command, /api/screenshot).
+ * Bridge to a running editor (`rev2d edit [model]`): read what the human sees, drive the view, open
+ * another model of the editor's workspace, take screenshots. Editors are discovered through
+ * ~/.rev2d/editors (src/node/editor-registry.ts; an entry names the file the editor has open now)
+ * and spoken to over the editor HTTP protocol (/api/workspace, /api/model, /api/state, /api/command,
+ * /api/screenshot).
  */
+import { statSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -11,7 +14,17 @@ import { suggest } from '../../core/address.js';
 import { parseModelText } from '../../core/validate.js';
 import { OVERLAY_LAYERS } from '../../api/index.js';
 import { formatLayerSpec, toLayer } from '../../api/layers.js';
-import { findEditor, listEditors, type EditorCommand, type EditorEntry, type EditorLayer, type EditorState } from '../../node/editor-registry.js';
+import {
+  editorHasFile,
+  editorRootContains,
+  findEditor,
+  listEditors,
+  type EditorCommand,
+  type EditorEntry,
+  type EditorLayer,
+  type EditorState,
+  type WorkspaceInfo,
+} from '../../node/editor-registry.js';
 import { decodePNG } from '../../render/index.js';
 import {
   addTool,
@@ -37,34 +50,95 @@ const TIMEOUT_MS = 15_000;
 type Rect = [number, number, number, number];
 
 const targetShape = {
-  model: z.string().min(1).optional().describe('Model file the editor has open (selects that editor when several are running).'),
+  model: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Selects the editor when several are running: a model file (the editor that has it open, else the one whose workspace root contains it, e.g. one on its start screen) or a workspace directory.',
+    ),
   url: z.string().min(1).optional().describe('Editor base URL, e.g. "http://127.0.0.1:4777" (default: discover running editors).'),
 };
 
 type Target = { model?: string; url?: string };
+
+interface Located {
+  entry: EditorEntry;
+  /**
+   * Absolute path of `model` when it names a file this editor does not have open: the editor was
+   * chosen because its workspace root contains the file.
+   */
+  notOpen: string | null;
+}
 
 function isInside(dir: string, file: string): boolean {
   const rel = path.relative(dir, file);
   return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
 }
 
-function locate(ctx: ToolContext, a: Target): EditorEntry {
-  const file = a.model ? resolvePath(ctx, a.model) : undefined;
+/** "http://127.0.0.1:4777 (hero.r2d.json open, workspace root .)" for lists of running editors. */
+function describeEditor(ctx: ToolContext, e: EditorEntry): string {
+  const open = e.file ? `${displayPath(ctx, e.file)} open` : 'no model open';
+  return `${e.url} (${open}${e.root ? `, workspace root ${displayPath(ctx, e.root)}` : ''})`;
+}
+
+/**
+ * The editor to talk to: `url`; else by `model` (a file: the editor that has it open, else the one
+ * whose workspace root contains it; a directory: the editor of that workspace); else by `openFile`
+ * (the file an "open" command names) the same way; else, since editors of several projects may be
+ * running, the newest one editing a file under the working directory, then one whose workspace root
+ * lies under it or contains it, then the newest.
+ */
+function locate(ctx: ToolContext, a: Target, openFile?: string): Located {
+  const target = a.model ? resolvePath(ctx, a.model) : undefined;
+  const isDir = target !== undefined && (statSync(target, { throwIfNoEntry: false })?.isDirectory() ?? false);
   const url = a.url && !/^https?:\/\//i.test(a.url) ? `http://${a.url}` : a.url;
-  const running = url || file ? [] : listEditors();
-  // Editors of several projects may be open: prefer one editing a file under the working directory.
-  const entry = url || file ? findEditor({ url, file }) : (running.find((e) => isInside(ctx.cwd, e.file)) ?? running[0] ?? null);
-  if (entry) return entry;
+  if (url) return { entry: findEditor({ url, file: isDir ? undefined : target })!, notOpen: null };
+  if (target !== undefined) {
+    const entry = findEditor(isDir ? { root: target } : { file: target });
+    if (entry) return { entry, notOpen: !isDir && !editorHasFile(entry, target) ? target : null };
+  } else {
+    const running = listEditors();
+    const entry =
+      (openFile !== undefined ? findEditor({ file: openFile }) : null) ??
+      running.find((e) => e.file !== '' && isInside(ctx.cwd, e.file)) ??
+      running.find((e) => e.root !== undefined && (isInside(ctx.cwd, e.root) || editorRootContains(e, ctx.cwd))) ??
+      running[0] ??
+      null;
+    if (entry) return { entry, notOpen: null };
+  }
   const start = `ask the user to run \`rev2d edit ${a.model ?? '<model.r2d.json>'}\` (it starts the editor and registers it for these tools), or pass url`;
-  const others = file ? listEditors() : [];
-  if (others.length) {
+  const others = listEditors();
+  if (target !== undefined && others.length) {
     throw new ToolError(
-      `no running Rev2D editor has ${displayPath(ctx, file!)} open`,
+      isDir
+        ? `no running Rev2D editor works in ${displayPath(ctx, target)} (none has it as or inside its workspace root)`
+        : `no running Rev2D editor has ${displayPath(ctx, target)} open or contains it in its workspace root`,
       [],
-      `running editors: ${others.map((e) => `${e.url} (${displayPath(ctx, e.file)})`).join(', ')}; or ${start}`,
+      `running editors: ${others.map((e) => describeEditor(ctx, e)).join(', ')}; or ${start}`,
     );
   }
   throw new ToolError('no running Rev2D editor found', [], start);
+}
+
+/** Refuse to act on another model than the one the agent named (`model` found by the editor's workspace root only). */
+function requireOpen(ctx: ToolContext, { entry, notOpen }: Located, action: string): void {
+  if (notOpen === null) return;
+  const shown = displayPath(ctx, notOpen);
+  throw new ToolError(
+    `the editor at ${entry.url} has ${entry.file ? displayPath(ctx, entry.file) : 'no model'} open, not ${shown}, so it cannot ${action} it`,
+    [],
+    `open it first: rev2d_editor_command {command: {type: "open", file: "${shown}"}} (the editor's workspace root ${displayPath(ctx, entry.root ?? '')} contains it)`,
+  );
+}
+
+/** Note for a state read of an editor found by its workspace root, not by the file it has open. */
+function notOpenNote(ctx: ToolContext, { entry, notOpen }: Located): string[] {
+  if (notOpen === null) return [];
+  const shown = displayPath(ctx, notOpen);
+  return [
+    `note: ${shown} is not open in this editor (it was chosen because its workspace root ${displayPath(ctx, entry.root ?? '')} contains the file); open it with rev2d_editor_command {command: {type: "open", file: "${shown}"}}`,
+  ];
 }
 
 function failureReason(e: unknown): string {
@@ -117,10 +191,16 @@ async function fetchState(entry: EditorEntry): Promise<EditorState | null> {
   return res.status === 404 ? null : ((await res.json()) as EditorState);
 }
 
-/** The model exactly as the editor has it (GET /api/model); null when missing or invalid. */
+/** The editor's workspace (GET /api/workspace), or null for an editor that predates file management. */
+async function fetchWorkspace(entry: EditorEntry): Promise<WorkspaceInfo | null> {
+  const res = await request(entry, 'GET', '/api/workspace', undefined, [404]);
+  return res.status === 404 ? null : ((await res.json()) as WorkspaceInfo);
+}
+
+/** The model exactly as the editor has it (GET /api/model); null when missing, invalid or none is open (409). */
 async function editorModel(entry: EditorEntry): Promise<Model | null> {
-  const res = await request(entry, 'GET', '/api/model', undefined, [404]);
-  if (res.status === 404) return null;
+  const res = await request(entry, 'GET', '/api/model', undefined, [404, 409]);
+  if (res.status === 404 || res.status === 409) return null;
   const { text: src } = (await res.json()) as { text?: unknown };
   return typeof src === 'string' ? parseModelText(src).model : null;
 }
@@ -132,7 +212,7 @@ export function layerString(l: EditorLayer): string {
   return formatLayerSpec(l);
 }
 
-function stateSummary(ctx: ToolContext, s: EditorState, model: Model | null): string {
+function stateSummary(ctx: ToolContext, s: EditorState, model: Model | null, workspace: WorkspaceInfo | null = null): string {
   const anims = (s.animations ?? []).map(layerString);
   const params = model
     ? `params: ${paramSummary(model, s.params ?? {})}`
@@ -140,6 +220,7 @@ function stateSummary(ctx: ToolContext, s: EditorState, model: Model | null): st
   const physics = s.physics === undefined ? '' : `; physics ${s.physics ? 'on' : 'off'}`;
   const lines = [
     `model: ${s.file ? displayPath(ctx, s.file) : '?'}`,
+    ...(workspace ? [`workspace root: ${displayPath(ctx, workspace.root)}`] : []),
     `time: ${fmtNum(s.time ?? 0)} s (${s.playing ? 'playing' : 'paused'}), animations: ${anims.length ? JSON.stringify(anims) : 'none'}${physics}`,
     params,
     `selection: ${(s.selection ?? []).join(', ') || 'none'}; overlay: ${(s.overlay ?? []).join(', ') || 'none'}`,
@@ -303,19 +384,35 @@ export function registerEditorTools(server: McpServer, ctx: ToolContext): void {
     {
       title: 'What the human sees in the editor',
       description:
-        'Read the live view state of a running Rev2D editor (started by the user with `rev2d edit <model>`): model file, time, playing, animation layers (as layer strings with their options), parameter slider values, ' +
+        'Read the live view state of a running Rev2D editor (started by the user with `rev2d edit [model]`): the model file it has open and its workspace root (or that no model is open: start screen), time, playing, animation layers (as layer strings with their options), parameter slider values, ' +
         'selected ids, overlay layers, parts hidden in the preview, the physics toggle and the visible viewBox. Use it to answer "what am I looking at?" or to reproduce the pose with ' +
         'rev2d_render/rev2d_inspect (same params/time/animations, physics: false: the params already hold the physics results). ' +
-        'Without model/url, the newest editor of a file under the working directory is used.',
+        'Without model/url, the newest editor of a file under the working directory is used (then one whose workspace root is there).',
       input: z.strictObject(targetShape),
       effect: 'read-only',
     },
     async (a) => {
-      const entry = locate(ctx, a);
+      const located = locate(ctx, a);
+      const { entry } = located;
+      const workspace = await fetchWorkspace(entry);
+      if (workspace && !workspace.current) {
+        const lines = [
+          `editor ${entry.url}: no model is open (the editor shows its start screen)`,
+          `workspace root: ${displayPath(ctx, workspace.root)}`,
+          `recent: ${workspace.recent.map((f) => displayPath(ctx, f)).join(', ') || 'none'}`,
+          'hint: open one with rev2d_editor_command {command: {type: "open", file}} (or create it first with rev2d_create_model inside the workspace root)',
+          ...notOpenNote(ctx, located),
+        ];
+        return result([text(lines.join('\n')), json({ workspace, state: null })]);
+      }
       const state = await fetchState(entry);
-      if (!state) throw new ToolError(`the editor at ${entry.url} has not published a view state yet`, [], noStateHint(entry));
+      if (!state) {
+        const where = workspace?.current ? ` (model: ${displayPath(ctx, workspace.current)}, workspace root: ${displayPath(ctx, workspace.root)})` : '';
+        throw new ToolError(`the editor at ${entry.url} has not published a view state yet${where}`, [], noStateHint(entry));
+      }
       const model = await editorModel(entry);
-      return result([text(`editor ${entry.url}\n${stateSummary(ctx, state, model)}`), json(state)]);
+      const summary = [`editor ${entry.url}`, stateSummary(ctx, state, model, workspace), ...notOpenNote(ctx, located)].join('\n');
+      return result([text(summary), json(workspace ? { ...state, workspace } : state)]);
     },
   );
 
@@ -330,13 +427,29 @@ export function registerEditorTools(server: McpServer, ctx: ToolContext): void {
         '{type:"setAnimations", animations:[{id:"idle"}, {id:"blink", weight?:1, mode?:"add", start?:2, hold?:false}]} exactly these layers in blend order (the first is the timeline\'s main animation; mode/start/hold as in rev2d_render layers) | ' +
         '{type:"select", ids:["head", "param:AngleX", "ik:armIk", "physics:hair"]} highlight items and show them in the inspector (IK constraints and physics groups with live diagnostics) | ' +
         `{type:"setOverlay", overlay:[${OVERLAY_LAYERS.map((l) => `"${l}"`).join(',')}]} | {type:"focus", viewBox:"fit" or [x,y,w,h]} | {type:"reload"} re-read the model file | ` +
-        '{type:"message", text:"..."} show a note to the human. Ids are checked against the model first. Returns how many editor tabs received it.',
+        '{type:"open", file:"other.r2d.json"} switch the editor to another model (relative to the working directory; it must lie inside the editor\'s workspace root, see rev2d_editor_state; the tabs follow and the view state resets; without model/url it goes to the editor whose workspace root contains the file) | ' +
+        '{type:"message", text:"..."} show a note to the human. Ids are checked against the model first. Returns how many editor tabs received it. ' +
+        'A `model` the editor does not have open (found by its workspace root) is refused for every command but open.',
       input: z.strictObject({ command: editorCommandSchema, ...targetShape }),
       effect: 'additive',
     },
     async (a) => {
-      const entry = locate(ctx, a);
       const command = toEditorCommand(a.command);
+      // An "open" without model/url goes to the editor whose workspace holds the file.
+      const located = locate(ctx, a, command.type === 'open' ? resolvePath(ctx, command.file) : undefined);
+      const { entry } = located;
+      if (command.type !== 'open') requireOpen(ctx, located, `apply ${command.type} to`);
+      if (command.type === 'open') {
+        // Opened by the editor server itself (it checks the workspace root); the tabs follow.
+        const res = await request(entry, 'POST', '/api/command', { type: 'open', file: resolvePath(ctx, command.file) });
+        const body = (await res.json()) as { delivered?: number; file?: string; notes?: string[] };
+        const n = body.delivered ?? 0;
+        const file = body.file ?? resolvePath(ctx, command.file);
+        const lines = [`opened ${displayPath(ctx, file)} in the editor at ${entry.url}; ${n} editor tab${n === 1 ? '' : 's'} follow${n === 1 ? 's' : ''}`];
+        for (const note of body.notes ?? []) lines.push(`note: ${note}`);
+        if (n === 0) lines.push(`hint: ${noStateHint(entry)}`);
+        return result([text(lines.join('\n')), json({ delivered: n, url: entry.url, file, notes: body.notes ?? [] })]);
+      }
       await checkCommand(entry, command);
       const res = await request(entry, 'POST', '/api/command', command);
       const { delivered } = (await res.json()) as { delivered?: number };
@@ -356,7 +469,8 @@ export function registerEditorTools(server: McpServer, ctx: ToolContext): void {
       title: 'Screenshot of the editor view',
       description:
         'Render exactly what the human is looking at in the running editor (its current params incl. the editor\'s own physics results and pinned values, time, animation layers with their mode/start/hold options, overlay and visible region, minus the parts hidden in its preview; rendered by the editor server, returned as a PNG), ' +
-        'plus a summary of the view state. overlay/scale/viewBox override the view. Default size like rev2d_render: longest side 512..1024 px; the summary names the region and the scale actually used.',
+        'plus a summary of the view state. overlay/scale/viewBox override the view. Default size like rev2d_render: longest side 512..1024 px; the summary names the region and the scale actually used. ' +
+        'A `model` the editor does not have open (found by its workspace root) is refused: open it first with rev2d_editor_command.',
       input: z.strictObject({
         ...targetShape,
         overlay: z.array(z.enum(OVERLAY_LAYERS)).optional().describe('Debug layers to draw (default: the editor\'s overlay; [] = none).'),
@@ -366,7 +480,9 @@ export function registerEditorTools(server: McpServer, ctx: ToolContext): void {
       effect: 'read-only',
     },
     async (a) => {
-      const entry = locate(ctx, a);
+      const located = locate(ctx, a);
+      const { entry } = located;
+      requireOpen(ctx, located, 'take a screenshot of');
       const viewBox = toViewBox(a.viewBox);
       const [state, model] = await Promise.all([fetchState(entry), editorModel(entry)]);
       let shot: Shot;

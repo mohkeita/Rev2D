@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { formatModelJson } from '../../core/format.js';
 import { decodePNG } from '../../render/index.js';
@@ -32,7 +32,7 @@ function renamed(name: string): string {
 describe('GET /api/events', () => {
   it('starts with a hello event naming the model file', async () => {
     const { fx, events } = await setup();
-    expect(events.events[0]).toEqual({ event: 'hello', data: { file: path.resolve(fx.file), mtimeMs: expect.any(Number) } });
+    expect(events.events[0]).toEqual({ event: 'hello', data: { file: path.resolve(fx.file), mtimeMs: expect.any(Number), root: path.resolve(fx.dir) } });
   });
 
   it('reports external writes as origin "external"', async () => {
@@ -87,6 +87,18 @@ describe('GET /api/events', () => {
     writeFileSync(path.join(fx.dir, 'sub', 'extra.png'), texturePng());
     const e = await events.next(changed('external'));
     expect(e.data.files).toEqual(['sub/extra.png']);
+  });
+
+  it('reports the model file being deleted on disk, and again when it comes back', async () => {
+    const { fx, events } = await setup();
+    rmSync(fx.file);
+    const gone = await events.next(changed('external'));
+    expect(gone.data.files).toEqual(['model.r2d.json']);
+    // The editor re-reads it and learns it is missing (it then keeps its document as unsaved).
+    expect((await fetch(`${fx.base}/api/model`)).status).toBe(404);
+    writeFileSync(fx.file, renamed('restored'));
+    await events.next(changed('external'));
+    expect((await (await fetch(`${fx.base}/api/model`)).json()).text).toContain('"restored"');
   });
 
   it('ignores rewrites with identical content', async () => {

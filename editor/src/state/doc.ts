@@ -212,6 +212,12 @@ export class DocHistory {
     return this.canRedo ? this.entries[this.index + 1].label : null;
   }
 
+  /** Forget everything (another file is being opened: no step may write the old document into it). */
+  clear(): void {
+    this.entries = [];
+    this.index = -1;
+  }
+
   /** Forget everything and start from `doc`. */
   reset(doc: RawDoc, label = 'Open'): void {
     this.entries = [{ doc, label }];

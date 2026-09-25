@@ -13,5 +13,8 @@
   than a GIF, and the notes under `render`/`sheet` point at IK, physics and view-box problems.
 - Worked, tested examples for most rigging tasks: `node bin/rev2d.js docs recipes` (docs/RECIPES.md).
 - `rev2d edit` and `rev2d watch` run until stopped: start them in the background, or ask the user
-  to run `rev2d edit <model>` in their own terminal and use `rev2d editor state|command|screenshot`.
+  to run `rev2d edit <model>` (or `rev2d edit <dir>` for a workspace with a start screen) in their
+  own terminal and use `rev2d editor state|command|screenshot`. `rev2d editor command --open <file>`
+  switches their editor to another model inside its workspace root (ask before switching away from
+  their work); see AGENTS.md §1.10.
 - Write scratch renders under `out/` (git-ignored).

@@ -1,3 +1,4 @@
+import { FileMenu } from '../files/FileMenu.js';
 import { errorCount, warningCount, BACKGROUND_MODES, OVERLAY_LAYERS, type BackgroundMode, type OverlayLayer } from '../state/app.js';
 import { useApp, useSession } from '../state/context.js';
 import { shallowEqual } from '../state/store.js';
@@ -29,18 +30,40 @@ export function Toolbar() {
   const history = useApp((s) => ({ canUndo: s.canUndo, canRedo: s.canRedo, undo: s.undoLabel, redo: s.redoLabel }), shallowEqual);
   const overlays = useApp((s) => s.overlays);
   const background = useApp((s) => s.background);
+  const empty = useApp((s) => s.status === 'empty');
+  const canOpen = useApp((s) => s.workspace !== null);
+
+  if (empty) {
+    return (
+      <header className="toolbar" data-testid="toolbar">
+        <Brand />
+        <FileMenu />
+        <div className="file-chip is-empty" data-testid="file-chip">
+          <span className="file-name muted">No model open</span>
+        </div>
+        <div className="toolbar-spacer" />
+        <BridgeIndicator />
+        <button className="icon-button" title="Keyboard shortcuts (?)" onClick={() => session.store.set({ helpOpen: true })}>
+          <Icon name="help" />
+        </button>
+      </header>
+    );
+  }
 
   return (
     <header className="toolbar" data-testid="toolbar">
-      <div className="brand" title="Rev2D editor">
-        <span className="brand-mark" aria-hidden="true" />
-        <span className="brand-name">Rev2D</span>
-      </div>
-      <div className="file-chip" title={file || 'no file'}>
+      <Brand />
+      <FileMenu />
+      <button
+        className="file-chip"
+        title={file ? `${session.displayPath(file)}\n${file}${canOpen ? '\nClick to open another model (Ctrl+O)' : ''}` : 'no file'}
+        onClick={() => canOpen && session.openDialog({ kind: 'open' })}
+        data-testid="file-chip"
+      >
         <span className="file-name">{file ? basename(file) : '—'}</span>
         {modelName && <span className="file-model">{modelName}</span>}
-        {saving ? <span className="saving-dot" title="Saving…" /> : unsaved ? <span className="unsaved-dot" title="Not saved to disk (Ctrl+S)" /> : null}
-      </div>
+        {saving ? <span className="saving-dot" title="Saving…" /> : unsaved ? <span className="unsaved-dot" title="Not saved to disk (Ctrl+S)" data-testid="unsaved-dot" /> : null}
+      </button>
 
       <div className="tool-group">
         <button className="icon-button" disabled={!history.canUndo} title={history.undo ? `Undo ${history.undo} (Ctrl+Z)` : 'Undo (Ctrl+Z)'} onClick={() => void session.undo()}>
@@ -93,6 +116,15 @@ export function Toolbar() {
         <Icon name="help" />
       </button>
     </header>
+  );
+}
+
+function Brand() {
+  return (
+    <div className="brand" title="Rev2D editor">
+      <span className="brand-mark" aria-hidden="true" />
+      <span className="brand-name">Rev2D</span>
+    </div>
   );
 }
 

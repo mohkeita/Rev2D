@@ -1,22 +1,32 @@
 /**
- * Editor server: serves the web editor, the model file API, live-reload events (SSE) and the
- * AI<->editor bridge (shared view state + commands). Protocol:
+ * Editor server: serves the web editor, the model file API, live-reload events (SSE), the
+ * AI<->editor bridge (shared view state + commands) and file management inside a workspace root.
+ * Protocol:
  *
  *   GET  /api/model                -> {file, text, mtimeMs}
- *   PUT  /api/model[?force=1]      {text} | {doc}, baseMtimeMs? -> {ok, written, diagnostics, mtimeMs}, or
- *                                     409 {error, hint, mtimeMs} when the file changed on disk since baseMtimeMs
+ *   PUT  /api/model[?force=1]      {text} | {doc}, baseMtimeMs?, file? -> {ok, written, diagnostics, mtimeMs}, or
+ *                                     409 {error, hint, mtimeMs} when the file changed on disk since baseMtimeMs,
+ *                                     409 {error, hint, file} when `file` is not the open model (it was switched)
  *   GET  /api/texture/:id          -> image/png
- *   GET  /api/events               -> SSE: hello {file, mtimeMs} | model-changed {origin, mtimeMs, files} | command <EditorCommand>
+ *   GET  /api/events               -> SSE: hello {file | null, mtimeMs, root} | model-changed {origin, mtimeMs, files}
+ *                                     | file-changed {file | null, origin: "editor" | "ai"} | command <EditorCommand>
  *   GET  /api/state                -> EditorState (404 until the UI published one)
- *   POST /api/state                EditorState -> 204 (animations: [{id, weight?, mode?, start?, hold?}])
- *   POST /api/command              EditorCommand -> {delivered}
+ *   POST /api/state                EditorState -> 204 (animations: [{id, weight?, mode?, start?, hold?}]);
+ *                                     409 when its absolute `file` is not the open model
+ *   POST /api/command              EditorCommand -> {delivered}; {type: "open", file} is handled by the
+ *                                     server -> {delivered, file, mtimeMs, notes} (tabs follow "file-changed")
  *   GET  /api/screenshot?overlay=a,b|all|none&scale=1&viewBox=fit|canvas|x,y,w,h -> image/png of the
  *                                     editor's pose (its published params with physics off, its layers
  *                                     with their options, minus its hidden parts; default: its overlay
  *                                     and visible region; without
  *                                     scale, shrunk to at most 2048*2048 px; X-Rev2D-* headers say what was used)
  *   GET  /api/info                 -> {info, diagnostics}
+ *   workspace: GET /api/workspace, GET /api/files?dir=, POST /api/open, POST /api/new, POST /api/save-as,
+ *              POST /api/close, POST /api/import, GET /api/download, GET /api/templates
+ *              (see src/node/editor-registry.ts and workspace-routes.ts)
  *   everything else                -> editor UI
+ *
+ * Endpoints that need a model answer 409 {error: "no model is open", hint} while none is open.
  *
  * Bound to 127.0.0.1 by default; requests must address a local Host (DNS-rebinding guard) and
  * browser writes must be same-origin (CSRF guard).
@@ -29,16 +39,25 @@ import { PACKAGE_ROOT } from '../api/templates.js';
 import { registerEditor } from '../node/editor-registry.js';
 import { HttpError, allowedHostnames, checkRequestOrigin, sendError, sendJson } from './http.js';
 import { ModelStore } from './model-store.js';
-import { handleApi, relativeFiles, type ApiContext, type ChangeOrigin } from './routes.js';
+import { handleApi, relativeFiles, type ApiContext } from './routes.js';
 import { SseHub } from './sse.js';
 import { createUiHandler, type UiMode } from './ui.js';
 import { FileWatcher } from './watch.js';
+import { RecentFiles, WorkspaceRoot, defaultRecentFile } from './workspace.js';
 
 export type { UiMode } from './ui.js';
 
 export interface EditorServerOptions {
-  /** Model file to edit (must exist). */
-  file: string;
+  /**
+   * Model file to open at start (must exist and lie inside the workspace root). Without it the
+   * server starts with no model open (the UI shows its start screen).
+   */
+  file?: string;
+  /**
+   * Workspace root: every file the editor opens, creates, saves or imports must lie inside it
+   * (symbolic links are resolved). Default: the directory of `file`, else the current directory.
+   */
+  root?: string;
   /** TCP port (default 4777; 0 picks a free port). */
   port?: number;
   /** Interface to bind (default 127.0.0.1). */
@@ -62,6 +81,13 @@ export interface EditorServerOptions {
   pollIntervalMs?: number;
   /** Request body limit in bytes (default 20 MiB). */
   maxBodyBytes?: number;
+  /** Body limit of POST /api/import in bytes (default 64 MiB; files travel base64-encoded). */
+  maxImportBytes?: number;
+  /**
+   * JSON file of the recently opened models, shared by editor servers. Default ~/.rev2d/recent.json
+   * when `register` is on, else none; null = keep the list in memory only.
+   */
+  recentFile?: string | null;
   /** Sink for operational messages (watch fallbacks, internal errors). Default: console.error. */
   log?: (message: string) => void;
 }
@@ -70,8 +96,10 @@ export interface EditorServer {
   /** Base URL, e.g. "http://127.0.0.1:4777". */
   url: string;
   port: number;
-  /** Absolute path of the model file. */
-  file: string;
+  /** Absolute path of the open model file, or null (start screen). Follows open/new/save-as/import/close. */
+  readonly file: string | null;
+  /** Absolute workspace root. */
+  root: string;
   /** How the editor UI is served ('none' = only the API; `detail` says why). */
   ui: { mode: UiMode; detail: string };
   /** Stop serving: ends event streams, stops watchers and Vite, removes the registry entry. */
@@ -80,12 +108,21 @@ export interface EditorServer {
 
 export const DEFAULT_PORT = 4777;
 const DEFAULT_MAX_BODY = 20 * 1024 * 1024;
+const DEFAULT_MAX_IMPORT = 64 * 1024 * 1024;
 
 export async function startEditorServer(opts: EditorServerOptions): Promise<EditorServer> {
   const log = opts.log ?? ((m: string) => console.error(`[rev2d editor] ${m}`));
   const host = opts.host ?? '127.0.0.1';
   const allowed = allowedHostnames(host, opts.allowedHosts);
-  const store = await ModelStore.open(opts.file);
+  const initial = opts.file !== undefined ? await ModelStore.open(opts.file) : null;
+  const root = await WorkspaceRoot.open(opts.root ?? (initial ? initial.dir : process.cwd()));
+  if (initial) {
+    await root.resolve(initial.file, 'model').catch(() => {
+      throw new Error(`the model ${initial.file} is outside the workspace root ${root.dir} (the root must contain every file the editor opens)`);
+    });
+  }
+  const register = opts.register ?? true;
+  const recent = new RecentFiles(opts.recentFile === undefined ? (register ? defaultRecentFile() : null) : opts.recentFile, log);
   const sse = new SseHub();
 
   const watcher = new FileWatcher({
@@ -93,25 +130,56 @@ export async function startEditorServer(opts: EditorServerOptions): Promise<Edit
     pollIntervalMs: opts.pollIntervalMs,
     log,
     onChange: (files) => {
+      const store = ctx.store;
+      if (!store) return;
       store
         .detectChanges(files)
         .then(({ changed, mtimeMs }) => {
-          if (changed.length) ctx.modelChanged('external', mtimeMs, changed);
+          if (changed.length) ctx.modelChanged(store, 'external', mtimeMs, changed);
         })
         .catch((e: Error) => log(`change detection failed: ${e.message}`));
     },
   });
 
+  /** Registry entry of this server once it listens (its `file` follows the open model; `root` lets the CLI/MCP find it by any path of the workspace). */
+  let advertised: { pid: number; url: string; startedAt: string } | null = null;
+  let unregister: (() => void) | null = null;
+  const advertise = (file: string | null) => {
+    if (advertised) unregister = registerEditor({ pid: advertised.pid, url: advertised.url, file: file ?? '', root: root.dir, startedAt: advertised.startedAt });
+  };
+  let queue: Promise<unknown> = Promise.resolve();
+
   const ctx: ApiContext = {
-    store,
+    store: initial,
+    root,
+    recent,
     sse,
     maxBodyBytes: opts.maxBodyBytes ?? DEFAULT_MAX_BODY,
+    maxImportBytes: opts.maxImportBytes ?? DEFAULT_MAX_IMPORT,
     state: null,
-    modelChanged(origin: ChangeOrigin, mtimeMs: number, files: string[]) {
+    modelChanged(store, origin, mtimeMs, files) {
+      if (store !== ctx.store) return; // a late event of a model that was switched away from
       watcher.setFiles(store.watchedFiles());
       sse.broadcast('model-changed', { origin, mtimeMs, files: relativeFiles(store, files) });
     },
+    async switchTo(next, origin) {
+      const prev = ctx.store;
+      ctx.store = next;
+      ctx.state = null;
+      watcher.setFiles(next ? next.watchedFiles() : []);
+      if (next) recent.add(next.file);
+      advertise(next?.file ?? null);
+      const delivered = sse.broadcast('file-changed', { file: next?.file ?? null, origin });
+      if (prev && prev !== next) await prev.idle();
+      return delivered;
+    },
+    exclusive<T>(fn: () => Promise<T>): Promise<T> {
+      const run = queue.then(fn, fn);
+      queue = run.catch(() => undefined);
+      return run;
+    },
   };
+  if (initial) recent.add(initial.file);
 
   const server = createServer();
   const ui = await createUiHandler({
@@ -159,21 +227,28 @@ export async function startEditorServer(opts: EditorServerOptions): Promise<Edit
       { cause: e },
     );
   }
-  watcher.setFiles(store.watchedFiles());
+  watcher.setFiles(initial ? initial.watchedFiles() : []);
 
   const boundPort = (server.address() as AddressInfo).port;
   if (BROWSER_BLOCKED_PORTS.has(boundPort)) log(`browsers refuse to connect to port ${boundPort} (ERR_UNSAFE_PORT); the editor UI will not open there`);
   const url = `http://${urlHost(host)}:${boundPort}`;
-  const unregister = (opts.register ?? true) ? registerEditor({ pid: process.pid, url, file: store.file, startedAt: new Date().toISOString() }) : null;
+  if (register) {
+    advertised = { pid: process.pid, url, startedAt: new Date().toISOString() };
+    advertise(ctx.store?.file ?? null);
+  }
 
   let closing: Promise<void> | null = null;
   return {
     url,
     port: boundPort,
-    file: store.file,
+    get file() {
+      return ctx.store?.file ?? null;
+    },
+    root: root.dir,
     ui: { mode: ui.mode, detail: ui.detail },
     close() {
       closing ??= (async () => {
+        advertised = null;
         unregister?.();
         watcher.close();
         sse.close();
@@ -182,7 +257,8 @@ export async function startEditorServer(opts: EditorServerOptions): Promise<Edit
           server.close(() => resolve());
           server.closeAllConnections();
         });
-        await store.idle();
+        await queue;
+        await ctx.store?.idle();
       })();
       return closing;
     },

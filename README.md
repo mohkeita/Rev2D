@@ -1,304 +1,421 @@
-# Rev2D
+<!--
+  Maintainers, before publishing:
+  1. Replace every {REPO_URL} placeholder (search the repository) with the repository URL.
+  2. Demo video: GitHub plays an MP4 inline only when it is uploaded as an attachment, not when it is
+     linked from the repository. Edit this README on github.com, drag docs/media/rev2d-demo.mp4
+     (65 s, 5 MB) into the editor and wait for the upload: GitHub inserts a
+     https://github.com/user-attachments/assets/<id> URL. Put that URL on its own line right below
+     the poster link (a bare attachment URL on its own line renders as a video player).
+-->
 
-**An AI-friendly 2D rigging and animation toolkit in the spirit of Live2D Cubism and Spine.**
-Models are plain JSON text, renders are deterministic and headless, and every step of authoring
-comes with a way to check it: overlays, contact sheets, exact numbers, precise diagnostics, atomic
-edit operations, an MCP server, and a live editor in which the AI and the human look at the same
-model.
+<div align="center">
 
-[한국어 소개](#한국어-소개) · [Quick start](#quick-start) · [Guide for AI agents](AGENTS.md) ·
-[Recipes](docs/RECIPES.md) · [Format spec](docs/SPEC.md)
+<h1>Rev2D</h1>
 
-<p>
-  <img src="docs/images/hana.png" width="312" alt="hana, a Live2D-style anime bust built from vector parts, rendered in its default pose">
-  <img src="docs/images/hana-turn.png" width="304" alt="3x3 contact sheet of hana turning her head: AngleX -30, 0, 30 across, AngleY 30, 0, -30 down">
-</p>
-<p>
-  <img src="docs/images/robot-arm-bones.png" width="373" alt="robot arm reaching with two-bone IK, rendered with the bone overlay">
-  <img src="docs/images/minimal-overlay.png" width="280" alt="the minimal example bent to one side, with its 2x2 warp lattice, bone, labels and coordinate grid overlaid">
-</p>
-<p>
-  <img src="docs/images/slime-jump.png" width="573" alt="8-frame contact sheet of the slime's jump animation: anticipation squash, stretch, apex, landing squash, settle, with the takeoff and land events under their frames">
-</p>
+**Live2D/Spine-style 2D rigging & animation — built for AI agents**
 
-Every image above is CLI output (see [Regenerating the images](#regenerating-the-images)).
+**English** · [한국어](README.ko.md)
 
-## Why Rev2D
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![Node >= 22](https://img.shields.io/badge/node-%3E%3D22-339933?logo=nodedotjs&logoColor=white)
+![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![Tests: 1350+ passing](https://img.shields.io/badge/tests-1350%2B%20passing-brightgreen)
+[![MCP: 16 tools](https://img.shields.io/badge/MCP-16%20tools-6E56CF)](docs/MCP.md)
 
-Rigging tools are built for mouse and eyes. Rev2D keeps the concepts of Live2D and Spine but makes
-every one of them readable, writable and checkable by a program:
+<img src="docs/media/hero.gif" width="720" alt="Four Rev2D example models animating in a 2x2 grid: hana, an anime bust, idling and blinking; a slime jumping; a robot arm reaching with IK; textured koinobori fluttering on a pole">
 
-- **Text-first format.** One `*.r2d.json` file (JSONC allowed) holds parameters, bones, warps,
-  parts, bindings, IK, physics and animations, all addressed by id. Geometry is in canvas pixels,
-  so an agent can reason about positions directly. [SPEC.md](docs/SPEC.md)
-- **Deterministic headless renders.** A pure TypeScript rasterizer with no GPU or browser: the same
-  model and inputs always give the same pixels, so a render is evidence, not a guess.
-- **Self-verification built in.** Debug overlays (bones, warp lattices, meshes, bounds, labels,
-  coordinate grid; `--only` focuses them on a few ids), contact sheets of parameter sweeps,
-  parameter overviews and animation windows, GIFs and frame sequences, `inspect` for exact world
-  transforms, bounds, IK reach and physics outputs (also as a table over time, or for any point
-  attached to a bone, warp or part), `analyze` for a whole animation (ranges, physics clamping, IK snap
-  risk, events, loop seam), `hit` for "what is under this pixel", image diffs. Renders add notes
-  when something looks wrong.
-- **Precise diagnostics.** Every problem has a JSON pointer, a stable code and a fix hint
-  (`unknown parent "bodyWarpp" → did you mean "bodyWarp"?`).
-- **Atomic edit operations.** `add` and `update` (bones by `world` position and `worldRotation`
-  if you like), `remove` (with cascade), `rename` (rewrites every reference), `set`, `bind`
-  (absolute or relative), `bind_linear`, `bind_warp` (pseudo-3D head turns from yaw/pitch),
-  `follow` (a rigid accessory that stays on a deforming head), `key`, `recolor`, `compose` (bake
-  layered animations), `patch`... A batch applies completely and validates, or nothing is written.
-  [OPS.md](docs/OPS.md)
-- **MCP server.** 16 tools for Claude Code and other MCP clients; renders come back as images.
-  [MCP.md](docs/MCP.md)
-- **Live editor bridge.** `rev2d edit` opens a web editor that live-reloads every change the AI
-  writes; the AI can read the human's view state, take a screenshot of exactly what they see, and
-  pose the model or play animations for them.
+<a href="docs/media/rev2d-demo.mp4"><img src="docs/media/poster.png" width="480" alt="Rev2D demo video poster: Live2D/Spine-style 2D rigging, built for AI agents. Click to watch the 1-minute demo"></a>
 
-## Feature map: Live2D / Spine concepts in Rev2D
+**[▶ Watch the 1-minute demo](docs/media/rev2d-demo.mp4)** · English headlines, Korean captions
 
-| Concept | In Rev2D | See |
+</div>
+
+## What is Rev2D?
+
+- **A rig is one JSON file.** Parameters, bones, warp deformers, parts, keyform bindings, IK,
+  physics and layered animations live in one `*.r2d.json`, addressed by id, in canvas pixels. You
+  can diff it, review it and generate it.
+- **A deterministic, headless renderer.** Pure TypeScript with no GPU and no browser: the same
+  model and inputs always give the same pixels. It renders debug overlays, contact sheets, GIFs and
+  PNG sequences.
+- **Tools an agent can drive.** A 19-command CLI with `--json` output, atomic and validated edit
+  operations, and an MCP server with 16 tools that return renders as images. The whole workflow is
+  in [How AI agents use Rev2D](#how-ai-agents-use-rev2d).
+- **A live editor for the human.** A React + WebGL2 [editor](#the-editor) reloads every change the
+  AI writes, and the AI can see and drive the view you are looking at.
+
+## How AI agents use Rev2D
+
+Rigging tools are built for a mouse and a pair of eyes. Rev2D keeps the concepts of Live2D and
+Spine and makes each step readable, writable and checkable by a program, so an agent can build a
+rig and **prove** it works before it says it is done.
+
+In one line: **write the JSON, check it with renders and numbers, fix it with ops, check again.** No
+human has to look at the pixels for it: the agent sees its results in renders and sheets and
+measures them with `inspect` and `analyze`.
+
+An agent connects in one of three ways:
+
+| Way in | Use it for | Start here |
 | --- | --- | --- |
-| Parameters (Live2D) | `parameters`: named scalars with range, default and group; the control surface that bindings, animations and physics share | every example |
-| Warp deformers (Live2D) | `warps`: `cols × rows` lattices, nestable, parented to bones or other warps; `bind_warp` generates pseudo-3D turns from yaw/pitch; `follow` keeps a rigid accessory on a turning head | `hana` 8×8 `faceWarp`, [recipe 16](docs/RECIPES.md#16-rigid-accessory-on-a-turning-head-hat) |
-| Rotation deformers (Live2D) | bones: a bone is a pivot with a rotation you bind to a parameter | `hana` `AngleZ` → `bone:head.rotation` |
-| Keyform bindings | 1-3 parameters per binding, full keyform grid, multilinear (or step) interpolation; bindings on one property add up | `hana` 3×3 `AngleX × AngleY` head turn |
-| Shape keyforms / deform keys | bind shape fields: SVG path morphs (`shape.d`), polygon points, mesh vertices, ellipse/rect fields | `hana` mouth: 6 path keyforms over 2 parameters |
-| Bones (Spine) | hierarchy with local x/y/rotation/scale/length | `robot-arm` |
-| IK constraints (Spine) | one-bone aim and two-bone IK with `mix`, bend direction, `softness` (no knee snap near full reach) and `stretch` | `robot-arm` `armIk`, [recipe 19](docs/RECIPES.md#19-walk-cycle-smooth-keys-track-offset-soft-ik) |
-| Skinning / weighted meshes (Spine) | `skin`: linear blend skinning with automatic (distance-based) or explicit weights | `robot-arm` elbow boot and cable |
-| Physics (Live2D) | pendulum chains at a fixed 60 Hz: inputs x / y / angle → output parameters; explicit parameter values override the outputs | `hana` hair, `robot-arm` cable |
-| Clipping masks | `mask`: clip to the union of other parts (geometry and texture alpha), `maskInvert` | `hana` irises, `textured` sheen |
-| Blend modes | `normal`, `add`, `multiply`, `screen` | `slime` glow and shadow |
-| Draw order | `z` then array order; `z` is bindable and animatable | [recipe 9](docs/RECIPES.md#9-draw-order-swap-step-binding-on-z) |
-| Animations / motions | tracks on parameters (preferred) or any property; named easings, `smooth` (Catmull-Rom through the keys) and cubic-bezier; per-track time `offset`; loop or one-shot | `hana` `idle` + `blink` |
-| Motion layering | several animations at once with weights, `override` or `add` mode, a `start` time and `once` one-shots; the `compose` op bakes a layer stack into one animation | [recipe 15](docs/RECIPES.md#15-gestures-over-an-idle-add-once-compose) |
-| Events | timed named events with JSON data | `slime` `takeoff` / `land` |
-| Textures and meshes | PNG textures, atlas crops as subdivided image grids, textured meshes with uvs | `textured` |
-| Paint | solid colors, linear/radial gradients, strokes with joins and inside/center/outside alignment, tint, opacity | every example |
-| Editor | web editor: outliner, WebGL viewport with overlays, parameter sliders (pin a physics output to hold it), inspector (live IK and physics diagnostics), timeline with layer options, problems panel, undo/redo, live reload | `rev2d edit` |
+| **MCP server** | Claude Code, Claude Desktop and other MCP clients | [Connect Claude Code](#connect-claude-code-or-any-mcp-client), 16 tools |
+| **CLI** | Any agent with a shell | `--json` on every command; the guide is [AGENTS.md](AGENTS.md) |
+| **Editor bridge** | Working together while a human watches in the editor | `rev2d edit`, then `rev2d editor ...` commands or the MCP `rev2d_editor_*` tools |
 
-## Quick start
+### The loop
 
-Requirements: Node 22+.
-
-```sh
-git clone <this repository> Rev2D && cd Rev2D
-npm install
-
-npx rev2d new hero.r2d.json                        # a small valid rig (or --template empty|hana|robot-arm|slime|textured|minimal)
-npx rev2d validate hero.r2d.json                   # diagnostics with JSON pointers and hints
-npx rev2d render hero.r2d.json -o out/hero.png --overlay bones,warps,labels
-npx rev2d sheet hero.r2d.json -o out/lean.png --sweep Lean --sweep Squash=0,1 --scale 0.5
-npx rev2d sheet hero.r2d.json -o out/params.png --overview --scale 0.4   # every parameter over its range
-npx rev2d sheet hero.r2d.json -o out/idle.png --anim idle --frames 8 --scale 0.5
-npx rev2d inspect hero.r2d.json --param Lean=1 --part eye --json
-npx rev2d analyze hero.r2d.json --anim idle         # ranges, physics clamping, IK reach, loop seam
-npx rev2d set hero.r2d.json part:eye.fill=#ffcc00 --render out/eye.png
-npx rev2d gif hero.r2d.json -o out/idle.gif --anim idle --scale 0.5
-npx rev2d edit hero.r2d.json                       # live editor at http://127.0.0.1:4777
+```text
+  ┌──► validate ──► render ──► sheet ──► inspect / analyze ──┐
+  │    pointers     overlays   sweeps    exact numbers:       │
+  │    + hints      + notes    overview  IK, physics, seams   │
+  └───────────────── fix with atomic ops ◄────────────────────┘
 ```
 
-`--template empty` gives a model with nothing but its canvas, for building everything with ops.
+Examples below write `rev2d` for `node bin/rev2d.js` (or `npx rev2d` inside the checkout).
 
-`npx rev2d` works inside the repository; from anywhere else run
-`node /path/to/Rev2D/bin/rev2d.js <command>`. `rev2d help <command>` lists every flag, and
-[CLI.md](docs/CLI.md) documents every command and its `--json` output.
+| Step | CLI | MCP tool | What the agent gets |
+| --- | --- | --- | --- |
+| 1. Author | `rev2d new hero.r2d.json --template hana`, or write the JSON directly | `rev2d_create_model` | a valid starting rig (blank, empty or one of 5 examples) |
+| 2. Validate | `rev2d validate hero.r2d.json --json` | `rev2d_validate` | every problem with a JSON pointer, a stable code and a fix hint |
+| 3. Look | `rev2d render hero.r2d.json -o out/look.png --overlay bones,warps,labels,grid` | `rev2d_render` | a PNG, plus notes when something looks wrong (IK out of reach, physics clamped, parts off-canvas) |
+| 4. Sweep | `rev2d sheet hero.r2d.json -o out/turn.png --sweep AngleX=-30:30:3 --sweep AngleY=30,0,-30` (or `--overview`, `--anim idle`) | `rev2d_sheet` | a parameter range, every parameter, or an animation in one captioned image |
+| 5. Measure | `rev2d inspect hero.r2d.json --param AngleX=30 --part mouth --json`, `rev2d analyze hero.r2d.json --anim idle --warmup 8` | `rev2d_inspect`, `rev2d_analyze` | bone transforms, part bounds, IK reach, physics clamping and loop seams as numbers |
+| 6. Fix | `rev2d ops hero.r2d.json edits.json --dry-run`, then without `--dry-run` | `rev2d_apply_ops` | a per-op report; nothing is written unless the whole batch applies and validates |
 
-A model is ordinary JSON. This is the core of [`examples/minimal`](examples/minimal/minimal.r2d.json):
-a parameter, a bone, a warp, two parts, a binding and an animation.
+<details>
+<summary><b>A full loop, verbatim</b>: giving the blank template a blink</summary>
 
-```jsonc
+```console
+$ node bin/rev2d.js new blob.r2d.json
+created blob.r2d.json from template "blank" (512x512; 0 errors, 0 warnings)
+
+$ node bin/rev2d.js ops blob.r2d.json --op '{"op":"add","kind":"parameter","value":{"id":"EyeOpen","min":0,"max":1,"default":1}}' --op '{"op":"bind","target":"part:eye.shape.ry","params":["EyeOpen"],"keys":[{"at":[0],"value":2},{"at":[1],"value":26}]}'
+applied 2 ops on blob.r2d.json
+  ok  #0  --op #1  add   added parameter "EyeOpen" as /parameters/2 (range 0..1, default 1)
+  ok  #1  --op #2  bind  added binding part:eye.shape.ry ← [EyeOpen] as /bindings/3 (2 keyforms)
+wrote blob.r2d.json
+
+$ node bin/rev2d.js validate blob.r2d.json
+ok    blob.r2d.json  (0 errors, 0 warnings)
+
+$ node bin/rev2d.js sheet blob.r2d.json -o out/blink.png --sweep EyeOpen=0:1:3 --sweep Lean=-1,0,1 --scale 0.5
+wrote out/blink.png (800x848, 9 cells, 3 per row, cell viewBox 0,0,512,512, scale 0.5)
+cells: EyeOpen=0,0.5,1 x Lean=-1,0,1
+
+$ node bin/rev2d.js inspect blob.r2d.json --param EyeOpen=0 --part eye --json
 {
-  "format": "rev2d", "version": 1,
-  "meta": { "name": "minimal", "width": 256, "height": 256, "background": "#1f2430" },
-  "parameters": [ { "id": "Lean", "min": -1, "max": 1, "default": 0 } ],
-  "bones": [ { "id": "root", "x": 128, "y": 210 } ],
-  "warps": [ { "id": "bodyWarp", "parent": "root", "rect": [68, 60, 120, 150], "cols": 2, "rows": 2 } ],
+  "time": 0,
+  "params": { "Lean": 0, "Squash": 0, "EyeOpen": 0 },
+  "drawOrder": ["body", "eye"],
+  "properties": { "part:eye.shape.ry": 2 },
+  "events": [],
+  "ik": [],
+  "physics": [],
   "parts": [
-    { "id": "body", "parent": "bodyWarp", "shape": { "type": "ellipse", "cx": 128, "cy": 140, "rx": 56, "ry": 66, "detail": 10 }, "fill": "#2f9e6e" },
-    { "id": "eye", "parent": "bodyWarp", "shape": { "type": "ellipse", "cx": 128, "cy": 124, "rx": 9, "ry": 14 }, "fill": "#14432f", "z": 1 }
-  ],
-  "bindings": [
-    { "target": "warp:bodyWarp.offsets", "params": ["Lean"], "keys": [
-      { "at": [-1], "value": { "0": [-28, 4], "1": [-28, 4], "2": [-28, 4], "3": [-14, 0], "4": [-14, 0], "5": [-14, 0] } },
-      { "at": [0], "value": {} },
-      { "at": [1], "value": { "0": [28, 4], "1": [28, 4], "2": [28, 4], "3": [14, 0], "4": [14, 0], "5": [14, 0] } } ] }
-  ],
-  "animations": [
-    { "id": "sway", "duration": 2, "loop": true, "tracks": [ { "target": "param:Lean", "keys": [
-      { "t": 0, "v": -1, "ease": "inOutSine" }, { "t": 1, "v": 1, "ease": "inOutSine" }, { "t": 2, "v": -1 } ] } ] }
+    {
+      "id": "eye",
+      "visible": true,
+      "opacity": 1,
+      "z": 1,
+      "bounds": [241, 235, 30, 4],
+      "center": [256, 237]
+    }
   ]
 }
+
+$ node bin/rev2d.js analyze blob.r2d.json --anim idle
+analysis of idle (2s loop): 120 frames over t=0..2s
+
+PARAMETERS (min..max over the frames, [range])
+  Lean  -0.5..0.5  [-1..1]
+  Squash  0..0.4  [0..1]  reaches min
+  constant: EyeOpen=1
+
+LOOP SEAM (end of the loop extrapolated to t=2 vs t=0)
+  parameters and bones close the loop
+  pixels: 0% differ between t=0 and one loop later (threshold 8, max delta 0)
+
+BOUNDS
+  visible parts over all frames: [112.9, 126.5, 286.2, 259] (canvas 512x512)
 ```
 
-**Conventions.** Coordinates are canvas pixels with the origin top-left and **+y down**; angles are
-degrees, **positive = clockwise**. Standard parameters follow Live2D names and signs
-([SPEC.md §3.1](docs/SPEC.md#31-parameters)): `AngleX > 0` turns the face toward the screen
-right, `AngleY > 0` looks **up** (features move to smaller y), `AngleZ > 0` tilts clockwise, and
-`L` in an id is the character's left, which is on the screen right.
+The closed eye is 4 px tall (`bounds` is x, y, w, h), the sweep sheet shows it at every lean, and
+the idle loop closes. Only the "next steps" lines that `new` prints are left out.
 
-### Edit with operations
+</details>
 
-```sh
-npx rev2d ops hero.r2d.json --dry-run --op '{"op":"add","kind":"parameter","value":{"id":"EyeOpen","min":0,"max":1,"default":1}}' --op '{"op":"bind","target":"part:eye.shape.ry","params":["EyeOpen"],"keys":[{"at":[0],"value":2},{"at":[1],"value":26}]}'
-```
-
-Drop `--dry-run` to write. Ops are validated as a batch; nothing is written unless all of them
-apply and the result is valid. Copy-paste batches for head turns, blinks, mouths, physics, IK,
-skinning and more are in [docs/RECIPES.md](docs/RECIPES.md).
-
-### Use it from Claude Code (MCP)
+### Connect Claude Code (or any MCP client)
 
 ```sh
 claude mcp add rev2d -- node /absolute/path/to/Rev2D/bin/rev2d.js mcp
 ```
 
-Add `--scope project` to share it through the project's `.mcp.json`. Ask the agent to call
-`rev2d_guide` first; tools such as `rev2d_render`, `rev2d_sheet`, `rev2d_inspect`,
-`rev2d_analyze` and `rev2d_apply_ops` then cover the whole authoring loop. Other MCP clients use the same command
-(`node .../bin/rev2d.js mcp`, stdio). See [MCP.md](docs/MCP.md).
+Add `--scope project` to share it through the project's `.mcp.json`:
 
-### Work together in the live editor
+```json
+{
+  "mcpServers": {
+    "rev2d": {
+      "command": "node",
+      "args": ["/absolute/path/to/Rev2D/bin/rev2d.js", "mcp"]
+    }
+  }
+}
+```
+
+Any client that starts stdio servers (Claude Desktop, other MCP clients) uses the same command. On
+Windows, write the path with forward slashes (`C:/Users/me/Rev2D/bin/rev2d.js`). Ask the agent to
+call `rev2d_guide` first. Without MCP, any agent with a shell can drive the CLI instead: every
+command has `--json`, and [AGENTS.md](AGENTS.md) is the agent's guide.
+
+| Group | Tool | Purpose |
+| --- | --- | --- |
+| Learn | `rev2d_guide` | Quickstart for AI authors: conventions, workflow, address grammar, recipes. **Call first.** |
+| | `rev2d_schema` | JSON Schema of the model, or of one part of it (`Part`, `Binding`, `Physics`, ...) |
+| | `rev2d_docs` | The bundled docs: spec, ops, cli, mcp, recipes, architecture, examples, agents |
+| Check | `rev2d_validate` | Diagnostics with JSON pointers, stable codes and fix hints |
+| | `rev2d_info` | Outline: parameters and what they drive, bone tree, warps, parts, bindings, IK, physics, animations |
+| See | `rev2d_render` | One pose as an inline PNG, with overlays, IK reach and warning notes |
+| | `rev2d_sheet` | One captioned grid: an animation over time, 1–2 parameter sweeps, or an overview of every parameter |
+| | `rev2d_diff_images` | Pixel diff of two PNGs, with the differences drawn in red |
+| Measure | `rev2d_inspect` | Exact numbers for a pose or a series of times: bones, part bounds, IK, physics, mapped points, track tables |
+| | `rev2d_analyze` | A whole animation checked at 60 fps: ranges, physics clamping, IK snap risk, events, loop seam |
+| | `rev2d_hit_test` | Which parts cover a canvas point, top-most first |
+| Edit | `rev2d_apply_ops` | Atomic, validated edits by id (16 ops: add, bind, bind_warp, follow, recolor, compose, ...) |
+| | `rev2d_create_model` | A new model from `blank`, `empty` or an example template |
+| Editor bridge | `rev2d_editor_state` | What the human sees: open model, workspace, pose, time, layers, selection, view |
+| | `rev2d_editor_command` | Drive the editor: open a file, set parameters, play, seek, select, overlays, focus, message |
+| | `rev2d_editor_screenshot` | A PNG of exactly what the human sees |
+
+Arguments and results for every tool: [docs/MCP.md](docs/MCP.md).
+
+### The live editor bridge: the AI works in the window you are watching
+
+<img src="docs/media/ai-live-edit.gif" width="800" alt="Left: a terminal where an AI runs real rev2d commands (validate, info, a recolor op, editor command, editor screenshot). Right: the Rev2D editor open in Chrome reloads with teal hair, turns the head, plays the talk animation and shows the AI's message">
+
+The human opens the editor; the agent edits the file and drives the view from its own terminal (or
+over MCP). These are the commands from the demo:
 
 ```sh
-npx rev2d edit hero.r2d.json                                      # the human's window
-npx rev2d editor command --params Lean=1 --message "lean check"   # the AI poses the model for them
-npx rev2d editor screenshot -o out/seen.png                       # ...and sees exactly what they see
+# the human
+rev2d edit hero.r2d.json                       # http://127.0.0.1:4777
+
+# the agent
+rev2d ops hero.r2d.json --op '{"op":"recolor","parts":["hairBack","hairBackStrands","hairSideR","hairSideStrandR","hairSideL","hairSideStrandL","hairFront","hairFrontStrands","hairFrontShine"],"hsl":{"h":-120,"s":0.25,"l":0.05}}'
+rev2d editor command --params AngleX=25,EyeLOpen=0,MouthOpen=0.6
+rev2d editor command --play talk
+rev2d editor screenshot -o out/seen.png        # a render of exactly what the human sees
+rev2d editor state                             # open model, parameters, time, layers, selection, view
+rev2d editor command --message "Hair is teal now, pose set, talk played."
+rev2d editor command --open models/cat.r2d.json   # switch the editor to another model in its workspace
 ```
 
-## The verification loop
+- **The AI sees** what you see: `editor state` (parameters including the editor's own physics
+  results and the sliders you pinned, time, animation layers, selection, visible region) and
+  `editor screenshot` (rendered by the same renderer as `rev2d render`).
+- **The AI drives** the view: parameters, play / pause / seek, animation layers, selection,
+  overlays, focus, messages, and which file is open.
+- **No lost edits.** If the agent writes the file while you have unsaved edits, your next save is
+  refused (HTTP 409) and you choose to reload its version or overwrite it.
 
-This is the loop the tooling is designed around (full guide: [AGENTS.md](AGENTS.md)):
+### Try these prompts
 
-1. **Validate**: `rev2d validate model.r2d.json --json`, until there are no errors.
-2. **Look**: `rev2d render ... --overlay bones,warps,labels,grid --viewbox fit`, and read the
-   notes (IK out of reach, physics clamped, parts outside the view).
-3. **Sweep**: `rev2d sheet ... --sweep AngleX --sweep AngleY=30,0,-30`, `--overview`, or
-   `--anim idle`: a whole parameter range, every parameter, or an animation in one captioned image.
-4. **Measure**: `rev2d inspect ... --param AngleX=30 --json`: bone world transforms, part bounds,
-   warp points, draw order, bound values, events, IK reach, physics outputs;
-   `--point 256,120@head` for where an attached point goes; `--times 0:2:9 --track ...` for a table
-   over time.
-5. **Analyze motion**: `rev2d analyze ... --anim idle --warmup 10`: parameter ranges, physics
-   clamping, IK snap risk, events and whether the loop closes.
-6. **Fix**: `rev2d ops model.r2d.json edits.json --dry-run`, then write; back to 1.
+> Make a cat mascot with rev2d: a head turn, a blink and tail physics. Verify it with sheets and
+> `analyze`.
 
-## Architecture
+> Create `cat.r2d.json` from the blank template and give it a blink: an `EyeOpen` parameter bound
+> to the eye, and a 0.4 s `blink` animation. Before you say it's done, show me a sweep sheet, an
+> animation sheet and the `inspect` numbers for the closed eye.
 
-```text
- .r2d.json ─► validate (schema + semantic diagnostics) ─► Rig compile ─► pose(params, animations, time)
-            ─► render list ─► software rasterizer (PNG, sheets, GIFs, overlays)   or   WebGL2 (editor)
- front ends: CLI (rev2d) · MCP server · editor server (HTTP + SSE) + React editor
- shared:     src/api (render/sheet/inspect/hit) · src/ops (edit engine) · src/node (files, textures)
+> I have the editor open on `hana.r2d.json`. Make her hair teal, turn her head to AngleX 25 and
+> play `talk` so I can watch, then take a screenshot of what I see and tell me what changed.
+
+> Put a small hat on hana that stays on her head when she turns (use the `follow` op). Prove it
+> with an AngleX × AngleY sheet and `inspect --point` numbers for the hat's anchor.
+
+> Analyze every animation in `robot-arm.r2d.json` for IK reach, physics clamping and loop seams.
+> Fix what you find with ops, and show me before/after sheets.
+
+### Why it works
+
+**Diagnostics an agent can act on.** Each problem names the exact place in the file, a stable code
+and the fix. This is real output for a model with two typos:
+
+```console
+$ rev2d validate blob.r2d.json
+FAIL  blob.r2d.json
+  error   /parts/0/parent     unknown-parent  unknown parent "bodyWarpp" (must be a bone or warp id)  → did you mean "bodyWarp"?
+  error   /bindings/1/target  invalid-target  bone has no property "scaleYY"  → did you mean "scaleY"?
+  2 errors, 0 warnings
 ```
 
-The core (`src/core`) has no Node or DOM dependencies and runs unchanged in the browser editor,
-so the editor, the CLI and the MCP server evaluate models with the same code. Details:
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+**Deterministic renders.** No GPU, no browser, no clock, no randomness: the same model and inputs
+give byte-identical PNGs and GIFs (the test suite checks this). A before/after `rev2d diff` means
+something, and a render is evidence rather than a guess.
 
-## Repository layout
+**Numbers, not just pixels.** Looking is expensive and vague; numbers are cheap and exact.
+`AngleX > 0` should turn the face toward the screen right, and `inspect` confirms it: at
+`--param AngleX=30` the mouth center of the hana example moves from `[256, 321.9]` to
+`[286.9, 322]`. `analyze` reads a whole animation without watching it. On hana's idle loop it
+reports that no hair physics output is ever clamped, that the loop seam is 0% different, and which
+parts leave the canvas.
 
-```text
-bin/rev2d.js           CLI launcher
-src/core/              format schema, types, addresses, validation, geometry compiler, rig evaluation
-src/render/            software rasterizer, overlays, bitmap font, sheets, diff, GIF, PNG
-src/node/              file and texture loading, running-editor registry
-src/api/               high-level operations shared by CLI / MCP / editor server (layers, sampling, sheets, inspect, analyze), templates
-src/ops/               edit operations engine
-src/cli/               the rev2d command line
-src/mcp/               MCP server (tools, resources, quickstart guide)
-src/server/            editor server: model API, live reload (SSE), AI bridge, screenshots
-editor/                React 19 + WebGL2 editor UI (Vite)
-examples/              hana, robot-arm, slime, textured, minimal (generated by scripts/examples/)
-scripts/               example builders, texture generator, render scripts
-docs/                  SPEC, CLI, OPS, MCP, ARCHITECTURE, RECIPES, images
-test/                  cross-module and end-to-end tests (unit tests live in src/**/__tests__/)
+<img src="docs/media/verify.png" width="800" alt="How the AI checks its own work: a render of hana with bone, warp, label and grid overlays; a 3x3 AngleX by AngleY head-turn contact sheet; and the text report of rev2d analyze on the idle animation (physics never clamped, loop seam closes)">
+
+## The editor
+
+`rev2d edit` opens a web editor (React 19 + WebGL2) at `http://127.0.0.1:4777`. It evaluates models
+with the same core as the CLI.
+
+| | |
+| --- | --- |
+| **Live reload** | Changes on disk from the AI, the CLI or a text editor show up at once. Edits made in the editor are written back to the same file. |
+| **Parameters** | Sliders by group (the outliner search filters them too). Pin a physics output to hold it; double-click a slider to reset it. |
+| **Viewport** | Zoom and pan, click to select parts and bone joints, overlays for bones, mesh, warps, bounds, labels and grid (`B` `M` `W` `X` `L` `G`), and hide parts in the preview (`H`). |
+| **Timeline & layers** | Play, loop, speed, physics on/off, keys per track, and extra animation layers with weight, `add`, `start` and `once`. |
+| **Outliner & inspector** | Rig tree, parts in draw order, warps, parameters, animations, bindings, IK and physics. Edit any object as JSON (`Ctrl+Enter` applies it), and watch live IK and physics diagnostics. |
+| **Problems & undo** | Validation diagnostics as you edit; undo and redo for inspector edits. |
+| **File menu** | New… (`Alt+N`), Open… (`Ctrl+O`), Open Recent, Save (`Ctrl+S`), Save As… (`Ctrl+Shift+S`), Import from computer… (or drop a model `.json` with its PNGs), Download copy, Export PNG of the view, Reload from disk, Close. |
+| **Start screen** | New model, Open, Import, recent files, and example cards (hana, robot arm, slime, textured, minimal) that copy an example into your workspace and leave the original untouched. |
+| **Safety** | An edit is saved as you make it. If a write fails (an invalid model, a conflict, a deleted file), the editor keeps your version and asks Save / Don't save / Cancel before New, Open, Import, Close or Reload replaces it. |
+| **Workspace** | The editor works inside one folder: `rev2d edit [model or dir] --root <dir>` (default: the model's folder, else the current one). It opens, creates, saves and imports only there and refuses paths outside it, including through symlinks. Without a model it starts on the start screen. |
+
+Press `?` in the editor for every shortcut.
+
+## Live2D and Spine concepts in Rev2D
+
+| Concept | From | In Rev2D |
+| --- | --- | --- |
+| Parameters | Live2D | Named scalars with a range, default and group. Bindings, animations and physics share them. |
+| Warp deformers | Live2D | `cols × rows` lattices, nestable, parented to bones or warps. `bind_warp` generates pseudo-3D head turns from yaw/pitch. |
+| Rotation deformers / bones | Live2D / Spine | Bone hierarchy with local x, y, rotation, scale and length |
+| Keyform bindings | Live2D | 1–3 parameters per binding on a full keyform grid, multilinear or step interpolation. Bindings on one property add up. |
+| Shape keys / deform | Live2D / Spine | Keyforms for SVG path morphs, polygon points, mesh vertices and ellipse/rect fields |
+| IK constraints | Spine | One-bone aim and two-bone IK with mix, bend direction, `softness` and `stretch` |
+| Weighted meshes (skinning) | Spine | Linear blend skinning with automatic or explicit weights |
+| Physics | Live2D | Pendulum chains at a fixed 60 Hz: inputs (x, y, angle) drive output parameters |
+| Clipping masks, blend modes | both | `mask` / `maskInvert` (geometry and texture alpha); `normal`, `add`, `multiply`, `screen` |
+| Draw order | both | `z` then array order; `z` can be bound and animated |
+| Animations & layering | both | Tracks on parameters or any property, eases incl. `smooth` and cubic-bezier, `add`/`override` layers, `once` one-shots, events; `compose` bakes a layer stack |
+| Textures | both | PNG textures, atlas crops as image grids, textured meshes with UVs |
+
+Format details: [docs/SPEC.md](docs/SPEC.md). Which example uses which technique: [examples/README.md](examples/README.md).
+
+## Quick start
+
+Requirements: Node 22+ and git.
+
+```sh
+git clone {REPO_URL} Rev2D && cd Rev2D
+npm install
+
+node bin/rev2d.js new hero.r2d.json --template hana     # templates: blank (default), empty, minimal, hana, robot-arm, slime, textured
+node bin/rev2d.js validate hero.r2d.json
+node bin/rev2d.js render hero.r2d.json -o out/hero.png --overlay bones,warps,labels
+node bin/rev2d.js sheet hero.r2d.json -o out/params.png --overview --scale 0.25
+node bin/rev2d.js sheet hero.r2d.json -o out/turn.png --sweep AngleX=-30:30:3 --sweep AngleY=30,0,-30 --scale 0.5
+node bin/rev2d.js analyze hero.r2d.json --anim idle --warmup 8
+node bin/rev2d.js edit hero.r2d.json                    # live editor at http://127.0.0.1:4777
 ```
+
+In a checkout the CLI runs the TypeScript sources directly (no build step). The editor UI is served
+from `dist/editor` after `npm run editor:build`, or compiled on the fly by Vite when there is no
+build. If port 4777 is taken, add `--port 0` to pick a free one. `rev2d help <command>` lists every
+flag, and [docs/CLI.md](docs/CLI.md) documents every command and its `--json` output.
+
+**Conventions.** Coordinates are canvas pixels with the origin top-left and **+y down**. Angles are
+degrees, **positive = clockwise**. Standard parameters follow Live2D names and signs: `AngleX > 0`
+turns toward the screen right, `AngleY > 0` looks **up**, and `L` in an id means the character's
+left, which is on the screen right.
+
+## Examples
+
+Five models ship as templates (`rev2d new my.r2d.json --template <name>`). All images below are CLI
+output.
+
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="docs/images/hana.png" width="260" alt="hana, a Live2D-style anime bust built only from vector parts, in its default pose"><br><b>hana</b>: a Live2D-style bust made only of vector parts, with path-morph eyes and mouth, iris masks and hair physics</td>
+    <td align="center" width="50%"><img src="docs/images/hana-turn.png" width="300" alt="3x3 contact sheet of hana turning her head: AngleX -30, 0, 30 across and AngleY 30, 0, -30 down"><br><b>hana, head turn</b>: the 3×3 AngleX × AngleY warp keyform grid, in one <code>sheet</code> call</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/robot-arm-bones.png" width="360" alt="The robot arm reaching with two-bone IK, rendered with the bone overlay"><br><b>robot-arm</b>: a Spine-style skeleton with two-bone IK (softness), a skinned boot and cable, and cable physics</td>
+    <td align="center"><img src="docs/images/minimal-overlay.png" width="260" alt="The minimal example bent to one side, with its 2x2 warp lattice, bone, labels and coordinate grid overlaid"><br><b>minimal</b>: the smallest complete rig, shown with warp, bone, label and grid overlays</td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="docs/images/slime-jump.png" width="620" alt="8-frame contact sheet of the slime's jump: anticipation squash, stretch, apex, landing squash and settle, with the takeoff and land events under their frames"><br><b>slime</b>: squash & stretch with warp keyforms, blend modes, and <code>takeoff</code> / <code>land</code> events captioned under their frames</td>
+  </tr>
+</table>
+
+**textured** (the koinobori in the demo) shows PNG atlas crops bent by warps, a textured mesh with
+UVs and a texture-alpha mask. Details and a feature matrix: [examples/README.md](examples/README.md).
 
 ## Documentation
 
 | Document | What it covers |
 | --- | --- |
-| [AGENTS.md](AGENTS.md) | Guide for AI agents: mental model, verification loop, diagnostics, addresses, pitfalls, MCP tools; developing Rev2D |
-| [docs/SPEC.md](docs/SPEC.md) | Model format and evaluation semantics (authoritative) |
-| [docs/RECIPES.md](docs/RECIPES.md) | Copy-paste rig recipes, each with the commands that verify it (all executed by the test suite) |
-| [docs/OPS.md](docs/OPS.md) | Edit operations, reference handling, `bind_warp` math, worked example |
+| [AGENTS.md](AGENTS.md) | The guide for AI agents: mental model, the verify loop, diagnostics, addresses, common mistakes, MCP tools, and developing Rev2D |
+| [docs/SPEC.md](docs/SPEC.md) | The model format and evaluation semantics (authoritative) |
 | [docs/CLI.md](docs/CLI.md) | Every command, flag, exit code and `--json` shape |
-| [docs/MCP.md](docs/MCP.md) | MCP server setup and tools |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, modules, data contracts, determinism, editor protocol |
-| [examples/README.md](examples/README.md) | The example models and the techniques each one shows |
-| [llms.txt](llms.txt) | Index for LLM tools |
+| [docs/OPS.md](docs/OPS.md) | The 16 edit operations, reference handling and the `bind_warp` math |
+| [docs/MCP.md](docs/MCP.md) | MCP setup, the 16 tools, the editor bridge and troubleshooting |
+| [docs/RECIPES.md](docs/RECIPES.md) | 21 copy-paste rig recipes with the commands that verify them, all run by the test suite |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, modules, data contracts, determinism and the editor protocol |
+| [examples/README.md](examples/README.md) | The five example models and the techniques each one shows |
+| [llms.txt](llms.txt) | An index for LLM tools |
 
-SPEC, OPS, CLI, MCP, AGENTS, RECIPES, ARCHITECTURE and the examples guide are also served by the
-tool itself: `rev2d docs <spec|ops|cli|mcp|agents|recipes|architecture|examples>` and MCP
-`rev2d_docs {topic}`.
+The tool serves the same docs offline: `rev2d docs <spec|ops|cli|mcp|agents|recipes|architecture|examples>`,
+or MCP `rev2d_docs`.
+
+## Status and roadmap
+
+Rev2D is at **v0.1**. The format (version 1), the CLI, the MCP tools and the editor work and are
+covered by 1,350+ tests, but they may still change before 1.0. There is no npm release yet: run it
+from a checkout.
+
+Rev2D does not replace Live2D Cubism or Spine for production pipelines. It is a text-first toolkit
+for AI-assisted authoring and experiments. Some ideas we may explore (not promises):
+
+- Importing layered artwork (PSD / Photoshop) as parts
+- Runtimes for game engines and the web (Unity, Godot, a small web player)
+- Audio-driven lip-sync for mouth parameters
+- More constraints: longer IK chains, transform and path constraints
+
+Ideas and use cases are welcome in the issues.
 
 ## Development
 
 ```sh
-npm test                               # the full vitest suite
-npx vitest run src/ops                 # one area
-npx tsc --noEmit -p tsconfig.json      # typecheck (npm run typecheck)
-npm run editor:dev                     # editor UI with hot reload (proxies /api to rev2d edit on :4777)
-npm run editor:build                   # build the editor UI into dist/editor (served by rev2d edit)
-npx tsx scripts/build-examples.ts      # regenerate examples/ from their builders
-npx tsx scripts/render-examples.ts     # render every example into out/examples/
+npm test                    # the full vitest suite (1,350+ tests)
+npm run typecheck           # tsc --noEmit -p tsconfig.json
+npm run editor:dev          # editor UI with hot reload; proxies /api to rev2d edit on :4777
+npm run editor:build        # build the editor UI into dist/editor (served by rev2d edit)
+npm run build               # compile src/ to dist/ and build the editor UI (what the package ships)
+npx tsx scripts/build-examples.ts   # regenerate examples/ from their builders
 ```
 
-The editor end-to-end test uses playwright-core with an installed Chrome and skips (with the reason)
-when the UI is not built or Chrome is unavailable. Conventions, module boundaries and where to add
-features: [AGENTS.md, Part 2](AGENTS.md#part-2-developing-rev2d).
+The editor end-to-end tests use playwright-core with an installed Google Chrome. They skip, with a
+reason, when the UI is not built or Chrome is missing.
 
-### Regenerating the images
+**Demo media.** Everything in `docs/media` is generated from real CLI output, real renders and
+screen recordings of the real editor:
 
 ```sh
-npx rev2d render examples/hana/hana.r2d.json -o docs/images/hana.png --scale 0.625
-npx rev2d sheet examples/hana/hana.r2d.json -o docs/images/hana-turn.png --sweep AngleX=-30,0,30 --sweep AngleY=30,0,-30 --scale 0.6 --viewbox 96,50,320,390 --title "hana: AngleX x AngleY (3x3 warp keyform grid)"
-npx rev2d render examples/robot-arm/robot-arm.r2d.json -o docs/images/robot-arm-bones.png --overlay bones --param ReachX=0.5 --viewbox 40,60,560,420
-npx rev2d render examples/minimal/minimal.r2d.json -o docs/images/minimal-overlay.png --overlay warps,bones,labels,grid --param Lean=1 --scale 1.25
-npx rev2d sheet examples/slime/slime.r2d.json -o docs/images/slime-jump.png --anim jump --frames 8 --columns 4 --viewbox fit --scale 0.4
+node scripts/video/capture-all.mjs   # capture: CLI transcripts, frame sequences, editor recordings -> out/video/assets
+node scripts/video/compose.mjs       # compose: docs/media/*.mp4, hero.gif, ai-live-edit.gif, poster.png, verify.png
 ```
+
+This needs Google Chrome and ffmpeg/ffprobe on the `PATH` (on Windows you can instead set
+`FFMPEG_DIR` to the folder with `ffmpeg.exe`). The capture step starts its editors on free ports
+with a sandboxed home directory.
+
+## Contributing
+
+Issues and pull requests are welcome. Before you open a PR, run `npm test`, `npm run typecheck` and,
+if you touched `editor/`, `npm run editor:build`. The docs are tested too: links, command lines and
+recipes are checked by the suite. Module boundaries and where to add a feature are described in
+[AGENTS.md, Part 2](AGENTS.md#part-2-developing-rev2d).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
-
----
-
-## 한국어 소개
-
-**Rev2D**는 Live2D Cubism과 Spine의 개념(파라미터, 워프 디포머, 본, 키폼 바인딩, 물리, IK,
-스키닝, 마스크, 블렌드 모드, 애니메이션)을 그대로 가져오면서, **AI 에이전트가 텍스트만으로 리깅
-모델을 만들고 스스로 검증할 수 있도록** 설계한 2D 리깅·애니메이션 툴킷입니다.
-
-- **텍스트 포맷**: 모델 하나가 JSON 파일(`*.r2d.json`) 하나입니다. 모든 좌표는 캔버스 픽셀
-  (원점 왼쪽 위, +y 아래 방향), 각도는 시계 방향이 양수입니다. 표준 파라미터는 Live2D 규칙을
-  따릅니다: `AngleX > 0`은 화면 오른쪽으로 고개를 돌리고, `AngleY > 0`은 **위를** 봅니다(특징점의
-  y가 작아짐). `L`은 캐릭터의 왼쪽, 즉 화면의 오른쪽입니다.
-- **결정론적 헤드리스 렌더링**: 순수 TypeScript 래스터라이저라서 GPU나 브라우저 없이도
-  같은 모델과 입력이면 언제나 같은 픽셀이 나옵니다.
-- **자기 검증 도구**: 본·워프·메시·라벨·좌표 격자 오버레이(`--only`로 일부만 표시), 파라미터
-  스윕·전체 파라미터 개요·애니메이션 컨택트 시트, `inspect`의 정확한 수치(본 월드 좌표, 파츠 경계,
-  IK 도달 여부, 물리 출력, 본·워프·파츠에 붙은 점의 위치, 시간별 표), `analyze`의 애니메이션 분석
-  (물리 클램핑, IK 튐 위험, 이벤트, 루프 이음새), 이미지 diff.
-- **정확한 진단**: 모든 오류에 JSON 포인터, 고정 코드, 수정 힌트(did-you-mean)가 붙습니다.
-- **원자적 편집 연산(ops)**: 배치 전체가 성공하고 검증을 통과할 때만 파일에 기록됩니다.
-  `recolor`(팔레트 변경), `compose`(레이어 애니메이션 굽기), `bind_linear`, `follow`(돌아가는
-  머리 위에 모자 같은 강체 액세서리 고정)도 있습니다.
-- **MCP 서버와 라이브 에디터**: Claude Code 등에서 바로 쓸 수 있는 MCP 도구 16개를 제공하며,
-  `rev2d edit`로 연 웹 에디터는 AI의 수정을 즉시 반영하고, AI는 사람이 보고 있는 화면을 그대로
-  확인하고 조작할 수 있습니다.
-
-빠른 시작:
-
-```sh
-npm install
-npx rev2d new hero.r2d.json --template hana
-npx rev2d render hero.r2d.json -o out/hero.png --overlay bones,warps,labels
-npx rev2d sheet hero.r2d.json -o out/turn.png --sweep AngleX --sweep AngleY=30,0,-30 --scale 0.5
-npx rev2d analyze hero.r2d.json --anim idle --warmup 10
-claude mcp add rev2d -- node /absolute/path/to/Rev2D/bin/rev2d.js mcp
-```
-
-AI 에이전트용 안내는 [AGENTS.md](AGENTS.md), 따라 하기 쉬운 리깅 레시피는
-[docs/RECIPES.md](docs/RECIPES.md), 포맷 명세는 [docs/SPEC.md](docs/SPEC.md)를 참고하세요.
+[MIT](LICENSE) © 2026 RevStudio

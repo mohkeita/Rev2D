@@ -5,6 +5,7 @@ import type { AppState } from './state/app.js';
 import { SessionContext } from './state/context.js';
 import { Session } from './state/session.js';
 import './styles.css';
+import './files/files.css';
 
 /**
  * Automation hook for tests and AI-driven browsers: read-only state and render counters. Not a
@@ -17,6 +18,8 @@ export interface Rev2dTestHook {
     /** A valid model is loaded and at least one frame with draw calls was rendered. */
     ready: boolean;
     status: AppState['status'];
+    /** Absolute path of the open model ('' when none is open: status 'empty', the start screen). */
+    file: string;
     connection: AppState['connection'];
     modelVersion: number;
     mtimeMs: number;
@@ -44,6 +47,7 @@ window.__rev2d = {
     return {
       ready: s.status === 'ready' && s.model !== null && r.frames > 0 && r.draws > 0,
       status: s.status,
+      file: s.file,
       connection: s.connection,
       modelVersion: s.modelVersion,
       mtimeMs: s.mtimeMs,

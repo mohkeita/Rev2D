@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +13,7 @@ import { blankModel, listTemplates, PACKAGE_ROOT } from '../src/api/templates.js
 import { formatModelJson } from '../src/core/format.js';
 import { decodePNG, encodePNG, createImage } from '../src/render/index.js';
 import { loadModelFile } from '../src/node/load.js';
+import { listEditors } from '../src/node/editor-registry.js';
 import { ApiError, recipesDescription, renderFrame } from '../src/api/index.js';
 import { DOC_TOPICS } from '../src/cli/commands/reference.js';
 
@@ -1075,6 +1076,18 @@ describe('set', () => {
 // ----------------------------------------------------------------------------- live editor
 
 describe('edit and editor', () => {
+  // Editors register in ~/.rev2d/editors and remember recent files in ~/.rev2d/recent.json: keep
+  // both in a temp home so the developer's real ~/.rev2d is never touched.
+  let home: string;
+  beforeAll(() => {
+    home = mkdtempSync(path.join(os.tmpdir(), 'rev2d-cli-home-'));
+    vi.spyOn(os, 'homedir').mockReturnValue(home);
+  });
+  afterAll(() => {
+    vi.restoreAllMocks();
+    rmSync(home, { recursive: true, force: true });
+  });
+
   it('validates arguments before starting anything', async () => {
     const dir = workspace();
     const missing = await run(['edit', 'nope.r2d.json', '--no-open'], { cwd: dir });
@@ -1082,6 +1095,177 @@ describe('edit and editor', () => {
     expect(missing.stderr).toContain('rev2d new nope.r2d.json');
     expect((await run(['edit', 'model.r2d.json', '--port', '70000'], { cwd: dir })).code).toBe(2);
     expect((await run(['edit', 'model.r2d.json', '--port', 'x'], { cwd: dir })).code).toBe(2);
+
+    // The workspace root must exist and contain the model.
+    mkdirSync(path.join(dir, 'other'));
+    const outside = await run(['edit', 'model.r2d.json', '--root', 'other', '--no-open'], { cwd: dir });
+    expect(outside.code).toBe(1);
+    expect(outside.stderr).toContain('error: model.r2d.json is outside the workspace root other');
+    expect(outside.stderr).toContain('hint: the root must contain the model');
+    const noRoot = await run(['edit', '--root', 'missing', '--no-open'], { cwd: dir });
+    expect(noRoot.code).toBe(1);
+    expect(noRoot.stderr).toContain('error: workspace root missing does not exist');
+    expect((await run(['edit', 'model.r2d.json', '--root', 'model.r2d.json', '--no-open'], { cwd: dir })).stderr).toContain('is not a directory');
+    const both = await run(['edit', 'other', '--root', '.', '--no-open'], { cwd: dir });
+    expect(both.code).toBe(2);
+    expect(both.stderr).toContain('error: other is a directory');
+    const openWithout = await run(['editor', 'command', '{"type":"open"}', '--url', 'http://127.0.0.1:9'], { cwd: dir });
+    expect(openWithout.code).toBe(2);
+    expect(openWithout.stderr).toContain('an "open" command needs "file"');
+  });
+
+  it('starts without a model and switches models with --open / {"type":"open"}; "editor state" follows', async () => {
+    const dir = workspace(blankModel({ name: 'first', width: 32, height: 32 }));
+    mkdirSync(path.join(dir, 'sub'));
+    writeFileSync(path.join(dir, 'sub', 'b.r2d.json'), formatModelJson(blankModel({ name: 'second', width: 48, height: 48 })));
+    const e = start(['edit', '--port', '0', '--no-open', '--json'], dir);
+    const events = () => e.buf.stdout.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    await until(() => events().length > 0 || e.buf.stderr.includes('error:'), 'the editor to listen', 60000);
+    const listening = events()[0];
+    expect(listening, e.buf.stderr).toMatchObject({ event: 'listening', file: null, root: dir });
+    const url: string = listening.url;
+    try {
+      const empty = await run(['editor', 'state', '--url', url], { cwd: dir });
+      expect(empty.code, empty.stderr).toBe(0);
+      expect(empty.stdout).toContain(`editor ${url}  no model open (start screen)`);
+      expect(empty.stdout).toContain('workspace root: .\n');
+      expect(empty.stderr).toContain('rev2d editor command --open <model>');
+      expect((await run(['editor', 'state', '--url', url, '--json'], { cwd: dir })).json()).toEqual({ editor: { url, file: null, root: dir, pid: expect.any(Number) }, state: null });
+      // Model commands need a model; the server says how to open one.
+      const early = await run(['editor', 'command', '--url', url, '--pause'], { cwd: dir });
+      expect(early.code).toBe(1);
+      expect(early.stderr).toContain('the editor rejected pause (409): no model is open');
+
+      // --open (relative to the current directory), then the flags apply to the opened model.
+      const opened = await run(['editor', 'command', '--url', url, '--open', 'model.r2d.json', '--params', 'Lean=0.5', '--json'], { cwd: dir });
+      expect(opened.code, opened.stderr).toBe(0);
+      expect(opened.json().sent).toEqual([
+        { command: { type: 'open', file: path.join(dir, 'model.r2d.json') }, delivered: 0, file: path.join(dir, 'model.r2d.json'), notes: [] },
+        { command: { type: 'setParams', params: { Lean: 0.5 } }, delivered: 0 },
+      ]);
+      const typo = await run(['editor', 'command', '--url', url, '--open', 'sub/b.r2d.json', '--params', 'Laen=1'], { cwd: dir });
+      expect(typo.code).toBe(2);
+      expect(typo.stderr).toContain('did you mean "Lean"?');
+
+      // The registry follows the open model, so --model finds the editor by its current file.
+      expect(listEditors(path.join(dir, 'model.r2d.json')).map((x) => x.url)).toEqual([url]);
+      const json = await run(['editor', 'command', '{"type":"open","file":"b.r2d.json"}', '--model', '../model.r2d.json'], { cwd: path.join(dir, 'sub') });
+      expect(json.code, json.stderr).toBe(0);
+      expect(json.stdout).toContain(`opened b.r2d.json in the editor at ${url} -> 0 editor windows`);
+      expect(listEditors(path.join(dir, 'sub', 'b.r2d.json')).map((x) => x.url)).toEqual([url]);
+
+      const posted = await fetch(`${url}/api/state`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ params: { Lean: 1 } }) });
+      expect(posted.status).toBe(204);
+      const state = await run(['editor', 'state', '--model', 'sub/b.r2d.json', '--json'], { cwd: dir });
+      expect(state.code, state.stderr).toBe(0);
+      expect(state.json()).toMatchObject({ editor: { url, file: path.join(dir, 'sub', 'b.r2d.json'), root: dir }, state: { file: path.join(dir, 'sub', 'b.r2d.json'), params: { Lean: 1 } } });
+      const text = await run(['editor', 'state', '--url', url], { cwd: dir });
+      expect(text.stdout).toContain(`editor ${url}  sub/b.r2d.json\nworkspace root: .\n`);
+
+      // Paths outside the workspace root are refused with the server's hint.
+      const outside = await run(['editor', 'command', '--url', url, '--open', path.join(root, 'elsewhere.r2d.json')], { cwd: dir });
+      expect(outside.code).toBe(1);
+      expect(outside.stderr).toContain('the editor rejected open (403)');
+      expect(outside.stderr).toContain('outside the workspace root');
+      expect(outside.stderr).toContain('--root');
+      const missing = await run(['editor', 'command', '--url', url, '--open', 'nope.r2d.json'], { cwd: dir });
+      expect(missing.stderr).toContain('the editor rejected open (404): file not found: nope.r2d.json');
+    } finally {
+      expect(await e.stop()).toBe(0);
+    }
+    // The recent list lives in the (temporary) home.
+    expect(JSON.parse(readFileSync(path.join(home, '.rev2d', 'recent.json'), 'utf8')).files.slice(0, 2)).toEqual([path.join(dir, 'sub', 'b.r2d.json'), path.join(dir, 'model.r2d.json')]);
+  });
+
+  it('finds an editor by its workspace root: --model of a file it has not open (start screen), a directory, or the file --open names', async () => {
+    const dir = workspace(blankModel({ name: 'outer', width: 32, height: 32 }));
+    mkdirSync(path.join(dir, 'ws'));
+    writeFileSync(path.join(dir, 'ws', 'a.r2d.json'), formatModelJson(blankModel({ name: 'a', width: 32, height: 32 })));
+    writeFileSync(path.join(dir, 'ws', 'b.r2d.json'), formatModelJson(blankModel({ name: 'b', width: 32, height: 32 })));
+    mkdirSync(path.join(dir, 'other'));
+    const listening = async (e: ReturnType<typeof start>) => {
+      await until(() => e.buf.stdout.includes('listening') || e.buf.stderr.includes('error:'), 'the editor to listen', 60000);
+      return JSON.parse(e.buf.stdout.split('\n')[0]).url as string;
+    };
+    // The start-screen editor of ws/ is the OLDER one: discovery must not just take the newest.
+    const inWs = start(['edit', 'ws', '--port', '0', '--no-open', '--json'], dir);
+    const wsUrl = await listening(inWs);
+    const elsewhere = start(['edit', 'other', '--port', '0', '--no-open', '--json'], dir);
+    const otherUrl = await listening(elsewhere);
+    try {
+      expect(listEditors({ root: path.join(dir, 'ws') })).toEqual([expect.objectContaining({ url: wsUrl, file: '', root: path.join(dir, 'ws') })]);
+
+      // A file of the workspace that no editor has open: the editor whose root contains it answers, with a note.
+      const state = await run(['editor', 'state', '--model', 'ws/a.r2d.json'], { cwd: dir });
+      expect(state.code, state.stderr).toBe(0);
+      expect(state.stdout).toContain(`editor ${wsUrl}  no model open (start screen)`);
+      expect(state.stderr).toContain(
+        `note: the editor at ${wsUrl} has no model open, not ws/a.r2d.json (it was chosen because its workspace root ws contains the file); open it with "rev2d editor command --open ws/a.r2d.json"`,
+      );
+      // A directory selects the editor of that workspace.
+      expect((await run(['editor', 'state', '--model', 'ws', '--json'], { cwd: dir })).json()).toMatchObject({ editor: { url: wsUrl, file: null, root: path.join(dir, 'ws') } });
+      expect((await run(['editor', 'state', '--model', 'other', '--json'], { cwd: dir })).json()).toMatchObject({ editor: { url: otherUrl } });
+      // Commands for a model the editor does not have open are refused (they would act on another model) ...
+      const refused = await run(['editor', 'command', '--model', 'ws/a.r2d.json', '--pause'], { cwd: dir });
+      expect(refused.code).toBe(1);
+      expect(refused.stderr).toContain(`error: the editor at ${wsUrl} has no model open, not ws/a.r2d.json; nothing was sent`);
+      expect(refused.stderr).toContain('hint: add --open ws/a.r2d.json to switch the editor to it first (its workspace root ws contains the file)');
+
+      // ... while --open without --model / --url goes to the editor whose workspace holds the file.
+      const opened = await run(['editor', 'command', '--open', 'ws/a.r2d.json', '--json'], { cwd: dir });
+      expect(opened.code, opened.stderr).toBe(0);
+      expect(opened.json()).toMatchObject({ url: wsUrl, sent: [{ file: path.join(dir, 'ws', 'a.r2d.json') }] });
+      expect(listEditors(path.join(dir, 'ws', 'a.r2d.json')).map((x) => x.url)).toEqual([wsUrl]);
+      const json = await run(['editor', 'command', '{"type":"open","file":"ws/b.r2d.json"}', '--json'], { cwd: dir });
+      expect(json.json()).toMatchObject({ url: wsUrl });
+      // --model with --open is fine even though the model is not open yet.
+      const both = await run(['editor', 'command', '--model', 'ws/a.r2d.json', '--open', 'ws/a.r2d.json', '--json'], { cwd: dir });
+      expect(both.code, both.stderr).toBe(0);
+      expect(both.json()).toMatchObject({ url: wsUrl });
+
+      // A screenshot of a model the editor does not show is refused.
+      const shot = await run(['editor', 'screenshot', '--model', 'ws/b.r2d.json', '-o', 'b.png'], { cwd: dir });
+      expect(shot.code).toBe(1);
+      expect(shot.stderr).toContain(`error: the editor at ${wsUrl} has ws/a.r2d.json open, not ws/b.r2d.json`);
+      expect(shot.stderr).toContain('hint: open it first: rev2d editor command --open ws/b.r2d.json');
+      expect((await run(['editor', 'screenshot', '--model', 'ws/a.r2d.json', '-o', 'a.png'], { cwd: dir })).code).toBe(0);
+
+      // Outside every workspace: the error lists the running editors with their roots.
+      const none = await run(['editor', 'state', '--model', 'model.r2d.json'], { cwd: dir });
+      expect(none.code).toBe(1);
+      expect(none.stderr).toContain('error: no running editor for model.r2d.json');
+      expect(none.stderr).toContain(`${wsUrl} (ws/a.r2d.json open, workspace root ws)`);
+      expect(none.stderr).toContain(`${otherUrl} (no model open, workspace root other)`);
+      expect(none.stderr).toContain('start one with "rev2d edit model.r2d.json"');
+    } finally {
+      expect(await elsewhere.stop()).toBe(0);
+      expect(await inWs.stop()).toBe(0);
+    }
+  });
+
+  it('"rev2d edit <dir>" makes the directory the workspace root; --root widens the workspace of a model', async () => {
+    const dir = workspace(blankModel({ name: 'ws', width: 32, height: 32 }));
+    mkdirSync(path.join(dir, 'models'));
+    writeFileSync(path.join(dir, 'models', 'm.r2d.json'), formatModelJson(blankModel({ name: 'm', width: 32, height: 32 })));
+    const e = start(['edit', 'models', '--port', '0', '--no-open'], dir);
+    await until(() => e.buf.stdout.includes('press Ctrl+C') || e.buf.stderr.includes('error:'), 'the editor to listen', 60000);
+    try {
+      expect(e.buf.stdout).toContain('editor started with no model open');
+      expect(e.buf.stdout).toContain('workspace root: models');
+      expect(e.buf.stderr).toContain('note: open or create a model in the browser (File menu)');
+    } finally {
+      expect(await e.stop()).toBe(0);
+    }
+    const w = start(['edit', 'models/m.r2d.json', '--root', '.', '--port', '0', '--no-open', '--json'], dir);
+    await until(() => w.buf.stdout.includes('listening') || w.buf.stderr.includes('error:'), 'the editor to listen', 60000);
+    try {
+      const listening = JSON.parse(w.buf.stdout.split('\n')[0]);
+      expect(listening, w.buf.stderr).toMatchObject({ file: path.join(dir, 'models', 'm.r2d.json'), root: dir });
+      const files = await (await fetch(`${listening.url}/api/files`)).json();
+      expect(files.entries.map((x: { path: string }) => x.path)).toEqual(['models', 'model.r2d.json']);
+    } finally {
+      expect(await w.stop()).toBe(0);
+    }
   });
 
   it('editor commands fail clearly without a running editor', async () => {
@@ -1131,7 +1315,7 @@ describe('edit and editor', () => {
     const events = () => e.buf.stdout.split('\n').filter(Boolean).map((l) => JSON.parse(l));
     await until(() => events().length > 0 || e.buf.stderr.includes('error:'), 'the editor to listen', 60000);
     const listening = events()[0];
-    expect(listening, e.buf.stderr).toMatchObject({ event: 'listening', file: path.join(dir, 'model.r2d.json') });
+    expect(listening, e.buf.stderr).toMatchObject({ event: 'listening', file: path.join(dir, 'model.r2d.json'), root: dir });
     const url: string = listening.url;
     try {
       const model = await (await fetch(`${url}/api/model`)).json();

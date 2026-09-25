@@ -15,6 +15,11 @@
  *   (`conflict`) instead of silently losing the other change.
  * - AI bridge: EditorCommands from the server are applied here; the view state is published with
  *   POST /api/state (at most every 200 ms, trailing).
+ * - Files: the server works in a workspace root with at most one open model. New / Open / Save As /
+ *   Import / Close go through the workspace endpoints; switching files resets the document, the undo
+ *   history and the view state (Save As keeps the view). Actions that replace an unsaved document
+ *   ask first (files/guard.ts). "file-changed" events (another tab or an AI switched files) are
+ *   followed; with no model open the UI shows its start screen (status 'empty').
  */
 import {
   Rig,
@@ -32,7 +37,11 @@ import {
 } from '../../../src/core/index.js';
 import { formatModelJson } from '../../../src/core/format.js';
 import * as api from '../api.js';
-import type { EditorCommand, EditorState, ModelChangedEvent } from '../api.js';
+import type { EditorCommand, EditorState, FileChangedEvent, ModelChangedEvent, NewRequest, OpenResult, WorkspaceInfo } from '../api.js';
+import { GUARD_IDLE, guardStep, type GuardChoice, type GuardEffect, type GuardEvent, type GuardState } from '../files/guard.js';
+import { modelTextProblem, planImport, readImportFiles } from '../files/importing.js';
+import { summarizeNotes } from '../files/notes.js';
+import { baseName, relativeToRoot, samePath } from '../files/paths.js';
 import { fitRect, roundRect, unionRects, visibleRect, zoomAt, type Camera, type Rect, type ViewportSize } from '../view/camera.js';
 import {
   errorCount,
@@ -94,6 +103,9 @@ export interface EditResult {
   message?: string;
 }
 
+/** Outcome of a file operation (dialogs show `error` inline; `exists` asks to replace the target). */
+export type FileOpResult = { ok: true } | { ok: false; error?: string; hint?: string; exists?: boolean; cancelled?: boolean };
+
 type FocusTarget = Rect | 'fit' | 'canvas' | 'selection';
 
 /** How an ingested version relates to the undo history. */
@@ -102,6 +114,10 @@ type HistoryMode = 'reset' | 'external' | 'none';
 const PUBLISH_INTERVAL_MS = 200;
 const FIT_PADDING_MODEL = 16;
 const OWN_WRITES_KEPT = 32;
+/** A model file found missing is fetched once more after this delay (delete + re-create saves). */
+const MISSING_RETRY_MS = 250;
+/** AI commands kept while a model loads (the oldest are dropped beyond this). */
+const MAX_PENDING_COMMANDS = 64;
 
 function isPlainObject(v: unknown): v is RawDoc {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -109,6 +125,44 @@ function isPlainObject(v: unknown): v is RawDoc {
 
 function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/** The server's own error text (ApiRequestError.detail) when there is one. */
+function detailOf(e: unknown): string {
+  const d = (e as { detail?: unknown } | null)?.detail;
+  return typeof d === 'string' && d ? d : messageOf(e);
+}
+
+/** 409 "no model is open" (duck-typed: works with any ApiRequestError-like error). */
+function isNoModel(e: unknown): boolean {
+  const status = (e as { status?: unknown } | null)?.status;
+  return status === 409 && /no model is open/i.test(`${detailOf(e)} ${messageOf(e)}`);
+}
+
+/** GET /api/model answered 404: the open model's file was deleted or moved on disk. */
+function isMissingFile(e: unknown): boolean {
+  return (e as { status?: unknown } | null)?.status === 404;
+}
+
+/**
+ * A failed file operation. new / save-as / import answer 409 when the target exists (FileExistsError);
+ * checked by status so it also works with protocol fakes.
+ */
+function failure(e: unknown): FileOpResult {
+  const hint = (e as { hint?: unknown } | null)?.hint;
+  const exists = (e as { status?: unknown } | null)?.status === 409 && !isNoModel(e);
+  return { ok: false, error: detailOf(e), ...(typeof hint === 'string' ? { hint } : {}), ...(exists ? { exists } : {}) };
+}
+
+/** Save a URL (same-origin or blob:) through a temporary download link. */
+function triggerDownload(href: string, name: string): void {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = name;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 const round = (v: number, digits: number): number => {
@@ -171,6 +225,24 @@ export class Session {
   private publishWarned = false;
   private toastSeq = 0;
   private readonly toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  /** Increments whenever the open document is replaced; results of writes to an older one are dropped. */
+  private epoch = 0;
+  /** Unsaved-changes prompt (state machine in files/guard.ts) and the action waiting for it. */
+  private guard: GuardState = GUARD_IDLE;
+  private guardResolve: ((proceed: boolean) => void) | null = null;
+  /** The unsaved document the user already chose to discard (a retried action does not ask again). */
+  private discardedDoc: RawDoc | null = null;
+  /** Own file operations in flight: "file-changed" events meanwhile wait until they end. */
+  private fileOps = 0;
+  /** The last "file-changed" event received during an own operation (its echo, or a switch by someone else). */
+  private deferredFileEvent: FileChangedEvent | null = null;
+  /** Outcome of the last write, for the unsaved-changes prompt. */
+  private lastWrite: { ok: boolean; message?: string; invalid?: boolean } = { ok: true };
+  /**
+   * AI commands received while a model is loading (e.g. right after an AI opened it: "open, then set
+   * params, select..."): applied once it is shown, so they reach the model they were meant for.
+   */
+  private pendingCommands: EditorCommand[] = [];
 
   get(): AppState {
     return this.store.get();
@@ -186,16 +258,26 @@ export class Session {
         // A (re)started server has no view state until the UI publishes one, even if nothing changed.
         this.lastPublished = '';
         this.schedulePublish();
-        // Changes may have been missed while disconnected.
-        if (wasOffline && this.get().status !== 'loading') void this.reload('external', true);
+        // Changes may have been missed while disconnected (including another model being opened).
+        if (wasOffline && this.get().status !== 'loading') {
+          void this.refreshWorkspace();
+          void this.reload('external', true);
+        }
       },
       onError: () => this.store.set({ connection: 'offline' }),
       onModelChanged: (e) => void this.onModelChanged(e),
+      onFileChanged: (e) => void this.onFileChanged(e),
       onCommand: (c) => this.handleCommand(c),
       onProtocolError: (m) => console.warn(`[rev2d] ${m}`),
     });
-    this.unsubscribePublish = this.store.subscribe(() => this.schedulePublish());
-    await this.reload('reset', true);
+    this.unsubscribePublish = this.store.subscribe(() => {
+      this.schedulePublish();
+      if (this.pendingCommands.length && this.get().status !== 'loading') queueMicrotask(() => this.flushCommands());
+    });
+    // With no model open, go straight to the start screen (GET /api/model would only answer 409).
+    const workspace = await this.refreshWorkspace();
+    if (workspace && workspace.current === null) this.showStartScreen();
+    else await this.reload('reset', true);
   }
 
   dispose(): void {
@@ -214,25 +296,63 @@ export class Session {
 
   // ------------------------------------------------------------------------------ loading
 
-  /** Fetch the file from the server and ingest it. */
-  async reload(history: HistoryMode = 'external', bustTextures = false): Promise<void> {
+  /** Fetch the file from the server and ingest it. Resolves whether a version from disk is shown now. */
+  async reload(history: HistoryMode = 'external', bustTextures = false): Promise<boolean> {
     const seq = ++this.seq;
-    const first = this.get().status !== 'ready';
-    if (first) this.store.set({ status: 'loading', loadError: null });
+    // The start screen stays up while checking whether the server has a model now.
+    const status = this.get().status;
+    if (status === 'loading' || status === 'failed') this.store.set({ status: 'loading', loadError: null });
     try {
-      const file = await api.fetchModel();
-      if (seq !== this.seq) return;
+      let file: api.ModelFile;
+      try {
+        file = await api.fetchModel();
+      } catch (e) {
+        // Programs that save by deleting and re-creating the file: give it a moment to come back.
+        if (!isMissingFile(e) || this.get().status !== 'ready') throw e;
+        await new Promise((r) => setTimeout(r, MISSING_RETRY_MS));
+        if (seq !== this.seq) return false;
+        file = await api.fetchModel();
+      }
+      if (seq !== this.seq) return false;
       if (bustTextures) this.textureFetch++;
-      await this.ingest(file.text, { file: file.file, mtimeMs: file.mtimeMs, history, seq });
+      // A different model than the one shown (opened elsewhere while disconnected): start afresh.
+      if (this.get().file && !samePath(file.file, this.get().file)) {
+        this.resetDocument();
+        history = 'reset';
+      }
+      // (resetDocument above starts a new sequence: what counts is whether this ingest is still current.)
+      const ingestSeq = this.seq;
+      await this.ingest(file.text, { file: file.file, mtimeMs: file.mtimeMs, history, seq: ingestSeq });
+      return ingestSeq === this.seq;
     } catch (e) {
-      if (seq !== this.seq) return;
-      if (this.get().status !== 'ready') this.store.set({ status: 'failed', loadError: messageOf(e) });
+      if (seq !== this.seq) return false;
+      if (isNoModel(e)) this.showStartScreen();
+      else if (isMissingFile(e) && this.get().status === 'ready') this.markMissing();
+      else if (this.get().status !== 'ready') this.store.set({ status: 'failed', loadError: messageOf(e) });
       else this.toast('error', `Reload failed: ${messageOf(e)}`);
+      return false;
     }
+  }
+
+  /**
+   * The open model's file was deleted or moved away on disk. The document stays open as unsaved:
+   * Save writes it back (the server re-creates the file), Save As stores it elsewhere, and leaving
+   * or switching files asks first.
+   */
+  private markMissing(): void {
+    const s = this.get();
+    const name = baseName(s.file) || 'The model file';
+    if (!s.doc) {
+      this.toast('warning', `${name} was deleted or moved on disk.`);
+      return;
+    }
+    this.store.set({ unsaved: true, conflict: null });
+    this.toast('warning', `${name} was deleted or moved on disk. It is still open here: Save (Ctrl+S) writes it back, Save As… stores it elsewhere.`);
   }
 
   private async onModelChanged(e: ModelChangedEvent): Promise<void> {
     if (this.writing) await this.writing.catch(() => undefined);
+    if (this.get().status === 'empty' || this.fileOps > 0) return;
     const s = this.get();
     // Echo of our own write (its PUT response carried this mtime) or of the version already shown.
     if (e.origin === 'editor') {
@@ -246,8 +366,11 @@ export class Session {
       if (e.mtimeMs > 0) this.store.set({ conflict: { ...s.conflict, mtimeMs: e.mtimeMs } });
       return;
     }
-    if (s.unsaved && e.origin === 'external') this.toast('warning', 'The file changed on disk; your unsaved edit was replaced by the new version.');
-    await this.reload('external', e.origin === 'external');
+    const replacesEdit = s.unsaved && e.origin === 'external';
+    // (A deleted file keeps the edit: reload reports that instead.)
+    if ((await this.reload('external', e.origin === 'external')) && replacesEdit) {
+      this.toast('warning', 'The file changed on disk; your unsaved edit was replaced by the new version.');
+    }
   }
 
   /**
@@ -407,6 +530,73 @@ export class Session {
   /** Close bitmaps of a discarded texture set that the live set does not share. */
   private releaseUnused(entries: Map<string, TextureEntry>): void {
     for (const [id, entry] of entries) if (this.textures.get(id) !== entry) entry.bitmap.close();
+  }
+
+  /**
+   * Forget the open document before another one is shown: pending loads, the undo history (its steps
+   * would write the old document into the new file), textures and the compiled rig. `keepView`
+   * (Save As: the same model under a new name) keeps parameters, animation, selection and camera.
+   */
+  private resetDocument(opts: { keepView?: boolean } = {}): void {
+    this.seq++;
+    this.epoch++;
+    this.history.clear();
+    this.ownWrites.length = 0;
+    this.discardedDoc = null;
+    this.rig = null;
+    this.player = null;
+    this.frame = null;
+    this.frameKey = '';
+    for (const t of this.textures.values()) t.bitmap.close();
+    this.textures = new Map();
+    this.textureVersion++;
+    this.textureFetch++;
+    this.lastPublished = '';
+    // Toast actions (Retry, Save anyway) act on the open document: they would now hit the next one.
+    for (const t of this.get().toasts) if (t.action) this.dismissToast(t.id);
+    const view: Partial<AppState> = opts.keepView
+      ? {}
+      : {
+          hidden: [],
+          selection: [],
+          animation: null,
+          animationWeight: 1,
+          animationOptions: {},
+          layers: [],
+          playing: false,
+          time: 0,
+          overrides: {},
+          values: {},
+          physicsValues: {},
+          drawOrder: [],
+          search: '',
+        };
+    if (!opts.keepView) this.pendingFocus = 'canvas';
+    this.store.set({
+      file: '',
+      mtimeMs: 0,
+      text: '',
+      doc: null,
+      diagnostics: [],
+      model: null,
+      stale: false,
+      validAt: null,
+      saving: false,
+      unsaved: false,
+      conflict: null,
+      hover: null,
+      pointer: null,
+      evalError: null,
+      ...this.historyFlags(),
+      ...view,
+    });
+    this.requestFrame();
+  }
+
+  /** No model is open on the server: the start screen. */
+  private showStartScreen(): void {
+    this.resetDocument();
+    this.store.set({ status: 'empty', loadError: null });
   }
 
   // ------------------------------------------------------------------------------ evaluation
@@ -749,10 +939,10 @@ export class Session {
     this.store.set((s) => ({ bottomTab: tab, ...(s.panels.dock ? {} : { panels: { ...s.panels, dock: true } }) }));
   }
 
-  toast(kind: Toast['kind'], text: string, extra: Pick<Toast, 'source' | 'action'> = {}): void {
+  toast(kind: Toast['kind'], text: string, extra: Pick<Toast, 'source' | 'action' | 'details'> = {}): void {
     const id = ++this.toastSeq;
     this.store.set((s) => ({ toasts: [...s.toasts.slice(-4), { id, kind, text, ...extra }] }));
-    const ms = extra.action ? 10000 : kind === 'error' ? 9000 : kind === 'warning' ? 6000 : 4000;
+    const ms = extra.action ? 10000 : kind === 'error' ? 9000 : kind === 'warning' || extra.details?.length ? 7000 : 4000;
     this.toastTimers.set(
       id,
       setTimeout(() => this.dismissToast(id), ms),
@@ -796,18 +986,21 @@ export class Session {
    * Ctrl+S: write the current raw document (formatted) when it is not on disk yet (a rejected or
    * failed write). Otherwise the file already holds it and rewriting would only reformat it.
    */
-  async save(force = false): Promise<void> {
+  async save(force = false): Promise<boolean> {
     if (this.writing) await this.writing.catch(() => false);
     const s = this.get();
+    if (s.status !== 'ready') return false;
     if (!s.doc) {
       this.toast('error', 'Nothing to save: the file is not valid JSON.');
-      return;
+      return false;
     }
     if (!s.unsaved && !force) {
       this.toast('info', 'No unsaved changes: the file on disk is up to date.');
-      return;
+      return true;
     }
-    if (await this.writeDoc(s.doc, force, s.mtimeMs)) this.toast('success', 'Saved');
+    const ok = await this.writeDoc(s.doc, force, s.mtimeMs);
+    if (ok) this.toast('success', 'Saved');
+    return ok;
   }
 
   /**
@@ -852,8 +1045,10 @@ export class Session {
    * `baseMtimeMs` is the file version `doc` derives from (default: the version shown when the write
    * runs, for documents that replace it wholesale like undo steps).
    */
-  private writeDoc(doc: RawDoc, force: boolean, baseMtimeMs?: number): Promise<boolean> {
-    const run = (): Promise<boolean> => this.performWrite(doc, force, baseMtimeMs ?? this.get().mtimeMs);
+  private writeDoc(doc: RawDoc, force: boolean, baseMtimeMs?: number, quiet = false): Promise<boolean> {
+    // The model this document belongs to: the server refuses the write once another one is open.
+    const file = this.get().file;
+    const run = (): Promise<boolean> => this.performWrite(doc, force, baseMtimeMs ?? this.get().mtimeMs, quiet, file);
     const write = this.writing ? this.writing.then(run, run) : run();
     this.writing = write;
     void write.finally(() => {
@@ -862,8 +1057,10 @@ export class Session {
     return write;
   }
 
-  private async performWrite(doc: RawDoc, force: boolean, baseMtimeMs: number): Promise<boolean> {
+  /** `quiet`: failures are reported by the caller (the unsaved-changes prompt), not as toasts. */
+  private async performWrite(doc: RawDoc, force: boolean, baseMtimeMs: number, quiet = false, file = this.get().file): Promise<boolean> {
     const seq = ++this.seq;
+    const epoch = this.epoch;
     const text = formatModelJson(doc);
     this.store.set({ saving: true });
     let written = false;
@@ -871,31 +1068,374 @@ export class Session {
     let mtimeMs = this.get().mtimeMs;
     try {
       // mtime 0: the version is unknown (nothing to compare), write unconditionally.
-      const res = await api.putModel({ doc }, { force, baseMtimeMs: baseMtimeMs > 0 ? baseMtimeMs : undefined });
+      const res = await api.putModel({ doc }, { force, baseMtimeMs: baseMtimeMs > 0 ? baseMtimeMs : undefined, ...(file ? { file } : {}) });
       written = res.written;
       if (written) {
+        this.lastWrite = { ok: true };
         mtimeMs = res.mtimeMs;
         this.ownWrites.push(mtimeMs);
         // Echoes normally arrive within milliseconds; keep only recent ones (events can be lost offline).
         if (this.ownWrites.length > OWN_WRITES_KEPT) this.ownWrites.splice(0, this.ownWrites.length - OWN_WRITES_KEPT);
       } else {
         const n = errorCount(res.diagnostics);
-        this.toast('error', `Not saved: the server rejected the model (${n} error${n === 1 ? '' : 's'}).`, {
-          action: { label: 'Save anyway', run: () => void this.save(true) },
-        });
+        const message = `Not saved: the server rejected the model (${n} error${n === 1 ? '' : 's'}).`;
+        this.lastWrite = { ok: false, message, invalid: true };
+        if (!quiet) this.toast('error', message, { action: { label: 'Save anyway', run: () => void this.save(true) } });
       }
     } catch (e) {
-      if (e instanceof api.ConflictError) conflict = { mtimeMs: e.mtimeMs, force };
-      else this.toast('error', `Save failed: ${messageOf(e)}`, { action: { label: 'Retry', run: () => void this.save(force) } });
+      if (e instanceof api.ConflictError) {
+        conflict = { mtimeMs: e.mtimeMs, force };
+        this.lastWrite = { ok: false, message: 'Not saved: the file changed on disk since it was loaded.' };
+      } else if ((e as { file?: unknown }).file !== undefined && (e as { status?: unknown }).status === 409) {
+        // FileSwitchedError: another tab or an AI opened another model; follow it (file-changed may be late).
+        this.lastWrite = { ok: false, message: `Not saved: ${baseName(String((e as { file: unknown }).file))} was opened meanwhile.` };
+        if (!quiet) this.toast('error', `Not saved: another model (${baseName(String((e as { file: unknown }).file))}) was opened meanwhile.`);
+        void this.syncWithServer();
+      } else {
+        this.lastWrite = { ok: false, message: `Save failed: ${messageOf(e)}` };
+        if (!quiet) this.toast('error', `Save failed: ${messageOf(e)}`, { action: { label: 'Retry', run: () => void this.save(force) } });
+      }
     }
+    // Another file was opened meanwhile: this write's outcome no longer describes what is shown.
+    if (epoch !== this.epoch) return written;
     if (seq === this.seq) await this.ingest(text, { mtimeMs, history: 'none', seq });
     this.store.set({ saving: false, unsaved: !written, conflict: written ? null : conflict, ...this.historyFlags() });
     return written;
   }
 
+  // ------------------------------------------------------------------------------ files & workspace
+
+  /** Re-read the workspace (root, open model, recent files). Null when the server has no workspace API. */
+  async refreshWorkspace(): Promise<WorkspaceInfo | null> {
+    try {
+      const workspace = await api.fetchWorkspace();
+      this.store.set({ workspace });
+      return workspace;
+    } catch {
+      // An older editor server (no /api/workspace): file management stays unavailable.
+      return null;
+    }
+  }
+
+  /** `abs` relative to the workspace root ('/'-separated), or the path itself outside of it. */
+  displayPath(abs: string): string {
+    const root = this.get().workspace?.root;
+    const rel = root ? relativeToRoot(abs, root) : null;
+    return rel ?? abs;
+  }
+
+  private importPicker: (() => void) | null = null;
+
+  /** The hidden file input registers how to open the browser's file picker. */
+  setImportPicker(fn: (() => void) | null): void {
+    this.importPicker = fn;
+  }
+
+  /** "Import from computer…": the browser's file picker; the picked files open the import dialog. */
+  pickImportFiles(): void {
+    this.importPicker?.();
+  }
+
+  openDialog(dialog: AppState['dialog']): void {
+    if (dialog && dialog.kind === 'saveAs' && this.get().status !== 'ready') return;
+    this.store.set({ dialog, helpOpen: false });
+  }
+
+  closeDialog(): void {
+    this.store.set({ dialog: null });
+  }
+
+  /**
+   * Ask before an action replaces an unsaved document: resolves true to go on (saved, or the user
+   * chose "Don't save"), false when the user cancelled or the prompt is already up for another action.
+   */
+  async confirmUnsaved(action: string): Promise<boolean> {
+    if (this.writing) await this.writing.catch(() => false);
+    const s = this.get();
+    const dirty = s.status === 'ready' && s.unsaved && !(s.doc !== null && s.doc === this.discardedDoc);
+    const effect = this.stepGuard({ type: 'request', dirty, file: baseName(s.file) || 'the model', action });
+    if (effect === 'proceed') return true;
+    if (effect === 'abort') return false;
+    return new Promise<boolean>((resolve) => {
+      this.guardResolve = resolve;
+    });
+  }
+
+  /** The user's answer to the unsaved-changes prompt. */
+  resolveUnsaved(choice: GuardChoice): void {
+    if (choice === 'discard' && this.guard.phase === 'asking') this.discardedDoc = this.get().doc;
+    void this.runGuard(this.stepGuard({ type: 'choose', choice }));
+  }
+
+  private stepGuard(event: GuardEvent): GuardEffect {
+    const { state, effect } = guardStep(this.guard, event);
+    this.guard = state;
+    this.store.set({ unsavedPrompt: state.phase === 'idle' ? null : state });
+    return effect;
+  }
+
+  private async runGuard(effect: GuardEffect): Promise<void> {
+    if (effect === 'proceed' || effect === 'abort') {
+      const resolve = this.guardResolve;
+      this.guardResolve = null;
+      resolve?.(effect === 'proceed');
+      return;
+    }
+    if (effect !== 'save' && effect !== 'saveAnyway') return;
+    const s = this.get();
+    let ok = false;
+    if (!s.doc) this.lastWrite = { ok: false, message: 'The file is not valid JSON, so it cannot be saved from here.' };
+    else ok = await this.writeDoc(s.doc, effect === 'saveAnyway', s.mtimeMs, true);
+    if (ok) this.toast('success', 'Saved');
+    await this.runGuard(this.stepGuard({ type: 'saved', ok, error: this.lastWrite.message, invalid: this.lastWrite.invalid }));
+  }
+
+  /** Drop a pending prompt (the document it is about was replaced from elsewhere). */
+  private cancelGuard(): void {
+    if (this.guard.phase === 'idle') return;
+    this.guard = GUARD_IDLE;
+    this.store.set({ unsavedPrompt: null });
+    const resolve = this.guardResolve;
+    this.guardResolve = null;
+    resolve?.(false);
+  }
+
+  /**
+   * Run a file operation. "file-changed" events that arrive meanwhile are held back: once it ends,
+   * the last one is handled (its own echo is recognized by the file now shown; a switch by another
+   * tab or an AI right after it is followed, with its toast), else the server is re-read.
+   */
+  private async fileOp(label: string, run: () => Promise<FileOpResult>): Promise<FileOpResult> {
+    this.fileOps++;
+    this.store.set({ fileBusy: label });
+    try {
+      return await run();
+    } finally {
+      this.fileOps--;
+      if (this.fileOps === 0) {
+        this.store.set({ fileBusy: null });
+        const deferred = this.deferredFileEvent;
+        this.deferredFileEvent = null;
+        if (deferred) void this.onFileChanged(deferred);
+        else void this.syncWithServer();
+      }
+    }
+  }
+
+  /** Follow the server when its open model differs from the one shown (events missed during an operation). */
+  private async syncWithServer(): Promise<void> {
+    const ws = await this.refreshWorkspace();
+    if (!ws || this.fileOps > 0) return;
+    const s = this.get();
+    if (ws.current === null && s.status === 'ready') this.showStartScreen();
+    else if (ws.current !== null && (s.status === 'empty' || (s.status === 'ready' && !samePath(ws.current, s.file)))) {
+      this.resetDocument();
+      this.store.set({ status: 'loading' });
+      await this.reload('reset', true);
+    }
+  }
+
+  /** Show a model the server just opened (open / new / save-as / import). */
+  private async adopt(result: OpenResult, message: string, opts: { keepView?: boolean } = {}): Promise<void> {
+    this.resetDocument(opts);
+    this.store.set({ status: 'loading', dialog: null });
+    await this.ingest(result.text, { file: result.file, mtimeMs: result.mtimeMs, history: 'reset', seq: this.seq });
+    const { text, details } = summarizeNotes(message, result.notes);
+    this.toast('success', text, details.length ? { details } : {});
+    await this.refreshWorkspace();
+  }
+
+  /** Open a model of the workspace (absolute or root-relative path). */
+  async openFile(file: string): Promise<FileOpResult> {
+    // Already open: nothing to do (Reload from disk re-reads it).
+    const s = this.get();
+    const root = s.workspace?.root;
+    const target = /^([a-zA-Z]:[\\/]|[\\/])/.test(file) || !root ? file : `${root}/${file}`;
+    if (s.status === 'ready' && samePath(target, s.file)) {
+      this.closeDialog();
+      return { ok: true };
+    }
+    if (!(await this.confirmUnsaved(`open ${baseName(file)}`))) return { ok: false, cancelled: true };
+    return this.fileOp(`Opening ${baseName(file)}…`, async () => {
+      try {
+        const result = await api.openModel(file);
+        await this.adopt(result, `Opened ${this.displayPath(result.file)}`);
+        return { ok: true };
+      } catch (e) {
+        return failure(e);
+      }
+    });
+  }
+
+  /** Open Recent / start screen: like openFile, errors as toasts. */
+  async openRecent(file: string): Promise<void> {
+    const r = await this.openFile(file);
+    if (!r.ok && !r.cancelled) this.toast('error', `Could not open ${baseName(file)}: ${r.error}${r.hint ? ` (${r.hint})` : ''}`);
+  }
+
+  /** Create a model from a template and open it. */
+  async createModel(req: NewRequest): Promise<FileOpResult> {
+    if (!(await this.confirmUnsaved('create a new model'))) return { ok: false, cancelled: true };
+    return this.fileOp(`Creating ${baseName(req.file)}…`, async () => {
+      try {
+        const result = await api.newModel(req);
+        await this.adopt(result, `Created ${this.displayPath(result.file)}`);
+        return { ok: true };
+      } catch (e) {
+        return failure(e);
+      }
+    });
+  }
+
+  /** Write the current document to another file of the workspace and continue editing that one. */
+  async saveAs(file: string, overwrite = false): Promise<FileOpResult> {
+    if (this.writing) await this.writing.catch(() => false);
+    const s = this.get();
+    if (s.status !== 'ready') return { ok: false, error: 'No model is open.' };
+    return this.fileOp(`Saving ${baseName(file)}…`, async () => {
+      try {
+        const result = await api.saveAs(s.doc ? { file, doc: s.doc, overwrite } : { file, text: s.text, overwrite });
+        await this.adopt(result, `Saved as ${this.displayPath(result.file)}`, { keepView: true });
+        return { ok: true };
+      } catch (e) {
+        return failure(e);
+      }
+    });
+  }
+
+  /** Import a model (+ PNG textures) picked on the user's computer into `dir`, then open it. */
+  async importFiles(files: readonly File[], dir: string, overwrite = false): Promise<FileOpResult> {
+    const plan = planImport(files);
+    if (plan.error) return { ok: false, error: plan.error };
+    let payload: Awaited<ReturnType<typeof readImportFiles>>;
+    try {
+      payload = await readImportFiles(files, plan);
+    } catch (e) {
+      return { ok: false, error: `Could not read the picked files: ${messageOf(e)}` };
+    }
+    const model = payload.find((f) => f.name === plan.model);
+    const problem = model?.text !== undefined ? modelTextProblem(model.text) : 'The model file could not be read.';
+    if (problem) return { ok: false, error: problem };
+    if (!(await this.confirmUnsaved(`import ${plan.model}`))) return { ok: false, cancelled: true };
+    return this.fileOp(`Importing ${plan.model}…`, async () => {
+      try {
+        const result = await api.importFiles({ dir, files: payload, overwrite });
+        await this.adopt(result, `Imported ${this.displayPath(result.file)}`);
+        return { ok: true };
+      } catch (e) {
+        return failure(e);
+      }
+    });
+  }
+
+  /** Close the model: the server keeps running, the UI shows its start screen. */
+  async closeModel(): Promise<FileOpResult> {
+    if (this.get().status !== 'ready' && this.get().status !== 'failed') return { ok: true };
+    if (!(await this.confirmUnsaved('close it'))) return { ok: false, cancelled: true };
+    const r = await this.fileOp('Closing…', async () => {
+      try {
+        await api.closeModel();
+        this.showStartScreen();
+        await this.refreshWorkspace();
+        return { ok: true };
+      } catch (e) {
+        return failure(e);
+      }
+    });
+    if (!r.ok && !r.cancelled) this.toast('error', `Could not close the model: ${r.error}`);
+    return r;
+  }
+
+  /** Re-read the file from disk, dropping an unsaved edit (after asking). */
+  async reloadFromDisk(): Promise<void> {
+    if (this.get().status !== 'ready') return;
+    if (!(await this.confirmUnsaved('reload it from disk'))) return;
+    if (await this.reload('external', true)) this.toast('info', `Reloaded ${baseName(this.get().file)} from disk`);
+  }
+
+  /**
+   * Download the model: the file as on disk, or, while the document shown is not on disk (a failed
+   * write, a deleted file), that document itself.
+   */
+  downloadCopy(): void {
+    const s = this.get();
+    if (s.status !== 'ready') return;
+    if (s.unsaved && s.doc) {
+      const url = URL.createObjectURL(new Blob([formatModelJson(s.doc)], { type: 'application/json' }));
+      triggerDownload(url, baseName(s.file));
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      this.toast('info', 'Downloaded the version shown in the editor (it is not saved to disk yet).');
+      return;
+    }
+    triggerDownload(api.DOWNLOAD_URL, baseName(s.file));
+  }
+
+  /** Download a PNG of the current view (rendered by the server from the published view state). */
+  async exportPng(): Promise<void> {
+    const s = this.get();
+    if (!s.model) return;
+    const name = `${baseName(s.file).replace(/(\.r2d)?\.json$/i, '') || 'rev2d'}.png`;
+    try {
+      await this.publishNow();
+      const blob = await api.fetchScreenshot();
+      const url = URL.createObjectURL(blob);
+      triggerDownload(url, name);
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      this.toast('success', `Exported ${name}`);
+    } catch (e) {
+      this.toast('error', `Export failed: ${detailOf(e)}`);
+    }
+  }
+
+  /** Another tab or an AI switched files (or closed the model): follow it. */
+  private async onFileChanged(e: FileChangedEvent): Promise<void> {
+    // During an own operation: handled when it ends (fileOp).
+    if (this.fileOps > 0) {
+      this.deferredFileEvent = e;
+      return;
+    }
+    const s = this.get();
+    if (e.file !== null && s.status === 'ready' && samePath(e.file, s.file)) return void this.refreshWorkspace();
+    if (e.file === null && s.status === 'empty') return void this.refreshWorkspace();
+    const lost = s.status === 'ready' && s.unsaved ? baseName(s.file) : null;
+    const previous = baseName(s.file);
+    // Prompts and dialogs about the old document no longer apply, nor do commands held back for a
+    // model that is replaced before it was even shown.
+    this.cancelGuard();
+    this.pendingCommands = [];
+    if (s.dialog?.kind === 'saveAs') this.store.set({ dialog: null });
+    const from = e.origin === 'ai' ? { source: 'AI' } : {};
+    if (e.file === null) {
+      this.showStartScreen();
+      this.toast('info', e.origin === 'ai' ? `closed ${previous || 'the model'}` : `${previous || 'The model'} was closed in another tab`, from);
+    } else {
+      this.resetDocument();
+      this.store.set({ status: 'loading' });
+      await this.reload('reset', true);
+      const name = this.displayPath(e.file);
+      this.toast('info', e.origin === 'ai' ? `opened ${name}` : `${name} was opened in another tab`, from);
+    }
+    if (lost) this.toast('warning', `Your unsaved edit to ${lost} was discarded.`);
+    void this.refreshWorkspace();
+  }
+
   // ------------------------------------------------------------------------------ AI bridge
 
+  /** Apply the commands held back while a model was loading. */
+  private flushCommands(): void {
+    if (this.get().status === 'loading') return;
+    const queued = this.pendingCommands;
+    this.pendingCommands = [];
+    for (const c of queued) this.handleCommand(c);
+  }
+
   handleCommand(c: EditorCommand): void {
+    // A model is being loaded (just opened): the command is meant for it, not for the empty view.
+    if (this.get().status === 'loading' && c.type !== 'message') {
+      this.pendingCommands.push(c);
+      if (this.pendingCommands.length > MAX_PENDING_COMMANDS) this.pendingCommands.shift();
+      return;
+    }
     const s = this.get();
     const model = s.model;
     const note = (text: string): void => this.store.set({ bridge: { text, at: Date.now() } });
@@ -1026,6 +1566,10 @@ export class Session {
         void this.reload('external', true);
         note('reload');
         return;
+      case 'open':
+        // The server switches files itself; this UI follows its "file-changed" event.
+        note(`open ${String(c.file ?? '')}`);
+        return;
       case 'message':
         this.toast('info', String(c.text ?? ''), { source: 'AI' });
         note('message');
@@ -1061,6 +1605,18 @@ export class Session {
       this.publishTimer = null;
       this.flushPublish();
     }, PUBLISH_INTERVAL_MS);
+  }
+
+  /** Publish the view state now (before a screenshot that must show exactly this view). */
+  private async publishNow(): Promise<void> {
+    if (this.publishTimer) {
+      clearTimeout(this.publishTimer);
+      this.publishTimer = null;
+    }
+    const body = this.editorState();
+    if (!body) return;
+    this.lastPublished = JSON.stringify(body);
+    await api.postState({ ...body, updatedAt: new Date().toISOString() });
   }
 
   private flushPublish(): void {

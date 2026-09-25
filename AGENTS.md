@@ -356,7 +356,7 @@ several ops files (`rev2d ops m.r2d.json 01-bones.json 02-parts.json`) form one 
 17. **Trusting one frame.** Check parameter extremes and diagonals with sweep grids, and animation
     loops with `analyze` (the loop seam at `t = duration` vs `t = 0`; with physics, `--warmup`).
 18. **Editing a shipped example in place.** `rev2d edit` and ops write the file. Work on a copy
-    (`rev2d new mine.r2d.json --template slime`).
+    (`rev2d new mine.r2d.json --template slime`; the editor's example cards copy too).
 19. **Hand-formatted JSON diffs.** Ops and the editor rewrite files with the stable formatter
     (comments are dropped). Keep comments out of models you edit with tools.
 
@@ -381,7 +381,7 @@ with a hint and diagnostics, never as a crash.
 | `rev2d_hit_test {path, x, y}` | parts under a canvas point |
 | `rev2d_apply_ops {path, ops, dry_run?, render_after?}` | atomic, validated edits |
 | `rev2d_diff_images {a, b}` | pixel diff with a visualization |
-| `rev2d_editor_state` / `rev2d_editor_command` / `rev2d_editor_screenshot` | see and drive the human's live editor |
+| `rev2d_editor_state` / `rev2d_editor_command` / `rev2d_editor_screenshot` | see and drive the human's live editor; `{type: "open", file}` switches it to another model of its workspace ([§1.10](#110-working-with-a-human-the-live-editor)) |
 
 Pose arguments: `params` (explicit values beat animations and physics), `animations` as layer
 strings (`["look_around", "talk@0.8,add", "wink,once,start=2.5"]`) or objects
@@ -399,9 +399,11 @@ screen immediately, and their edits are written to the same file: re-read it (`r
 before your next batch. `rev2d_apply_ops` refuses to overwrite a file that another program saved while the call
 was running; send the batch again.
 
-- `rev2d editor state --json` / `rev2d_editor_state`: their parameters (physics results
-  included), time, playing animation layers, the parameters they pinned (explicit values that beat
-  animation and physics), selection, overlays, visible region and parts hidden in the preview.
+- `rev2d editor state --json` / `rev2d_editor_state`: the model they have open and the workspace
+  root, their parameters (physics results included), time, playing animation layers, the
+  parameters they pinned (explicit values that beat animation and physics), selection, overlays,
+  visible region and parts hidden in the preview. With no model open it reports the start screen
+  and the recent files (exit 0, not an error).
 - `rev2d editor screenshot -o out/seen.png` / `rev2d_editor_screenshot`: exactly what they see,
   rendered by the same renderer.
 - `rev2d editor command --params AngleX=30 --select head --message "check the turn"` /
@@ -412,6 +414,50 @@ was running; send the batch again.
   or MCP `rev2d_editor_command`.
 - If you write the model while the human has unsaved edits, their next save is refused with a
   conflict (HTTP 409) instead of overwriting your change; they choose to reload or overwrite.
+
+### Files and the workspace root
+
+The editor manages files inside a **workspace root** and has at most one model open:
+
+```sh
+rev2d edit hero.r2d.json                     # one model; workspace = its directory
+rev2d edit                                   # start screen; workspace = the current directory
+rev2d edit models                            # a directory: that directory is the workspace, no model open yet
+rev2d edit models/hero.r2d.json --root .     # a model, with the whole project as the workspace
+```
+
+- The human's **File menu** has New from a template (Alt+N), Open (Ctrl+O), Open Recent, Save
+  (Ctrl+S), Save As (Ctrl+Shift+S), Import from computer (a model plus its PNG textures), Download
+  copy, Export PNG of the view, Reload from disk and Close. Without a model the editor shows a
+  **start screen**: New / Open / Import, the recent files of the workspace and example cards; an
+  example card *copies* the example into the workspace (through the New dialog), it never edits the
+  shipped file. Before New, Open, Import, Close or Reload replaces a document with unsaved changes
+  the editor asks "Save changes?".
+- **Every path stays inside the root**: files the editor opens, creates, saves or imports must lie
+  inside it, also after following symbolic links and junctions. Anything else is refused with HTTP
+  403 and a hint (restart with `--root <dir>`). New files need portable names, and existing files
+  are only replaced when the human confirms (overwrite).
+- **You can switch the model the human sees**: `rev2d editor command --open models/cat.r2d.json`
+  or MCP `rev2d_editor_command {command: {type: "open", file: "models/cat.r2d.json"}}` (a relative
+  path resolves against your working directory; it must lie inside the editor's root). Every editor
+  tab follows, the view state resets, and commands sent right after the open (in the same call:
+  `--open m.r2d.json --params AngleX=30`) apply to the newly opened model. To show a model that does
+  not exist yet, create it inside the root first (`rev2d new models/cat.r2d.json --template blank`,
+  or `rev2d_create_model`), then open it. Opening replaces what the human is looking at, and an edit
+  they could not save (a conflict, a rejected invalid model, a deleted file) is discarded with a
+  warning: check `rev2d editor state` first and do not switch away from their work unasked.
+- **Which editor you talk to**: running editors register their URL, the file they have open now and
+  their workspace root in `~/.rev2d/editors/`. `--model <file>` (MCP `model`) picks the editor that
+  has that file open, else the one whose workspace root contains it (innermost root first; this
+  also finds an editor on its start screen); a directory picks the editor of that workspace.
+  `--open <file>` without `--model` / `--url` goes to the editor whose workspace holds the file.
+  When the chosen editor has another model (or none) open, `editor state` adds a note, while
+  commands other than open and screenshots are refused (they would act on the wrong model): add
+  `--open <file>`. `--url` (MCP `url`) skips discovery; entries of older editor versions carry no root and
+  are found by their open file only.
+- While no model is open, model commands and screenshots fail with `409 no model is open` and a hint
+  to open one. If the open model's file is deleted or moved away on disk, the editor keeps it open
+  as unsaved (Save writes it back).
 
 ---
 
@@ -453,14 +499,14 @@ Details, data contracts and extension points: [docs/ARCHITECTURE.md](docs/ARCHIT
 | --- | --- | --- |
 | `src/core` | schema (single source of truth), types, addresses, values, validation, geometry compiler, rig compile + evaluation, render list | zod only. **No Node APIs, no DOM**: the editor imports it in the browser. |
 | `src/render` | software rasterizer, overlays, bitmap font, sheets, diff, GIF, PNG | core types. Browser-safe except `png.ts` (node:zlib); browser code imports `src/render/browser.ts`. |
-| `src/node` | loading model files and textures, editor registry (`~/.rev2d/editors`) | core, render, Node |
+| `src/node` | loading model files and textures, editor registry (`~/.rev2d/editors`: URL, open file and workspace root of each running editor) and the editor protocol types | core, render, Node |
 | `src/api` | JSON-friendly high-level operations shared by CLI/MCP/server: layer syntax (`layers.ts`), pose options (`pose.ts`), frames and view boxes (`frame.ts`), sampling plans (`sampling.ts`), notes (`stats.ts`), sheets (`sheet.ts`), inspect/series/tracks (`inspect.ts`), `analyze.ts`, hit, info, templates, doc summaries (`docs.ts`); `index.ts` re-exports them | core, render, node |
 | `src/ops` | edit ops on the **raw** document (`applyOps`, `describeOps`); `compose` and `follow` evaluate the model through `Rig` | core |
 | `src/cli` | `rev2d` commands, flags, help, `--json` output | api, ops, node, render, core; server and mcp are imported lazily by `edit` / `mcp` |
 | `src/mcp` | MCP server and tools | api, ops, node, render, core |
-| `src/server` | editor HTTP server: model file API, SSE live reload, AI bridge (state/command/screenshot) | api, node, render, core |
+| `src/server` | editor HTTP server: model file API, SSE live reload, AI bridge (state/command/screenshot), file management confined to a workspace root (`workspace.ts`, `workspace-routes.ts`) | api, node, render, core |
 | `editor/` | React 19 + WebGL2 editor UI | `src/core` via relative imports (`src/render/browser.ts` is available when it needs raster code); type-only imports from `src/node/editor-registry.ts` |
-| `scripts/` | example builders, texture generator, render scripts | anything |
+| `scripts/` | example builders, texture generator, render scripts, demo media pipeline (`scripts/video/` → `docs/media/`) | anything |
 
 Keep these boundaries: anything the editor imports must stay browser-safe, and `stdout` inside
 `src/mcp` belongs to the protocol (never `console.log` there).
@@ -513,6 +559,7 @@ Keep these boundaries: anything the editor imports must stay browser-safe, and `
 | New note (render/sheet/analyze) | `PoseStats` in `src/api/stats.ts`, the notes table in CLI.md |
 | New recipe | a section in `docs/RECIPES.md` with `<!-- check:ops name=... -->` and `<!-- check:run chain=... -->` markers (see the comment at its top); `test/docs-recipes.test.ts` runs it, and quoted numbers get an assertion there |
 | New editor bridge command | `EditorCommand` in `src/node/editor-registry.ts`, parsing in `src/server/protocol.ts`, handling in `editor/src/state/session.ts`, CLI sugar in `src/cli/commands/live.ts`, MCP `rev2d_editor_command` |
+| New workspace (file-management) endpoint | a handler in `src/server/workspace-routes.ts` + `ROUTES` in `src/server/routes.ts`, request/result types in `src/node/editor-registry.ts`, validation in `src/server/protocol.ts`; resolve every path through `WorkspaceRoot` (`src/server/workspace.ts`); the client in `editor/src/api.ts`, UI in `editor/src/files/`; tests in `src/server/__tests__/workspace.test.ts`; the protocol section of CLI.md and ARCHITECTURE §5 |
 | New example | `scripts/examples/<name>.ts` + `scripts/examples/index.ts`, rebuild, examples/README.md (text and feature matrix), predicates in `test/examples.test.ts` |
 
 ## 2.6 Before you finish

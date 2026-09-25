@@ -116,7 +116,8 @@ IK and physics. You write it as text and VERIFY it with deterministic renders an
    rev2d_analyze {animation: "idle"} (loop seam, parameter ranges, physics clamping, IK reach).
    Over time in numbers: rev2d_inspect {animations: ["idle"], frames: 8, track: "param:AngleX,bone:head"}.
 6. Human in the loop: if the user runs \`rev2d edit <model>\`, the editor live-reloads your writes.
-   rev2d_editor_state / rev2d_editor_screenshot show what they see; rev2d_editor_command drives it.
+   rev2d_editor_state / rev2d_editor_screenshot show what they see; rev2d_editor_command drives it
+   ({type: "open", file} shows them another model of the editor's workspace).
 
 Animation layers (render, sheet, inspect, analyze): ["idle", "blink@0.5"]; comma options: "talk@0.8,add"
 (param tracks add on top of the layers below instead of replacing them), "wink,once,start=2.5" (a

@@ -905,15 +905,41 @@ Text output: `[12:01:02] hero.r2d.json: ok (0 errors, 1 warning)` followed by th
 ### rev2d edit
 
 ```
-rev2d edit <model> [--port n] [--host h] [--allow-host name]... [--no-open] [--json]
+rev2d edit [model | dir] [--root dir] [--port n] [--host h] [--allow-host name]... [--no-open] [--json]
 ```
 
-Starts the editor server for the model (default `http://127.0.0.1:4777`) and opens it in the
-default browser. The editor live-reloads on external file changes and writes edits back to the
-file. The server registers itself as `~/.rev2d/editors/<pid>-<port>.json` (`{pid, url, file,
-startedAt}`; one process may run several servers, stale entries of dead processes are ignored and
-cleaned up) so `rev2d editor ...` and the MCP server can find it. Runs until Ctrl+C, then shuts
-down cleanly (exit 0) and removes its entry.
+Starts the editor server (default `http://127.0.0.1:4777`) and opens it in the default browser.
+With a model it opens that model; without one (or with a directory, which becomes the workspace
+root) the editor starts on its **start screen** (new from template, open, recent files, import). The
+editor live-reloads on external file changes and writes edits back to the file. The server registers
+itself as `~/.rev2d/editors/<pid>-<port>.json` (`{pid, url, file, startedAt}`; `file` is the model
+the editor has open **now**, `""` on the start screen; one process may run several servers, stale
+entries of dead processes are ignored and cleaned up) so `rev2d editor ...` and the MCP server can
+find it. Runs until Ctrl+C, then shuts down cleanly (exit 0) and removes its entry.
+
+**File management.** The editor's File menu opens, creates (from a template), saves as, closes,
+imports (model + PNG textures picked on your computer) and downloads models. It works inside a
+**workspace root**:
+
+- `--root <dir>` if given, else the model's directory, else the current directory. The model must
+  lie inside the root (`rev2d edit models/hero.r2d.json --root .` gives the editor the whole project).
+- Every path the editor or an agent names (absolute, or relative to the root) must resolve inside
+  the root after following symbolic links / junctions: `..`, absolute paths elsewhere and links
+  leading out are refused (HTTP 403 with a hint), and so are broken links. New files need portable
+  names (no `\ : * ? " < > |`, no trailing dot or space, no device names such as `CON`).
+- Recently opened models are kept in `~/.rev2d/recent.json` (`{"files": [...]}`, newest first, at
+  most 10, shared by all editors); the editor lists the ones that still exist inside its root.
+- "Save as" rewrites relative texture paths so they still point at the same PNG files from the new
+  location (the result lists every rewrite); "new" copies an example template's PNGs next to the
+  model; "import" refuses to replace different existing files unless you confirm (overwrite), and
+  writes each picked PNG where the model references it (a model using `textures/atlas.png` gets
+  the picked `atlas.png` in `textures/`: a file picker only yields file names).
+- An agent switches the model with `rev2d editor command --open <file>` (or MCP
+  `rev2d_editor_command {type: "open"}`); every editor tab follows, and commands sent right after
+  the open (params, play, select, ...) apply to the newly opened model once it is loaded. Unsaved
+  changes are the UI's concern: it asks before switching and warns before the page is closed.
+- When the open model's file is deleted or moved away on disk, the editor keeps the model open as
+  unsaved: Save writes it back, Save As stores it elsewhere, switching files asks first.
 
 Edits from the editor are written with `PUT /api/model` `{text | doc, baseMtimeMs}`: when the file
 changed on disk since the version the edit is based on (another program or an agent wrote it), the
@@ -927,8 +953,9 @@ Another note names editors that already have the same model open (a second edito
 
 | Flag | Meaning |
 | --- | --- |
+| `--root <dir>` | workspace root: the editor opens, creates, saves and imports files only inside it (default: the model's directory, else the current directory) |
 | `--port <n>` | port, 0..65535 (default 4777; `0` picks a free port) |
-| `--host <address>` | interface to bind (default `127.0.0.1`; other values print a warning, the editor can write your file) |
+| `--host <address>` | interface to bind (default `127.0.0.1`; other values print a warning, the editor can write files in the workspace) |
 | `--allow-host <name>` | also answer requests addressed to this host name (repeatable or comma list) |
 | `--open` / `--no-open` | open a browser (default) or not |
 
@@ -937,9 +964,16 @@ address it is bound to (with `--host 0.0.0.0`: any of the machine's IP addresses
 through a host name, e.g. `http://my-pc.local:4777` from another machine, add
 `--allow-host my-pc.local`.
 
-`--json` prints NDJSON: `{"event":"listening","url":"http://127.0.0.1:4777","file":"/abs/hero.r2d.json","ui":{"mode":"static","detail":"..."}}`
-then `{"event":"stopped"}`. `ui.mode` is `static` (built UI), `vite` (development sources) or
-`none` (API only; `detail` says why).
+`--json` prints NDJSON: `{"event":"listening","url":"http://127.0.0.1:4777","file":"/abs/hero.r2d.json","root":"/abs","ui":{"mode":"static","detail":"..."}}`
+(`file` is `null` without a model) then `{"event":"stopped"}`. `ui.mode` is `static` (built UI),
+`vite` (development sources) or `none` (API only; `detail` says why).
+
+```sh
+rev2d edit hero.r2d.json                     # edit one model (workspace: its directory)
+rev2d edit                                   # start screen, workspace: the current directory
+rev2d edit models/hero.r2d.json --root .     # the whole project is the workspace
+rev2d edit hero.r2d.json --port 0 --no-open  # any free port, no browser
+```
 
 ### rev2d editor state
 
@@ -947,35 +981,46 @@ then `{"event":"stopped"}`. `ui.mode` is `static` (built UI), `vite` (developmen
 rev2d editor state [--model f] [--url u] [--json]
 ```
 
-What the human currently sees in a running editor: parameter values (physics outputs included),
-time, playing animations, selection, overlays, the visible region, the physics toggle and the parts
-hidden in the preview. The editor is found through the registry: the most
-recently started one, or the one editing `--model`; `--url` skips discovery. Exit 1 when no editor
-is running, it is unreachable, or no browser has published its state yet.
+What the human currently sees in a running editor: the model it has open and its workspace root,
+parameter values (physics outputs included), time, playing animations, selection, overlays, the
+visible region, the physics toggle and the parts hidden in the preview. The editor is found through
+the registry: the most recently started one, or the one that has `--model` open now; `--url` skips
+discovery. With no model open (start screen) it prints `no model open (start screen)`, the
+workspace root and the recent files, and exits 0. Exit 1 when no editor is running, it is
+unreachable, or no browser has published its state yet.
 
 | Flag | Meaning |
 | --- | --- |
 | `--model <file>` | the editor of this model |
 | `--url <url>` | explicit editor base URL, e.g. `http://127.0.0.1:4777` |
 
-`--json`: `{ "editor": { "url": "...", "file": "/abs/hero.r2d.json", "pid": 1234 }, "state": <EditorState> }`
-(see [Editor protocol types](#editor-protocol-types)).
+`--json`: `{ "editor": { "url": "...", "file": "/abs/hero.r2d.json", "root": "/abs", "pid": 1234 }, "state": <EditorState> }`
+(see [Editor protocol types](#editor-protocol-types)); `file` and `state` are `null` when no model is
+open.
 
 ### rev2d editor command
 
 ```
-rev2d editor command ['<EditorCommand json>'] [--params A=1,B=2] [--reset] [--play [id]] [--pause]
-                     [--seek t] [--anims layers] [--select ids] [--overlay list] [--focus fit|x,y,w,h]
-                     [--message text] [--reload] [--model f] [--url u] [--json]
+rev2d editor command ['<EditorCommand json>'] [--open file] [--params A=1,B=2] [--reset] [--play [id]]
+                     [--pause] [--seek t] [--anims layers] [--select ids] [--overlay list]
+                     [--focus fit|x,y,w,h] [--message text] [--reload] [--model f] [--url u] [--json]
 ```
 
-Drives the editor for the human: pose it, play animations, select items, show a message. Pass
-`EditorCommand` JSON (an object or an array) and/or sugar flags; sugar commands are sent after the
-JSON ones in this fixed order: reload, anims, params/reset, seek, play/pause, select, overlay, focus,
-message. Parameter, animation and selection ids are checked against the editor's model (did-you-mean).
+Drives the editor for the human: open another model, pose it, play animations, select items, show a
+message. Pass `EditorCommand` JSON (an object or an array) and/or sugar flags; sugar commands are
+sent after the JSON ones in this fixed order: open, reload, anims, params/reset, seek, play/pause,
+select, overlay, focus, message. Parameter, animation and selection ids are checked against the
+editor's model (with `--open`: the model being opened) with did-you-mean hints.
+
+`open` switches the editor to another model of its workspace: the server opens it (it must lie
+inside the workspace root; errors such as 403 outside the root or 404 missing come back with their
+hint), resets the view state, updates its registry entry and every editor tab follows. As
+everywhere in the CLI, a relative `file` (in `--open` or in the JSON) resolves against the current
+directory. Model commands sent while no model is open are refused (`409 no model is open`).
 
 | Flag | Command sent |
 | --- | --- |
+| `--open <file>` | `{"type":"open","file":"/abs/file"}` (sent first; prints `opened <file> ...`, `--json` adds `file` and `notes` to its `sent` entry) |
 | `--params <A=1,B=2>` | `{"type":"setParams","params":{...}}` (repeatable) |
 | `--reset` | with `--params`: `reset: true` (others back to defaults); alone: reset all parameters |
 | `--play [id]` | `{"type":"play"}` or `{"type":"play","animation":"id"}` |
@@ -993,6 +1038,9 @@ Prints how many editor windows received each command (`0` = no browser has the e
 `--json`: `{ "url": "...", "sent": [ { "command": { "type": "pause" }, "delivered": 1 } ] }`
 
 ```sh
+rev2d editor command --open models/cat.r2d.json
+rev2d editor command '{"type":"open","file":"hero.r2d.json"}'
+rev2d editor command --open hero.r2d.json --params AngleX=30 --play idle
 rev2d editor command --params AngleX=30,EyeOpen=0 --select head
 rev2d editor command --play idle
 rev2d editor command --anims idle,talk@0.8,add --play
@@ -1086,7 +1134,7 @@ Every command also accepts `-h, --help`.
 
 ```ts
 interface EditorState {
-  file: string;                                   // absolute model path
+  file: string;                                   // absolute path of the open model
   params: Record<string, number>;                 // every parameter as shown, physics outputs included
   time: number;
   animations: Array<{ id: string; weight?: number }>;
@@ -1109,7 +1157,18 @@ type EditorCommand =
   | { type: 'setOverlay'; overlay: string[] }
   | { type: 'focus'; viewBox: [number, number, number, number] | 'fit' }
   | { type: 'reload' }
+  | { type: 'open'; file: string }               // handled by the server (see below)
   | { type: 'message'; text: string };
+
+// File management (the editor's workspace)
+interface WorkspaceInfo { root: string; current: string | null; recent: string[] }
+interface FileListing {
+  dir: string;                                    // relative to the root, '' = the root
+  parent: string | null;
+  entries: Array<{ name: string; path: string; type: 'dir' | 'model' | 'image' | 'other'; size: number; mtimeMs: number }>;
+}
+interface OpenResult { file: string; text: string; mtimeMs: number; notes: string[] }
+interface TemplateInfo { name: string; description: string }
 ```
 
 Because `params` already hold the physics results the human sees, `editor screenshot` renders the
@@ -1124,4 +1183,30 @@ endings) plus an optional `baseMtimeMs`: when the file changed on disk since tha
 is refused with **409** `{error, hint, mtimeMs}` and nothing is written (GET the model again and
 re-apply the change; to overwrite on purpose, PUT again with `baseMtimeMs` = the returned mtimeMs).
 A result with validation errors is not written either (200 `{ok: false, written: false,
-diagnostics}`) unless `?force=1`.
+diagnostics}`) unless `?force=1`. `PUT /api/model` also takes an optional `file` (the model the write
+is for): when the editor has switched to another model meanwhile, the write is refused with **409**
+`{error, hint, file}` instead of landing in the wrong file (POST `/api/state` checks its absolute
+`file` the same way).
+
+Workspace endpoints (file management; every path is absolute or relative to the workspace root and
+must resolve inside it, else **403** with a hint):
+
+| Endpoint | Body | Answer |
+| --- | --- | --- |
+| `GET /api/workspace` | | `WorkspaceInfo` |
+| `GET /api/files?dir=<rel>` | | `FileListing`: directories, models (`*.r2d.json`), PNGs and other `*.json`; hidden entries and links leading outside the root are left out |
+| `GET /api/templates` | | `TemplateInfo[]` (`blank`, `empty`, then every example) |
+| `POST /api/open` | `{file}` | `OpenResult`; 404 missing, 400 directory, 422 not a Rev2D model (files not named `*.r2d.json` must hold `"format": "rev2d"`) |
+| `POST /api/new` | `{file, template?, name?, width?, height?, overwrite?}` | `OpenResult`; creates parent directories, copies example textures, appends `.r2d.json` to a bare name; 409 when the file (or a different texture file) exists without `overwrite` |
+| `POST /api/save-as` | `{file, doc? \| text?, overwrite?}` | `OpenResult`; writes the doc (or the open file as it is on disk), rewriting relative texture paths for the new location; 409 when the file exists without `overwrite` |
+| `POST /api/close` | | `WorkspaceInfo` (no model open) |
+| `POST /api/import` | `{dir?, files: [{name, text? \| base64?}], overwrite?}` | `OpenResult`; one model plus PNG textures written into `dir`; invalid JSON / non-models are refused with 422 and diagnostics, different existing files with 409, nothing is written on any error |
+| `GET /api/download` | | the open model file with `Content-Disposition: attachment` |
+
+While no model is open, the endpoints that need one (`/api/model`, `/api/texture/:id`,
+`/api/screenshot`, `/api/info`, `/api/state`, `/api/download`, `/api/save-as` and commands other
+than `open` / `message`) answer **409** `{"error": "no model is open", "hint": ...}`. The event
+stream (`GET /api/events`) starts with `hello {file | null, mtimeMs, root}` and sends
+`file-changed {file | null, origin: "editor" | "ai"}` whenever the open model changes (open, new,
+save as, import, close; `ai` = an `open` command); `POST /api/command {"type":"open","file"}`
+answers `{delivered, file, mtimeMs, notes}` (`delivered` = tabs that received `file-changed`).

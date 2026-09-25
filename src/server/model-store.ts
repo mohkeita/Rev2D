@@ -136,10 +136,12 @@ export class ModelStore {
         const hash = bytes ? sha1(bytes) : null;
         if (hash !== this.hash) {
           this.hash = hash;
+          // Deleted (or moved away) counts as a change too: the editor re-reads it, gets 404 and
+          // keeps its document as unsaved, so it can be written back.
+          changed.push(this.file);
           if (bytes) {
             this.mtimeMs = (await stat(this.file).catch(() => null))?.mtimeMs ?? this.mtimeMs;
             this.remember(this.mtimeMs, hash!);
-            changed.push(this.file);
             await this.retarget(bytes.toString('utf8'));
           }
         }
