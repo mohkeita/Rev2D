@@ -106,7 +106,7 @@ export function formatOpCatalogue(): string {
 
 // ----------------------------------------------------------------------------- docs
 
-export const DOC_TOPICS = ['spec', 'ops', 'cli', 'mcp', 'recipes', 'architecture', 'examples', 'agents'] as const;
+export const DOC_TOPICS = ['spec', 'ops', 'cli', 'mcp', 'recipes', 'interop', 'architecture', 'examples', 'agents'] as const;
 export type DocTopic = (typeof DOC_TOPICS)[number];
 
 /** Candidate files per topic, relative to the package root (first existing wins). */
@@ -116,6 +116,7 @@ const DOC_FILES: Record<Exclude<DocTopic, 'examples'>, string[]> = {
   cli: ['docs/CLI.md'],
   mcp: ['docs/MCP.md'],
   recipes: ['docs/RECIPES.md'],
+  interop: ['docs/INTEROP.md'],
   architecture: ['docs/ARCHITECTURE.md'],
   agents: ['docs/AGENTS.md', 'AGENTS.md'],
 };
@@ -232,6 +233,7 @@ export function registerDocTools(server: McpServer): void {
         'Full documentation by topic: spec = model format and evaluation semantics (coordinates, objects, addresses, bindings, animations, IK, physics, pipeline); ' +
         'ops = every edit op of rev2d_apply_ops with fields and examples; cli = the rev2d command line; mcp = this server (setup, tools, editor bridge); ' +
         `${recipesTopicText()}; ` +
+        'interop = Spine / Live2D import and export (support matrix, parameter map, limitations, workflows); ' +
         'architecture = pipeline and module map (for changing Rev2D itself); ' +
         'examples = the templates/example models with their parameters and animations; agents = the working guide for AI agents (AGENTS.md, else the rev2d_guide quickstart).',
       input: z.strictObject({ topic: z.enum(DOC_TOPICS).describe('Documentation topic.') }),
@@ -250,6 +252,7 @@ export function registerDocResources(server: McpServer): void {
   markdown('spec', 'rev2d://docs/spec', 'Rev2D format spec', 'Model format and evaluation semantics (docs/SPEC.md).', () => readDoc('spec'));
   markdown('ops', 'rev2d://docs/ops', 'Rev2D edit ops', 'Op catalogue for rev2d_apply_ops (docs/OPS.md).', () => readDoc('ops'));
   markdown('recipes', 'rev2d://docs/recipes', 'Rev2D rig recipes', 'Copy-paste rig recipes with their verification (docs/RECIPES.md).', () => readDoc('recipes'));
+  markdown('interop', 'rev2d://docs/interop', 'Rev2D interop', 'Spine and Live2D import / export (docs/INTEROP.md).', () => readDoc('interop'));
   server.registerResource(
     'schema',
     'rev2d://schema',

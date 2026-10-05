@@ -1,0 +1,15 @@
+{
+  "Version": 3,
+  "Parameters": [
+    { "Id": "ParamAngleX", "GroupId": "ParamGroupFace", "Name": "Angle X" },
+    { "Id": "ParamMouthOpenY", "GroupId": "ParamGroupMouth", "Name": "Mouth open" },
+    { "Id": "ParamNope", "GroupId": "", "Name": "Nope" },
+    { "Id": "ParamBreath", "GroupId": "ParamGroupMissing", "Name": "Breath" }
+  ],
+  "ParameterGroups": [
+    { "Id": "ParamGroupFace", "GroupId": "", "Name": "Face" },
+    { "Id": "ParamGroupMouth", "GroupId": "ParamGroupFace", "Name": "Mouth" }
+  ],
+  "Parts": [{ "Id": "PartArm", "Name": "Arm" }],
+  "CombinedParameters": [["ParamAngleX", "ParamAngleY"]]
+}

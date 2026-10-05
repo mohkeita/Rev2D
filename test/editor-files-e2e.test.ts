@@ -80,11 +80,13 @@ const ready = typeof env !== 'string';
 
 afterAll(async () => {
   if (typeof env === 'string') return;
-  await env.browser.close();
+  // Chrome sometimes keeps running long after browser.close() on some machines (a bare about:blank
+  // page too): wait a bounded time; the launcher kills the process when the worker exits.
+  await Promise.race([env.browser.close(), new Promise((resolve) => setTimeout(resolve, 5000))]);
   await env.server.close();
   rmSync(env.root, { recursive: true, force: true });
   rmSync(env.outside, { recursive: true, force: true });
-});
+}, 30000);
 
 const sha = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
 const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase();

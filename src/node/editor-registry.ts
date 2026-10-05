@@ -346,7 +346,10 @@ export interface ImportRequest {
   dir?: string;
   /**
    * Exactly one model (.json / .jsonc: must be a JSON object with "format": "rev2d", else 422 with
-   * diagnostics) plus optional PNG textures (checked by signature), at most 64 files. Content is
+   * diagnostics) plus optional PNG textures (checked by signature), at most 64 files. A Spine
+   * skeleton JSON export is accepted too, with its .atlas / .atlas.txt (as text) and PNG pages: it is
+   * converted into <skeleton name>.r2d.json + textures/ (src/node/interop.ts), and the answer adds its
+   * conversion `report`. Content is
    * utf8 `text` or `base64` (a data: URL is accepted). `name` may contain "/" for subdirectories
    * (portable names only). Other files are skipped with a note. Nothing is written when any check
    * fails; the request body is capped (default 64 MiB) and the model by the editor's write limit.

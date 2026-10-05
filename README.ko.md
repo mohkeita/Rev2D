@@ -17,8 +17,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Node >= 22](https://img.shields.io/badge/node-%3E%3D22-339933?logo=nodedotjs&logoColor=white)
 ![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Tests: 1350+ passing](https://img.shields.io/badge/tests-1350%2B%20passing-brightgreen)
-[![MCP: 16 tools](https://img.shields.io/badge/MCP-16%20tools-6E56CF)](docs/MCP.md)
+![Tests: 1600+ passing](https://img.shields.io/badge/tests-1600%2B%20passing-brightgreen)
+[![MCP: 18 tools](https://img.shields.io/badge/MCP-18%20tools-6E56CF)](docs/MCP.md)
 
 <img src="docs/media/hero.gif" width="720" alt="Rev2D 예제 모델 네 개가 2×2 격자에서 움직이는 모습: 눈을 깜빡이며 대기 동작을 하는 애니메이션풍 흉상 hana, 점프하는 슬라임, IK로 팔을 뻗는 로봇 팔, 깃대에서 펄럭이는 텍스처 잉어 깃발">
 
@@ -36,9 +36,12 @@
 - **결정론적 헤드리스 렌더러.** GPU도 브라우저도 쓰지 않는 순수 TypeScript 구현이라, 같은 모델과
   같은 입력이면 언제나 같은 픽셀이 나옵니다. 디버그 오버레이, 컨택트 시트, GIF, PNG 시퀀스를
   렌더합니다.
-- **에이전트가 직접 다루는 도구.** `--json` 출력을 지원하는 CLI 명령 19개, 원자적이고 검증되는 편집
-  연산(ops), 렌더 결과를 이미지로 돌려주는 MCP 도구 16개를 제공합니다. 자세한 흐름은
+- **에이전트가 직접 다루는 도구.** `--json` 출력을 지원하는 CLI 명령 21개, 원자적이고 검증되는 편집
+  연산(ops), 렌더 결과를 이미지로 돌려주는 MCP 도구 18개를 제공합니다. 자세한 흐름은
   [AI 에이전트 사용법](#ai-에이전트는-rev2d를-이렇게-사용합니다)에 있습니다.
+- **Spine·Live2D 파일 가져오기와 내보내기.** Spine 스켈레톤을 모델로 가져오고, 모델을 Spine
+  런타임용으로 내보냅니다. Live2D 모션, 표정, 물리는 양방향으로 옮길 수 있습니다.
+  [Spine·Live2D 호환](#spinelive2d-호환)을 참고하세요.
 - **사람을 위한 라이브 에디터.** React + WebGL2 [에디터](#에디터)가 AI가 쓴 변경을 즉시 다시
   불러오고, AI는 사람이 보고 있는 화면을 똑같이 보고 조작할 수 있습니다.
 
@@ -56,7 +59,7 @@
 
 | 경로 | 이럴 때 씁니다 | 시작하기 |
 | --- | --- | --- |
-| **MCP 서버** | Claude Code, Claude Desktop 같은 MCP 클라이언트 | [아래 연결 방법](#claude-code또는-다른-mcp-클라이언트에-연결하기), 도구 16개 |
+| **MCP 서버** | Claude Code, Claude Desktop 같은 MCP 클라이언트 | [아래 연결 방법](#claude-code또는-다른-mcp-클라이언트에-연결하기), 도구 18개 |
 | **CLI** | 셸을 쓸 수 있는 모든 에이전트 | 모든 명령에 `--json`, 가이드는 [AGENTS.md](AGENTS.md) |
 | **에디터 브리지** | 사람이 에디터로 지켜보는 가운데 함께 작업할 때 | `rev2d edit` 후 `rev2d editor ...` 명령 또는 MCP `rev2d_editor_*` 도구 |
 
@@ -284,7 +287,7 @@ FAIL  blob.r2d.json
 | **타임라인과 레이어** | 재생, 반복, 속도, 물리 켜기/끄기, 트랙별 키, 그리고 가중치·`add`·`start`·`once`를 지정하는 추가 애니메이션 레이어. |
 | **아웃라이너와 인스펙터** | 리그 트리, 그리기 순서대로 나열한 파츠, 워프, 파라미터, 애니메이션, 바인딩, IK, 물리. 어떤 객체든 JSON으로 편집하고(`Ctrl+Enter`로 적용), IK와 물리 진단을 실시간으로 봅니다. |
 | **문제 패널과 실행 취소** | 편집하는 동안 검증 진단을 보여 주고, 인스펙터 편집은 실행 취소와 다시 실행을 지원합니다. |
-| **파일 메뉴** | New…(새 모델, `Alt+N`), Open…(열기, `Ctrl+O`), Open Recent(최근 파일), Save(저장, `Ctrl+S`), Save As…(다른 이름으로 저장, `Ctrl+Shift+S`), Import from computer…(컴퓨터에서 가져오기, 모델 `.json`과 PNG를 끌어다 놓아도 됩니다), Download copy(사본 다운로드), Export PNG of the view(현재 뷰를 PNG로 내보내기), Reload from disk(디스크에서 다시 불러오기), Close(닫기). |
+| **파일 메뉴** | New…(새 모델, `Alt+N`), Open…(열기, `Ctrl+O`), Open Recent(최근 파일), Save(저장, `Ctrl+S`), Save As…(다른 이름으로 저장, `Ctrl+Shift+S`), Import from computer…(컴퓨터에서 가져오기, 모델 `.json`과 PNG 또는 Spine 내보내기 파일을 끌어다 놓아도 됩니다), Import Live2D motions…(Live2D 모션 가져오기), Download copy(사본 다운로드), Export PNG of the view(현재 뷰를 PNG로 내보내기), Export to ▸ Spine… / Live2D motions…(Spine, Live2D 모션으로 내보내기), Reload from disk(디스크에서 다시 불러오기), Close(닫기). |
 | **시작 화면** | 새 모델, 열기, 가져오기, 최근 파일, 그리고 예제 카드(hana, robot arm, slime, textured, minimal). 예제 카드는 예제를 워크스페이스에 복사해서 쓰므로 원본은 그대로 남습니다. |
 | **안전 장치** | 편집은 하는 즉시 저장됩니다. 저장에 실패하면(유효하지 않은 모델, 충돌, 삭제된 파일) 에디터가 사람의 버전을 보관하고, New, Open, Import, Close, Reload로 그 내용을 덮어쓰기 전에 Save / Don't save / Cancel(저장 / 저장 안 함 / 취소)을 묻습니다. |
 | **워크스페이스** | 에디터는 폴더 하나 안에서만 작업합니다: `rev2d edit [model or dir] --root <dir>`(기본값은 모델이 있는 폴더, 모델이 없으면 현재 폴더). 열기, 만들기, 저장, 가져오기를 모두 이 폴더 안에서만 하며, 심볼릭 링크를 거치는 경우까지 포함해 바깥 경로는 거부합니다. 모델 없이 실행하면 시작 화면이 뜹니다. |
@@ -310,6 +313,34 @@ FAIL  blob.r2d.json
 
 포맷의 세부 사항은 [docs/SPEC.md](docs/SPEC.md), 어떤 예제가 어떤 기법을 쓰는지는
 [examples/README.md](examples/README.md)에 있습니다.
+
+## Spine·Live2D 호환
+
+Rev2D는 Spine과 Live2D Cubism이 공개한 JSON 포맷을 읽고 씁니다. 모든 변환은 **보고서**를 함께
+돌려줍니다. 근사하거나 버린 기능마다 고정된 코드, 원본 데이터 안의 위치, 해결 방법을 적어 두므로
+모르는 사이에 사라지는 데이터가 없습니다.
+
+| | 가져오기 | 내보내기 |
+| --- | --- | --- |
+| **Spine** (3.8 – 4.2 JSON + 아틀라스 + PNG 페이지) | 새 Rev2D 모델: 본, 텍스처 메시와 가중치 메시, 이미지 시퀀스, 클리핑, IK, 스킨, 모든 애니메이션. 셰어, 상속 모드, 트랜스폼 컨스트레인트는 에뮬레이션하고, 패스·물리 컨스트레인트와 투 컬러 틴트는 보고서에 남깁니다 | Spine 런타임용 스켈레톤 JSON + 아틀라스 + 페이지. 파라미터, 워프, 물리, IK는 애니메이션에 구워 넣습니다 |
+| **Live2D** motion3 / exp3 / physics3 / cdi3 / model3 JSON | 모션, 표정, 물리, 이름을 기존 모델에 가져옵니다(검증되는 ops로 적용) | 모션, 물리, 이름, 그리고 파라미터가 같은 Live2D 모델에 합칠 부분 model3.json |
+
+```sh
+node bin/rev2d.js import spine spineboy/spineboy-pro.json -o models/spineboy.r2d.json
+node bin/rev2d.js export spine hero.r2d.json -o out/hero-spine
+node bin/rev2d.js export live2d hero.r2d.json -o out/hero-live2d --anim wave
+node bin/rev2d.js import live2d Hiyori/hiyori.model3.json --into hero.r2d.json --dry-run
+```
+
+같은 변환을 MCP 도구(`rev2d_import`, `rev2d_export`)와 에디터(File > Import from computer에서
+Spine 내보내기 파일 가져오기, File > Import Live2D motions…, File > Export to)에서도 쓸 수 있습니다.
+
+**Live2D `.moc3` 모델 파일은 지원하지 않습니다.** 공개되지 않은 독점 바이너리 포맷이기 때문입니다.
+파라미터 ID가 같은 Live2D 모델과 Rev2D 모델 사이에서 모션, 표정, 물리, 표시 이름은 옮길 수 있지만
+Live2D 모델의 그림이나 디포머는 옮길 수 없습니다. 실제로는 이렇게 씁니다. AI가 `hana`처럼 Live2D
+표준 파라미터를 쓰는 Rev2D 모델에서 모션을 만들고 렌더와 수치로 검증한 뒤 `.motion3.json`으로
+내보내면, 여러분은 그 파일을 Live2D 모델에 넣어 Cubism Viewer나 SDK 앱에서 재생합니다. 지원 범위,
+좌표 변환, 파라미터 매핑, 단계별 작업 흐름은 [docs/INTEROP.md](docs/INTEROP.md)에 있습니다.
 
 ## 빠른 시작
 
@@ -372,18 +403,19 @@ node bin/rev2d.js edit hero.r2d.json                    # 라이브 에디터: h
 | [docs/SPEC.md](docs/SPEC.md) | 모델 포맷과 계산 방식(기준 문서) |
 | [docs/CLI.md](docs/CLI.md) | 모든 명령, 플래그, 종료 코드, `--json` 형식 |
 | [docs/OPS.md](docs/OPS.md) | 편집 연산 16종, 참조 처리, `bind_warp` 수식 |
-| [docs/MCP.md](docs/MCP.md) | MCP 설정, 도구 16개, 에디터 브리지, 문제 해결 |
+| [docs/MCP.md](docs/MCP.md) | MCP 설정, 도구 18개, 에디터 브리지, 문제 해결 |
+| [docs/INTEROP.md](docs/INTEROP.md) | Spine·Live2D 가져오기와 내보내기: 지원 범위, 좌표, 파라미터 매핑, 작업 흐름, 제약 |
 | [docs/RECIPES.md](docs/RECIPES.md) | 복사해서 쓰는 리깅 레시피 21개와 각각을 검증하는 명령(모두 테스트 스위트가 실행) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 파이프라인, 모듈, 데이터 계약, 결정론, 에디터 프로토콜 |
 | [examples/README.md](examples/README.md) | 예제 모델 5종과 각 모델이 보여 주는 기법 |
 | [llms.txt](llms.txt) | LLM 도구를 위한 색인 |
 
-같은 문서를 오프라인으로도 볼 수 있습니다: `rev2d docs <spec|ops|cli|mcp|agents|recipes|architecture|examples>`
+같은 문서를 오프라인으로도 볼 수 있습니다: `rev2d docs <spec|ops|cli|mcp|agents|recipes|interop|architecture|examples>`
 또는 MCP `rev2d_docs`.
 
 ## 현황과 로드맵
 
-Rev2D는 **v0.1**입니다. 포맷(버전 1), CLI, MCP 도구, 에디터는 동작하며 테스트 1,350개 이상으로 검증되지만,
+Rev2D는 **v0.1**입니다. 포맷(버전 1), CLI, MCP 도구, 에디터는 동작하며 테스트 1,600개 이상으로 검증되지만,
 1.0 전까지는 바뀔 수 있습니다. 아직 npm 배포판은 없으니 체크아웃에서 실행하세요.
 
 Rev2D는 프로덕션 파이프라인에서 Live2D Cubism이나 Spine을 대체하려는 도구가 아닙니다. AI와 함께
@@ -400,7 +432,7 @@ Rev2D는 프로덕션 파이프라인에서 Live2D Cubism이나 Spine을 대체�
 ## 개발
 
 ```sh
-npm test                    # 전체 vitest 스위트(테스트 1,350개 이상)
+npm test                    # 전체 vitest 스위트(테스트 1,600개 이상)
 npm run typecheck           # tsc --noEmit -p tsconfig.json
 npm run editor:dev          # 핫 리로드되는 에디터 UI. /api는 :4777의 rev2d edit로 프록시
 npm run editor:build        # 에디터 UI를 dist/editor로 빌드(rev2d edit가 제공)

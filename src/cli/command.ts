@@ -4,11 +4,12 @@ import type { Ctx } from './context.js';
 
 export type FlagGroup = 'pose' | 'sequencePose' | 'sample' | 'frame';
 
-export type CommandGroup = 'check' | 'edit' | 'live' | 'reference';
+export type CommandGroup = 'check' | 'edit' | 'interop' | 'live' | 'reference';
 
 export const GROUP_TITLES: Record<CommandGroup, string> = {
   check: 'Check & look',
   edit: 'Create & edit',
+  interop: 'Import & export (Spine, Live2D)',
   live: 'Live editing',
   reference: 'Reference & integration',
 };

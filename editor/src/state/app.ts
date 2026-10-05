@@ -4,6 +4,7 @@
  */
 import type { Diagnostic, Model } from '../../../src/core/index.js';
 import type { WorkspaceInfo } from '../../../src/node/editor-registry.js';
+import type { InteropReport } from '../../../src/interop/types.js';
 import type { GuardState } from '../files/guard.js';
 import type { Camera, ViewportSize } from '../view/camera.js';
 import type { RawDoc } from './doc.js';
@@ -71,7 +72,13 @@ export type FileDialog =
   | { kind: 'new'; template?: string }
   | { kind: 'saveAs' }
   /** Files picked with "Import from computer", waiting for a target folder. */
-  | { kind: 'import'; files: File[] };
+  | { kind: 'import'; files: File[] }
+  /** Live2D JSON files to import into the open model (File > Import Live2D motions…). */
+  | { kind: 'live2d'; files: File[] }
+  /** Export the open model to Spine or Live2D files (File > Export to). */
+  | { kind: 'export'; format: 'spine' | 'live2d' }
+  /** A conversion report to read (after a Spine import). */
+  | { kind: 'report'; title: string; subtitle?: string; report: InteropReport };
 
 /** The unsaved-changes prompt (see files/guard.ts); null while no prompt is shown. */
 export type UnsavedPrompt = Exclude<GuardState, { phase: 'idle' }>;

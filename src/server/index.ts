@@ -22,8 +22,11 @@
  *                                     scale, shrunk to at most 2048*2048 px; X-Rev2D-* headers say what was used)
  *   GET  /api/info                 -> {info, diagnostics}
  *   workspace: GET /api/workspace, GET /api/files?dir=, POST /api/open, POST /api/new, POST /api/save-as,
- *              POST /api/close, POST /api/import, GET /api/download, GET /api/templates
- *              (see src/node/editor-registry.ts and workspace-routes.ts)
+ *              POST /api/close, POST /api/import (also converts a Spine export), GET /api/download,
+ *              GET /api/templates (see src/node/editor-registry.ts and workspace-routes.ts)
+ *   interop:   POST /api/live2d-import (Live2D files -> the resulting doc, not written),
+ *              POST /api/export {format: spine | live2d} (files into a workspace folder)
+ *              (see src/node/interop.ts and interop-routes.ts)
  *   everything else                -> editor UI
  *
  * Endpoints that need a model answer 409 {error: "no model is open", hint} while none is open.

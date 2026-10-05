@@ -1,0 +1,18 @@
+{
+  "Version": 3,
+  "Meta": {
+    "Duration": 1,
+    "Fps": 30,
+    "Loop": false,
+    "AreBeziersRestricted": false,
+    "CurveCount": 2,
+    "TotalSegmentCount": 3,
+    "TotalPointCount": 9,
+    "UserDataCount": 0,
+    "TotalUserDataSize": 0
+  },
+  "Curves": [
+    { "Target": "Parameter", "Id": "ParamAngleY", "Segments": [0, 0, 1, 0.1, 10, 0.3, 10, 0.5, 10, 1, 1.05, 10, 0.95, -5, 1, 0] },
+    { "Target": "Parameter", "Id": "ParamMouthForm", "FadeInTime": 0.2, "Segments": [0, 0, 0, 1, 1] }
+  ]
+}

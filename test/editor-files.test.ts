@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FileEntry } from '../src/node/editor-registry.js';
 import { GUARD_IDLE, guardStep, type GuardEvent, type GuardState } from '../editor/src/files/guard.js';
-import { MAX_IMPORT_BYTES, modelTextProblem, planImport, textureCheck, texturePlacement, toBase64 } from '../editor/src/files/importing.js';
+import { MAX_IMPORT_BYTES, jsonKind, modelTextProblem, planImport, planLive2d, spinePageCheck, textureCheck, texturePlacement, toBase64 } from '../editor/src/files/importing.js';
 import { summarizeNotes } from '../editor/src/files/notes.js';
 import {
   baseName,
@@ -223,7 +223,15 @@ describe('import from computer', () => {
       { name: 'atlas.PNG', size: 200 },
       { name: 'readme.txt', size: 5 },
     ]);
-    expect(plan).toEqual({ model: 'koi.r2d.json', textures: ['atlas.PNG'], skipped: ['readme.txt'], totalBytes: 300, error: null });
+    expect(plan).toEqual({ model: 'koi.r2d.json', textures: ['atlas.PNG'], atlases: [], skipped: ['readme.txt'], totalBytes: 300, error: null });
+    // A Spine export: the skeleton .json, its atlas and pages.
+    expect(planImport([{ name: 'hero.json', size: 10 }, { name: 'hero.atlas', size: 5 }, { name: 'hero.png', size: 20 }])).toMatchObject({
+      model: 'hero.json',
+      atlases: ['hero.atlas'],
+      textures: ['hero.png'],
+      totalBytes: 35,
+      error: null,
+    });
     expect(planImport([{ name: 'a.png', size: 1 }]).error).toMatch(/Pick a model file/);
     // JSONC models (comments allowed) import like JSON ones.
     expect(planImport([{ name: 'hero.r2d.jsonc', size: 1 }])).toMatchObject({ model: 'hero.r2d.jsonc', error: null });
@@ -237,6 +245,33 @@ describe('import from computer', () => {
     expect(modelTextProblem('{"format": "other"}')).toMatch(/not a Rev2D model/);
     expect(modelTextProblem('[1, 2]')).toMatch(/JSON object/);
     expect(modelTextProblem('{nope')).toMatch(/not valid JSON/);
+    // A Spine skeleton export is converted by the server.
+    expect(modelTextProblem('{"skeleton": {"spine": "4.2.22"}, "bones": [{"name": "root"}]}')).toBeNull();
+    expect(jsonKind('hero.json', '{"skeleton": {}, "bones": [{"name": "root"}]}')).toBe('spine');
+    expect(jsonKind('m.json', '{"format": "rev2d"}')).toBe('rev2d');
+    expect(jsonKind('idle.motion3.json', '{nope')).toBe('live2d-motion3');
+    expect(jsonKind('x.json', '{"a": 1}')).toBeNull();
+  });
+
+  it('compares the pages a Spine atlas names with the picked PNGs', () => {
+    const atlas = ['hero.png', 'size: 64, 32', 'head', 'bounds: 0, 0, 8, 8', '', 'hero_2.png', 'size: 8, 8', 'hand', 'bounds: 0, 0, 4, 4', ''].join('\n');
+    expect(spinePageCheck([atlas], ['HERO.png', 'other.png'])).toEqual({ pages: ['hero.png', 'hero_2.png'], missing: ['hero_2.png'], unused: ['other.png'] });
+    expect(spinePageCheck([], ['a.png'])).toEqual({ pages: [], missing: [], unused: ['a.png'] });
+  });
+
+  it('plans a Live2D import from the picked file names', () => {
+    const plan = planLive2d([
+      { name: 'idle.motion3.json', size: 10 },
+      { name: 'F01.exp3.json', size: 5 },
+      { name: 'readme.txt', size: 1 },
+    ]);
+    expect(plan.importable).toBe(2);
+    expect(plan.error).toBeNull();
+    expect(plan.files.map((f) => f.format)).toEqual(['live2d-motion3', 'live2d-exp3', null]);
+    expect(planLive2d([{ name: 'a.json', size: 1 }]).error).toMatch(/Pick Live2D files/);
+    // Live2D files picked for "Import from computer" (no model open) explain where they go.
+    expect(planImport([{ name: 'idle.motion3.json', size: 1 }, { name: 'tap.motion3.json', size: 1 }]).error).toMatch(/Live2D files: they are imported into an open model/);
+    expect(planLive2d([{ name: 'a.model3.json', size: 1 }, { name: 'b.model3.json', size: 1 }]).error).toMatch(/one \.model3\.json at a time/);
   });
 
   it('compares the textures a model uses with the picked PNGs', () => {

@@ -97,7 +97,7 @@ export function StartScreen() {
           <ActionCard
             icon="upload"
             title="Import from computer"
-            text="A model .json with its PNG textures (or drop them here)"
+            text="A model .json with its PNG textures, or a Spine export (or drop them here)"
             onClick={() => session.pickImportFiles()}
             testId="start-import"
           />

@@ -1,10 +1,12 @@
 /**
  * Validation of editor-protocol payloads: view state (POST /api/state), commands (POST /api/command),
- * workspace requests (POST /api/open|new|save-as|import) and screenshot query parameters. Errors are
- * HttpErrors naming the offending field and the fix.
+ * workspace requests (POST /api/open|new|save-as|import), interop requests (POST /api/live2d-import,
+ * /api/export) and screenshot query parameters. Errors are HttpErrors naming the offending field and
+ * the fix.
  */
 import { z } from 'zod';
 import type { EditorCommand, EditorState, ImportRequest, NewRequest, OpenRequest, SaveAsRequest } from '../node/editor-registry.js';
+import type { ExportRequest, Live2dImportRequest } from '../node/interop.js';
 import { OVERLAY_LAYERS } from '../api/index.js';
 import type { OverlayLayer } from '../render/index.js';
 import { HttpError } from './http.js';
@@ -227,4 +229,56 @@ export function parseScreenshotQuery(q: URLSearchParams): ScreenshotQuery {
     }
   }
   return out;
+}
+
+// ----------------------------------------------------------------------------- interop requests
+
+const ParamMapSpec = z.union([z.enum(['standard', 'none', 'prefix']), z.record(z.string(), z.string())]);
+const PARAM_MAP_SHAPE = '"standard" | "none" | "prefix" | {"<Rev2D id>": "<Live2D id>"}';
+
+export function parseLive2dImportRequest(body: unknown): Live2dImportRequest {
+  return parseRequest(
+    'live2d-import',
+    z.strictObject({
+      files: z
+        .array(z.strictObject({ name: z.string().min(1, 'expected a file name'), text: z.string() }))
+        .min(1, 'expected at least one file')
+        .max(MAX_IMPORT_FILES, `expected at most ${MAX_IMPORT_FILES} files`),
+      doc: z.record(z.string(), z.unknown()).optional(),
+      paramMap: ParamMapSpec.optional(),
+      id: z.string().min(1).optional(),
+      physics: z.enum(['replace', 'merge', 'skip']).optional(),
+      displayInfo: z.enum(['fill', 'overwrite', 'skip']).optional(),
+      motions: z.boolean().optional(),
+      expressions: z.boolean().optional(),
+    }),
+    body,
+    `{"files": [{"name": "idle.motion3.json", "text": "<JSON>"}], "doc"?: {<model>}, "paramMap"?: ${PARAM_MAP_SHAPE}, "id"?: "<animation id>", "physics"?: "replace"|"merge"|"skip", "displayInfo"?: "fill"|"overwrite"|"skip", "motions"?: <boolean>, "expressions"?: <boolean>}`,
+  );
+}
+
+export function parseExportRequest(body: unknown): ExportRequest {
+  const req = parseRequest(
+    'export',
+    z.strictObject({
+      format: z.enum(['spine', 'live2d']),
+      dir: z.string().min(1).optional(),
+      doc: z.record(z.string(), z.unknown()).optional(),
+      overwrite: z.boolean().optional(),
+      animations: z.array(z.string().min(1)).optional(),
+      fps: Size.optional(),
+      name: z.string().min(1).optional(),
+      tolerance: z.number().min(0).optional(),
+      textureScale: Size.optional(),
+      paramPoses: z.boolean().optional(),
+      premultipliedAlpha: z.boolean().optional(),
+      paramMap: ParamMapSpec.optional(),
+    }),
+    body,
+    `{"format": "spine"|"live2d", "dir"?: "<folder relative to the workspace root>", "doc"?: {<model>}, "overwrite"?: <boolean>, "animations"?: ["<id>"], "fps"?: <n>, "name"?: "<base file name>", "tolerance"?: <n>, spine: "textureScale"?, "paramPoses"?, "premultipliedAlpha"?; live2d: "paramMap"?: ${PARAM_MAP_SHAPE}}`,
+  );
+  const spineOnly = (['textureScale', 'paramPoses', 'premultipliedAlpha'] as const).filter((k) => req[k] !== undefined);
+  if (req.format === 'live2d' && spineOnly.length) throw new HttpError(400, `invalid export request: ${spineOnly.join(', ')} only apply to "spine"`, 'remove them');
+  if (req.format === 'spine' && req.paramMap !== undefined) throw new HttpError(400, 'invalid export request: paramMap only applies to "live2d"', 'remove it');
+  return req;
 }

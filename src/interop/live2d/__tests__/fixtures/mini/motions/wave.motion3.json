@@ -1,0 +1,27 @@
+{
+  "Version": 3,
+  "Meta": {
+    "Duration": 2,
+    "Fps": 30,
+    "Loop": true,
+    "AreBeziersRestricted": true,
+    "CurveCount": 7,
+    "TotalSegmentCount": 15,
+    "TotalPointCount": 26,
+    "UserDataCount": 2,
+    "TotalUserDataSize": 10
+  },
+  "Curves": [
+    { "Target": "Model", "Id": "EyeBlink", "Segments": [0, 1, 0, 1.5, 1, 0, 1.6, 0, 0, 1.7, 1] },
+    { "Target": "Parameter", "Id": "ParamAngleX", "Segments": [0, 0, 1, 0.333, 10, 0.667, 20, 1, 20, 0, 1.5, -10, 2, 1.8, 5, 0, 2, 0] },
+    { "Target": "Parameter", "Id": "ParamEyeLOpen", "Segments": [0, 1, 0, 2, 1] },
+    { "Target": "Parameter", "Id": "ParamMouthOpenY", "Segments": [0, 0, 3, 0.5, 1, 0, 1, 0, 1, 1.2, 0.8, 1.4, 0.8, 1.6, 0, 0, 2.5, 1] },
+    { "Target": "Parameter", "Id": "ParamUnknownThing", "Segments": [0, 0, 0, 2, 1] },
+    { "Target": "PartOpacity", "Id": "PartArm", "Segments": [0, 1, 0, 2, 0] },
+    { "Target": "PartOpacity", "Id": "PartHat", "Segments": [0, 1, 2, 1, 0] }
+  ],
+  "UserData": [
+    { "Time": 0.5, "Value": "step" },
+    { "Time": 1.5, "Value": "開始" }
+  ]
+}

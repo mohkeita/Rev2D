@@ -1,0 +1,20 @@
+
+legacy.png
+size: 32,32
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+arm
+  rotate: true
+  xy: 2, 2
+  size: 8, 12
+  orig: 10, 14
+  offset: 1, 2
+  index: -1
+body
+  rotate: false
+  xy: 16, 2
+  size: 12, 12
+  orig: 12, 12
+  offset: 0, 0
+  index: -1

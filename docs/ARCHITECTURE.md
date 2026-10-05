@@ -80,6 +80,8 @@ with `rig: null`.
 | `src/node/` | File loading (`load.ts`) and the running-editor registry (`editor-registry.ts`, `~/.rev2d/editors/`: each editor's URL, open model and workspace root; `findEditor` / `listEditors` discovery), which also holds the editor protocol types. | The only place core models touch the filesystem. |
 | `src/api/` | `layers.ts` (layer strings `"talk@0.8,add"`, `"wink,once,start=2"` → `AnimationLayer`), `pose.ts` (`toPoseOptions`), `frame.ts` (`renderFrame`, view boxes, `--only` checks), `sampling.ts` (time specs, sample plans with window and warm-up, sequential poses, frame events), `stats.ts` (`PoseStats`: the IK / physics / view-box notes), `sheet.ts` (sweeps incl. linked ones, `buildSheet` for animation / sweep / overview sheets), `inspect.ts` (`inspectPose`, `inspectSeries`, `trackSeries`, mapped points), `analyze.ts` (`analyzeAnimation`), `info.ts`, `templates.ts` (`blank`, `empty`, examples), `docs.ts` (the recipe list of docs/RECIPES.md for `rev2d docs` and MCP `rev2d_docs`); `index.ts` re-exports them and holds `hitTest`. | Throws `ApiError` with a hint and diagnostics. |
 | `src/ops/` | `applyOps` (atomic batches on the raw JSON document), `describeOps` (the catalogue behind MCP descriptions and hints), reference tracking for rename/cascade, `bind_warp` math, `recolor`, `compose` (evaluates the layers through `Rig` to bake them), `follow` (poses the rig and maps the anchor with `Rig.mapPoint` per keyform), change summaries for `update` messages (`diff.ts`). | Operates on raw documents so untouched text stays as written. |
+| `src/interop/` | Format converters: Spine skeleton JSON + atlas import and export (`spine/`: atlas reader/writer, curve and transform math, importer with emulation of what Rev2D bones lack (shear pairs, inheritance modes, transform constraints, sampled where needed), exporter with rasterization, lattice bones, key reduction and page packing), Live2D Cubism JSON files (`live2d/`: motion3, exp3, physics3, cdi3, model3, the parameter map), file detection (`detect.ts`). Every result carries an `InteropReport` (issues with stable codes, stats). See [INTEROP.md](INTEROP.md). | Pure (no Node APIs); the `.moc3` binary is never read. |
+| `src/node/interop.ts` | Interop file IO for the CLI, MCP and editor server: reading a Spine export folder (atlas lookup, page decoding), writing output files (new / replaced / unchanged, refusing overwrites unless asked), Live2D files turned into ops and applied atomically to a model file, report text. | Throws `InteropError` with a kind each front end maps (exit code, isError, HTTP status). |
 | `src/cli/` | The `rev2d` command line: argument parser, command registry, help, `--json` output, exit codes. | `main(argv, io)` is testable in-process. |
 | `src/mcp/` | MCP server over stdio: tools, resources, the quickstart guide. | stdout belongs to the protocol. |
 | `src/server/` | Editor server: model file API, texture serving, SSE live reload, shared view state, commands, server-side screenshots, file watching, and file management inside a workspace root (`workspace.ts`, `workspace-routes.ts`). Modules in [§5.1](#51-server-modules). | Loopback-only by default; no path outside the workspace root is read or written. |
@@ -196,8 +198,15 @@ Workspace (file management; request and result types in `src/node/editor-registr
 | `POST /api/new` | `{file, template?, name?, width?, height?, overwrite?}` → `OpenResult`; appends `.r2d.json` to a bare name, creates parent directories, copies an example's PNGs next to the model |
 | `POST /api/save-as` | `{file, doc? \| text?, overwrite?}` → `OpenResult`; writes the doc (or the open file as it is on disk) and opens the copy, rewriting relative texture paths so they still point at the same PNGs |
 | `POST /api/close` | → `WorkspaceInfo` with no model open |
-| `POST /api/import` | `{dir?, files: [{name, text? \| base64?}], overwrite?}` → `OpenResult`; exactly one model plus PNG textures from the user's computer, all checked before anything is written |
+| `POST /api/import` | `{dir?, files: [{name, text? \| base64?}], overwrite?}` → `OpenResult`; exactly one model plus PNG textures from the user's computer, all checked before anything is written. A Spine skeleton JSON with its `.atlas` and PNG pages is converted (`<name>.r2d.json` + `textures/`) and the answer adds its `report` |
 | `GET /api/download` | the open model file as an attachment |
+
+Interop (`src/server/interop-routes.ts`; request and result types in `src/node/interop.ts`):
+
+| Endpoint | Body → answer |
+| --- | --- |
+| `POST /api/live2d-import` | `Live2dImportRequest {files: [{name, text}], doc?, paramMap?, id?, physics?, displayInfo?, motions?, expressions?}` → `Live2dImportResponse {ok, changed, doc, results, diagnostics, report, summary, sources}`: the ops applied to `doc` (default: the open file) and validated, nothing written; the editor writes the doc as one undoable edit (`PUT /api/model` with `baseMtimeMs`) |
+| `POST /api/export` | `ExportRequest {format: "spine" \| "live2d", dir?, doc?, overwrite?, animations?, fps?, ...}` → `ExportResponse {dir, files, report, notes}`: files written into `dir` (default `exports/<model>-<format>`) inside the workspace root; 409 naming different existing files without `overwrite` |
 
 Errors are JSON `{error, hint?, diagnostics?, ...}`: **400** malformed request or invalid file name,
 **403** a path outside the workspace root, **404** missing file, **409** conflict (file exists
@@ -283,6 +292,7 @@ reads or writes nothing outside the workspace root.
 | A result note | `PoseStats` (`src/api/stats.ts`) | the notes table in CLI.md; MCP rewrites CLI flags in notes to arguments (`src/mcp/context.ts`) |
 | An editor command | `EditorCommand` (`src/node/editor-registry.ts`) | `src/server/protocol.ts`, `editor/src/state/session.ts`, CLI sugar, MCP tool |
 | A workspace endpoint | a handler in `src/server/workspace-routes.ts` + `ROUTES` (`src/server/routes.ts`) | request/result types in `src/node/editor-registry.ts`, validation in `src/server/protocol.ts`, paths only through `WorkspaceRoot`, `editor/src/api.ts`, the protocol section of CLI.md, `src/server/__tests__/workspace.test.ts` |
+| An interop feature | the converter in `src/interop/spine/` or `src/interop/live2d/` (report what is not converted with a stable code) | tests with hand-written fixtures, `src/node/interop.ts` for file IO, the CLI / MCP / server / editor front ends, INTEROP.md |
 | An example model | `scripts/examples/<name>.ts` | examples/README.md + its feature matrix, `test/examples.test.ts` |
 | A recipe | `docs/RECIPES.md` with check markers | `test/docs-recipes.test.ts` runs it; add assertions for numbers the text quotes |
 

@@ -139,14 +139,15 @@ function DropOverlay() {
       <div className="drop-card">
         <Icon name="upload" size={28} />
         <strong>Drop to import</strong>
-        <span>A model .json and its PNG textures are copied into the workspace and opened.</span>
+        <span>A model .json with its PNG textures, or a Spine export (.json + .atlas + PNG pages), is copied into the workspace and opened; Live2D motion, expression and physics files are imported into the open model.</span>
       </div>
     </div>
   );
 }
 
 /**
- * Files dragged from the computer onto the window open the import dialog. File drags are always
+ * Files dragged from the computer onto the window open the import dialog (Live2D files: the Live2D
+ * import into the open model). File drags are always
  * taken (preventDefault), also while a dialog is open: otherwise the browser would navigate to the
  * dropped file and the page (with any unsaved edit) would be gone.
  */
@@ -176,7 +177,7 @@ function useFileDrop(session: Session): { active: boolean; handlers: Record<stri
         e.preventDefault();
         setDepth(0);
         const files = [...e.dataTransfer.files];
-        if (files.length && enabled()) session.openDialog({ kind: 'import', files });
+        if (files.length && enabled()) session.openPickedFiles(files);
       },
     },
   };

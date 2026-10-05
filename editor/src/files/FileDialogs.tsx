@@ -1,8 +1,10 @@
 /**
  * File dialogs: Open (workspace browser + recent files), New (template picker + name, canvas size,
- * location), Save As (folder + file name), Import (files picked on the computer + target folder) and
- * the unsaved-changes prompt. All are modal (ui/Modal.tsx: Esc cancels, Enter confirms, focus is
- * kept inside). Replacing an existing file always asks first.
+ * location), Save As (folder + file name), Import (files picked on the computer + target folder; a
+ * Spine export is converted on the way) and the unsaved-changes prompt; the interop dialogs (Live2D
+ * import, export to Spine / Live2D, conversion report) live in InteropDialogs.tsx. All are modal
+ * (ui/Modal.tsx: Esc cancels, Enter confirms, focus is kept inside). Replacing an existing file
+ * always asks first.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { FileEntry } from '../api.js';
@@ -13,7 +15,8 @@ import type { UnsavedPrompt } from '../state/app.js';
 import { Icon } from '../ui/icons.js';
 import { Modal } from '../ui/Modal.js';
 import { FileBrowser } from './FileBrowser.js';
-import { planImport, textureCheck, texturePlacement } from './importing.js';
+import { ExportDialog, Live2dDialog, Live2dPicker, ReportDialog } from './InteropDialogs.js';
+import { jsonKind, planImport, spinePageCheck, textureCheck, texturePlacement } from './importing.js';
 import {
   baseName,
   copyName,
@@ -507,6 +510,9 @@ function ImportDialog({ files }: { files: File[] }) {
   const [check, setCheck] = useState<ReturnType<typeof textureCheck> | null>(null);
   /** Picked PNG -> the subfolder path the model references it by (where it is written). */
   const [placement, setPlacement] = useState<Record<string, string>>({});
+  /** The picked .json is a Spine skeleton (converted by the server) and its atlas pages vs the picked PNGs. */
+  const [spine, setSpine] = useState(false);
+  const [pages, setPages] = useState<ReturnType<typeof spinePageCheck> | null>(null);
   const [replace, setReplace] = useState<string | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
 
@@ -516,8 +522,14 @@ function ImportDialog({ files }: { files: File[] }) {
     let alive = true;
     model
       .text()
-      .then((text) => {
+      .then(async (text) => {
         if (!alive) return;
+        if (jsonKind(model.name, text) === 'spine') {
+          setSpine(true);
+          const atlasTexts = await Promise.all(files.filter((f) => plan.atlases.includes(f.name)).map((f) => f.text()));
+          if (alive) setPages(spinePageCheck(atlasTexts, plan.textures));
+          return;
+        }
         setCheck(textureCheck(text, plan.textures));
         setPlacement(texturePlacement(text, plan.textures));
       })
@@ -527,7 +539,8 @@ function ImportDialog({ files }: { files: File[] }) {
     };
   }, [files, plan]);
 
-  const target = plan.model ? joinPath(dir, plan.model) : '';
+  const spineModel = plan.model ? `${plan.model.replace(/\.jsonc?$/i, '')}.r2d.json` : '';
+  const target = plan.model ? joinPath(dir, spine ? spineModel : plan.model) : '';
 
   // No name check up front: the server accepts files identical to the ones there and names the
   // others in its 409 answer.
@@ -543,7 +556,7 @@ function ImportDialog({ files }: { files: File[] }) {
 
   return (
     <Modal
-      title="Import from computer"
+      title={spine ? 'Import a Spine export' : 'Import from computer'}
       icon="upload"
       size="medium"
       onCancel={() => session.closeDialog()}
@@ -567,22 +580,24 @@ function ImportDialog({ files }: { files: File[] }) {
             Choose other files…
           </button>
           <button className="button button-primary" disabled={!!plan.error || !!busy} onClick={() => void run()} data-testid="import-confirm">
-            {busy ? 'Importing…' : 'Import and open'}
+            {busy ? (spine ? 'Converting…' : 'Importing…') : spine ? 'Convert and open' : 'Import and open'}
           </button>
         </>
       }
     >
       <div className="import-files" data-testid="import-files">
         {files.map((f) => {
-          const kind = f.name === plan.model ? 'model' : plan.textures.includes(f.name) ? 'texture' : 'skipped';
+          const kind =
+            f.name === plan.model ? 'model' : plan.textures.includes(f.name) ? 'texture' : spine && plan.atlases.includes(f.name) ? 'atlas' : 'skipped';
+          const tag = kind === 'model' && spine ? 'Spine skeleton' : kind === 'texture' && spine ? (pages && pages.unused.includes(f.name) ? 'not a page' : 'page') : kind;
           return (
             <div key={f.name} className={`import-file is-${kind}`}>
-              <Icon name={kind === 'model' ? 'file' : kind === 'texture' ? 'texture' : 'close'} />
+              <Icon name={kind === 'model' || kind === 'atlas' ? 'file' : kind === 'texture' ? 'texture' : 'close'} />
               <span className="import-name mono" title={placement[f.name] ? `${f.name}, written as ${placement[f.name]} (the path the model uses)` : undefined}>
                 {placement[f.name] ?? f.name}
               </span>
               <span className="import-size muted">{formatSize(f.size)}</span>
-              <span className={`tag ${kind === 'model' ? 'tag-accent' : kind === 'skipped' ? 'tag-dim' : ''}`}>{kind === 'skipped' ? 'skipped' : kind}</span>
+              <span className={`tag ${kind === 'model' ? 'tag-accent' : kind === 'skipped' ? 'tag-dim' : ''}`}>{tag}</span>
             </div>
           );
         })}
@@ -593,7 +608,28 @@ function ImportDialog({ files }: { files: File[] }) {
           <span>{plan.error}</span>
         </div>
       )}
-      {plan.skipped.length > 0 && !plan.error && <p className="field-note muted">Only one .json model and .png textures are imported; the other files are skipped.</p>}
+      {plan.skipped.length > 0 && !plan.error && <p className="field-note muted">Only one .json model with .png textures (or a Spine .json with its .atlas and pages) is imported; the other files are skipped.</p>}
+      {spine && (
+        <p className="field-note muted" data-testid="import-spine-note">
+          The Spine skeleton is converted into <span className="mono">{spineModel}</span> with its pages in <span className="mono">textures/</span>; the conversion report lists
+          what was approximated or dropped.
+        </p>
+      )}
+      {spine && plan.atlases.length === 0 && (
+        <div className="notice notice-warning">
+          <Icon name="warning" />
+          <span>No atlas picked: the attachments are imported untextured. Pick the skeleton&apos;s .atlas file and its PNG pages too.</span>
+        </div>
+      )}
+      {spine && pages && pages.missing.length > 0 && (
+        <div className="notice notice-warning">
+          <Icon name="warning" />
+          <span>
+            The atlas uses {pages.missing.length === 1 ? 'a page' : 'pages'} you did not pick: <span className="mono">{pages.missing.join(', ')}</span>. Their regions are imported
+            untextured.
+          </span>
+        </div>
+      )}
       {check && check.missing.length > 0 && (
         <div className="notice notice-warning">
           <Icon name="warning" />
@@ -680,7 +716,7 @@ export function UnsavedDialog({ prompt }: { prompt: UnsavedPrompt }) {
 
 // ----------------------------------------------------------------------------- host
 
-/** Hidden file input behind "Import from computer…" (also the target of drag and drop). */
+/** Hidden file input behind "Import from computer…" (Live2D files it is given go to the Live2D import). */
 function ImportPicker() {
   const session = useSession();
   const ref = useRef<HTMLInputElement>(null);
@@ -693,7 +729,7 @@ function ImportPicker() {
       ref={ref}
       type="file"
       multiple
-      accept=".json,.jsonc,.png,application/json,image/png"
+      accept=".json,.jsonc,.png,.atlas,.txt,application/json,image/png"
       className="visually-hidden"
       tabIndex={-1}
       aria-hidden="true"
@@ -701,7 +737,7 @@ function ImportPicker() {
       onChange={(e) => {
         const files = [...(e.target.files ?? [])];
         e.target.value = '';
-        if (files.length) session.openDialog({ kind: 'import', files });
+        if (files.length) session.openPickedFiles(files);
       }}
     />
   );
@@ -717,8 +753,12 @@ export function FileDialogs() {
       {dialog?.kind === 'new' && <NewDialog key={dialog.template ?? ''} initialTemplate={dialog.template} />}
       {dialog?.kind === 'saveAs' && <SaveAsDialog />}
       {dialog?.kind === 'import' && <ImportDialog key={dialog.files.map((f) => f.name).join('|')} files={dialog.files} />}
+      {dialog?.kind === 'live2d' && <Live2dDialog key={dialog.files.map((f) => f.name).join('|')} files={dialog.files} />}
+      {dialog?.kind === 'export' && <ExportDialog key={dialog.format} format={dialog.format} />}
+      {dialog?.kind === 'report' && <ReportDialog title={dialog.title} subtitle={dialog.subtitle} report={dialog.report} />}
       {prompt && <UnsavedDialog prompt={prompt} />}
       <ImportPicker />
+      <Live2dPicker />
     </>
   );
 }

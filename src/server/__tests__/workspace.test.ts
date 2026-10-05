@@ -593,7 +593,7 @@ describe('POST /api/import', () => {
     );
     const abs = path.join(ws.dir, 'incoming', 'hero.r2d.json');
     expect(res.file).toBe(abs);
-    expect(res.notes).toEqual(['imported incoming/hero.r2d.json, incoming/tex.png into incoming', 'skipped readme.txt: only a model (.json) and PNG textures are imported']);
+    expect(res.notes).toEqual(['imported incoming/hero.r2d.json, incoming/tex.png into incoming', 'skipped readme.txt: only a model (.json) with its PNG textures, or a Spine export (.json + .atlas + PNG pages), is imported']);
     expect((await tab.next(fileChanged)).data).toEqual({ file: abs, origin: 'editor' });
     const tex = decodePNG(new Uint8Array(await (await fetch(`${ws.base}/api/texture/tex`)).arrayBuffer()));
     expect(Array.from(tex.data.subarray(0, 4))).toEqual([0, 255, 0, 255]);

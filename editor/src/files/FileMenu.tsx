@@ -1,8 +1,9 @@
 /**
  * Toolbar "File" menu (WAI-ARIA menu button): New, Open, Open Recent ▸, Save, Save As, Import,
- * Download, Export PNG, Reload, Close. Keyboard: Enter / Space / ↓ open it, ↑ ↓ Home End move,
- * → opens Open Recent (← closes it), a letter jumps to the next item starting with it, Enter / Space
- * activate, Esc closes (focus returns to the button), Tab closes and moves on.
+ * Import Live2D motions, Download, Export PNG, Export to ▸ (Spine, Live2D motions), Reload, Close.
+ * Keyboard: Enter / Space / ↓ open it, ↑ ↓ Home End move, → opens a submenu (← closes it), a letter
+ * jumps to the next item starting with it, Enter / Space activate, Esc closes (focus returns to the
+ * button), Tab closes and moves on.
  */
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useApp, useSession } from '../state/context.js';
@@ -14,6 +15,9 @@ import { FILE_SHORTCUTS, fileShortcut, type FileShortcut } from './shortcuts.js'
 /** Menu item of each file shortcut (pressed while the menu is open, the shortcut still runs it). */
 const SHORTCUT_ITEM: Record<FileShortcut, string> = { new: 'new', open: 'open', save: 'save', saveAs: 'save-as' };
 
+/** The submenus: Open Recent and Export to. */
+type SubMenu = 'recent' | 'export-to';
+
 interface Item {
   id: string;
   label: string;
@@ -22,7 +26,7 @@ interface Item {
   disabled?: boolean;
   title?: string;
   run?: () => void;
-  submenu?: boolean;
+  submenu?: SubMenu;
 }
 
 type Entry = Item | 'sep';
@@ -58,7 +62,9 @@ function moveFocus(root: HTMLElement | null, key: string): boolean {
 export function FileMenu() {
   const session = useSession();
   const [open, setOpen] = useState(false);
-  const [sub, setSub] = useState(false);
+  const [sub, setSub] = useState<SubMenu | null>(null);
+  /** Offset of the open submenu so it lines up with its row (null: the stylesheet's default). */
+  const [subTop, setSubTop] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -82,7 +88,7 @@ export function FileMenu() {
 
   const close = (refocus: boolean): void => {
     setOpen(false);
-    setSub(false);
+    setSub(null);
     if (refocus) buttonRef.current?.focus();
   };
 
@@ -115,7 +121,7 @@ export function FileMenu() {
   const entries: Entry[] = [
     { id: 'new', label: 'New…', icon: 'fileNew', shortcut: FILE_SHORTCUTS.new, disabled: !ws, title: noWs, run: () => session.openDialog({ kind: 'new' }) },
     { id: 'open', label: 'Open…', icon: 'folderOpen', shortcut: FILE_SHORTCUTS.open, disabled: !ws, title: noWs, run: () => session.openDialog({ kind: 'open' }) },
-    { id: 'recent', label: 'Open Recent', icon: 'clock', disabled: !ws, title: noWs, submenu: true },
+    { id: 'recent', label: 'Open Recent', icon: 'clock', disabled: !ws, title: noWs, submenu: 'recent' },
     'sep',
     { id: 'save', label: 'Save', icon: 'save', shortcut: FILE_SHORTCUTS.save, disabled: !ready, run: () => void session.save() },
     { id: 'save-as', label: 'Save As…', icon: 'saveAs', shortcut: FILE_SHORTCUTS.saveAs, disabled: !ready || !ws, title: noWs, run: () => session.openDialog({ kind: 'saveAs' }) },
@@ -129,8 +135,17 @@ export function FileMenu() {
       // Runs inside the click / key handler: browsers only open file pickers on a user gesture.
       run: () => session.pickImportFiles(),
     },
+    {
+      id: 'import-live2d',
+      label: 'Import Live2D motions…',
+      icon: 'film',
+      disabled: !ready || !ws,
+      title: noWs ?? 'Import Live2D .motion3 / .exp3 / .physics3 / .cdi3 .json files (or a .model3.json with them) into the open model',
+      run: () => session.pickLive2dFiles(),
+    },
     { id: 'download', label: 'Download copy', icon: 'download', disabled: !ready || !ws, title: noWs ?? 'Save a copy of the model file to your downloads (the version shown, while it is not saved to disk)', run: () => session.downloadCopy() },
     { id: 'export', label: 'Export PNG of the view', icon: 'camera', disabled: !st.hasModel, title: 'Render what the viewport shows (pose, overlays, visible region) to a PNG', run: () => void session.exportPng() },
+    { id: 'export-to', label: 'Export to', icon: 'layers', disabled: !ready || !ws, title: noWs ?? 'Export the model to Spine or Live2D files in a workspace folder', submenu: 'export-to' },
     'sep',
     { id: 'reload', label: 'Reload from disk', icon: 'refresh', disabled: !ready, run: () => void session.reloadFromDisk() },
     { id: 'close', label: 'Close', icon: 'fileClose', disabled: !(ready || st.status === 'failed') || !ws, title: noWs, run: () => void session.closeModel() },
@@ -149,10 +164,30 @@ export function FileMenu() {
     }
   };
 
-  const openSub = (focusFirst: boolean): void => {
-    setSub(true);
+  const openSub = (which: SubMenu, focusFirst: boolean): void => {
+    const row = menuRef.current?.querySelector<HTMLElement>(`[data-id="${which}"]`);
+    setSubTop(row ? row.offsetTop - 4 : null);
+    setSub(which);
     if (focusFirst) requestAnimationFrame(() => focusables(subRef.current)[0]?.focus());
   };
+
+  /** Back from a submenu to its row. */
+  const leaveSub = (): void => {
+    const row = sub;
+    setSub(null);
+    if (row) menuRef.current?.querySelector<HTMLElement>(`[data-id="${row}"]`)?.focus();
+  };
+
+  const exportItems: Item[] = [
+    { id: 'export-spine', label: 'Spine…', icon: 'bone', title: 'Skeleton JSON + atlas + PNG pages for the Spine editor and runtimes', run: () => session.openDialog({ kind: 'export', format: 'spine' }) },
+    {
+      id: 'export-live2d',
+      label: 'Live2D motions…',
+      icon: 'film',
+      title: 'motion3 / physics3 / cdi3 JSON for a Live2D model with matching parameter ids (the .moc3 model is not written)',
+      run: () => session.openDialog({ kind: 'export', format: 'live2d' }),
+    },
+  ];
 
   const onMenuKey = (e: KeyboardEvent<HTMLDivElement>): void => {
     // The editor's global shortcuts never see keys pressed in the menu...
@@ -167,12 +202,15 @@ export function FileMenu() {
       return;
     }
     const inSub = !!subRef.current?.contains(document.activeElement);
+    const focusedSub = (): SubMenu | null => {
+      const id = (document.activeElement as HTMLElement | null)?.dataset.id;
+      const item = entries.find((x): x is Item => x !== 'sep' && x.id === id);
+      return item?.submenu && !item.disabled ? item.submenu : null;
+    };
     if (e.key === 'Escape') {
       e.preventDefault();
-      if (inSub) {
-        setSub(false);
-        menuRef.current?.querySelector<HTMLElement>('[data-id="recent"]')?.focus();
-      } else close(true);
+      if (inSub) leaveSub();
+      else close(true);
       return;
     }
     if (e.key === 'Tab') {
@@ -181,20 +219,19 @@ export function FileMenu() {
     }
     if (e.key === 'ArrowLeft' && inSub) {
       e.preventDefault();
-      setSub(false);
-      menuRef.current?.querySelector<HTMLElement>('[data-id="recent"]')?.focus();
+      leaveSub();
       return;
     }
-    if (e.key === 'ArrowRight' && !inSub && (document.activeElement as HTMLElement | null)?.dataset.id === 'recent') {
+    if (e.key === 'ArrowRight' && !inSub && focusedSub()) {
       e.preventDefault();
-      openSub(true);
+      openSub(focusedSub()!, true);
       return;
     }
     if (e.key === 'Enter' || e.key === ' ') {
       const el = document.activeElement as HTMLElement | null;
-      if (el?.dataset.id === 'recent') {
+      if (!inSub && focusedSub()) {
         e.preventDefault();
-        openSub(true);
+        openSub(focusedSub()!, true);
         return;
       }
       if (el?.getAttribute('role') === 'menuitem') {
@@ -205,7 +242,7 @@ export function FileMenu() {
     }
     if (moveFocus(inSub ? subRef.current : menuRef.current, e.key)) {
       e.preventDefault();
-      if (!inSub) setSub(false);
+      if (!inSub) setSub(null);
     }
   };
 
@@ -242,12 +279,12 @@ export function FileMenu() {
                 <MenuItem
                   key={en.id}
                   item={en}
-                  expanded={en.submenu ? sub : undefined}
-                  onRun={en.submenu ? () => openSub(true) : act(en.run)}
+                  expanded={en.submenu ? sub === en.submenu : undefined}
+                  onRun={en.submenu ? () => openSub(en.submenu!, true) : act(en.run)}
                   onHover={() => {
                     if (en.submenu) {
-                      if (!en.disabled) setSub(true);
-                    } else setSub(false);
+                      if (!en.disabled) openSub(en.submenu, false);
+                    } else setSub(null);
                   }}
                 />
               ),
@@ -257,8 +294,15 @@ export function FileMenu() {
               <span className="ellipsis">{st.root ? `Workspace: ${st.root}` : 'No workspace'}</span>
             </div>
           </div>
-          {sub && (
-            <div className="menu menu-sub" role="menu" aria-label="Open Recent" ref={subRef} data-testid="recent-menu">
+          {sub === 'export-to' && (
+            <div className="menu menu-sub menu-sub-short" role="menu" aria-label="Export to" ref={subRef} style={subTop !== null ? { marginTop: subTop } : undefined} data-testid="export-menu">
+              {exportItems.map((it) => (
+                <MenuItem key={it.id} item={it} onRun={act(it.run)} onHover={() => undefined} />
+              ))}
+            </div>
+          )}
+          {sub === 'recent' && (
+            <div className="menu menu-sub" role="menu" aria-label="Open Recent" ref={subRef} style={subTop !== null ? { marginTop: subTop } : undefined} data-testid="recent-menu">
               {recentItems.length === 0 && (
                 <div className="menu-empty" role="menuitem" aria-disabled="true">
                   No recent files yet

@@ -7,3 +7,5 @@ export * from './node/editor-registry.js';
 export * from './api/index.js';
 export * from './api/templates.js';
 export * from './ops/index.js';
+export * from './interop/index.js';
+export * from './node/interop.js';

@@ -1,0 +1,133 @@
+{
+  "skeleton": { "hash": "hand-written", "spine": "4.2.22", "x": -50, "y": -20, "width": 100, "height": 160, "fps": 24, "images": "./images/" },
+  "bones": [
+    { "name": "root" },
+    { "name": "hip", "parent": "root", "y": 40 },
+    { "name": "torso", "parent": "hip", "length": 50, "rotation": 90 },
+    { "name": "head", "parent": "torso", "length": 30, "rotation": -15, "x": 50, "color": "ff0000ff" },
+    { "name": "upper arm", "parent": "torso", "length": 30, "rotation": -150, "x": 40, "y": 5 },
+    { "name": "fore-arm", "parent": "upper arm", "length": 25, "rotation": 20, "x": 30 },
+    { "name": "hand-target", "parent": "root", "x": 30, "y": 50 },
+    { "name": "scaled", "parent": "hip", "x": 20, "y": -10, "rotation": 30, "scaleX": 2, "scaleY": 0.5, "length": 10 },
+    { "name": "sheared", "parent": "root", "x": -20, "shearX": 10 },
+    { "name": "tip", "parent": "head", "x": 30, "inherit": "noRotationOrReflection" },
+    { "name": "back-shoulder", "parent": "torso", "x": 30, "y": -10 },
+    { "name": "front-shoulder", "parent": "torso", "x": 30, "y": 10 }
+  ],
+  "slots": [
+    { "name": "back", "bone": "root", "attachment": "bg", "color": "80ff80c0", "blend": "additive" },
+    { "name": "body", "bone": "torso", "attachment": "body" },
+    { "name": "skin", "bone": "hip", "attachment": "skin" },
+    { "name": "clip", "bone": "root", "attachment": "clip" },
+    { "name": "head", "bone": "head", "attachment": "head", "dark": "202020" },
+    { "name": "hand", "bone": "fore-arm", "attachment": "hand" },
+    { "name": "marker", "bone": "root", "attachment": "bb" },
+    { "name": "front", "bone": "front-shoulder", "blend": "multiply" }
+  ],
+  "ik": [
+    { "name": "arm-ik", "order": 2, "bones": ["upper arm", "fore-arm"], "target": "hand-target", "bendPositive": false, "softness": 4, "stretch": true },
+    { "name": "aim", "order": 1, "bones": ["head"], "target": "hand-target", "mix": 0, "compress": true, "uniform": true }
+  ],
+  "transform": [
+    { "name": "shoulder", "bones": ["back-shoulder"], "target": "front-shoulder", "y": -20, "mixRotate": 0, "mixX": -1, "mixScaleX": 0, "mixShearY": 0 },
+    { "name": "other", "order": 3, "bones": ["tip"], "target": "hip", "mixRotate": 0.5 }
+  ],
+  "path": [{ "name": "p", "bones": ["sheared"], "target": "marker" }],
+  "physics": [{ "name": "phys", "bone": "head", "mix": 0 }],
+  "skins": [
+    {
+      "name": "default",
+      "attachments": {
+        "back": { "bg": { "y": 60, "width": 20, "height": 40 } },
+        "body": {
+          "body": {
+            "type": "mesh",
+            "uvs": [0, 0, 1, 0, 1, 1, 0, 1],
+            "triangles": [0, 1, 2, 2, 3, 0],
+            "vertices": [0, -10, 50, -10, 50, 10, 0, 10],
+            "hull": 4,
+            "width": 40,
+            "height": 32
+          },
+          "body-linked": { "type": "linkedmesh", "parent": "body", "path": "body-b", "width": 40, "height": 32 }
+        },
+        "skin": {
+          "skin": {
+            "type": "mesh",
+            "path": "body",
+            "uvs": [0, 0, 1, 0, 1, 1, 0, 1],
+            "triangles": [0, 1, 2, 2, 3, 0],
+            "vertices": [1, 1, -10, 0, 1, 2, 1, 10, 0, 0.5, 2, 0, -10, 0.5, 2, 1, 10, 30, 0.5, 2, 30, -10, 0.5, 1, 2, 30, 10, 1],
+            "hull": 4
+          }
+        },
+        "clip": { "clip": { "type": "clipping", "end": "head", "vertexCount": 4, "vertices": [-40, 0, 40, 0, 40, 120, -40, 120], "color": "ce3a3aff" } },
+        "head": {
+          "head": { "x": 15, "rotation": -90, "width": 32, "height": 32 },
+          "head-alt": { "name": "head-alt", "x": 15, "width": 16, "height": 16, "color": "ff000080" }
+        },
+        "hand": { "hand": { "width": 10, "height": 10 } },
+        "marker": {
+          "bb": { "type": "boundingbox", "vertexCount": 3, "vertices": [0, 0, 10, 0, 0, 10] },
+          "pt": { "type": "point", "x": 1, "y": 2 }
+        },
+        "front": { "front": { "width": 8, "height": 8, "path": "head-alt" } }
+      }
+    },
+    { "name": "alt", "attachments": { "head": { "head": { "path": "head-alt", "x": 15, "width": 16, "height": 16 } } } }
+  ],
+  "events": { "step": { "int": 1, "string": "hi" }, "sound": { "audio": "a.ogg", "volume": 0.5 } },
+  "animations": {
+    "move": {
+      "bones": {
+        "hip": {
+          "rotate": [{ "value": 0, "curve": [0.25, 0, 0.5, 45] }, { "time": 1, "value": 90 }],
+          "translate": [{ "x": 0, "y": 0, "curve": [0.3, 0, 0.6, 10, 0.2, 0, 0.8, 20] }, { "time": 1, "x": 10, "y": 20 }],
+          "scale": [{ "time": 0.5, "x": 2, "y": 1 }, { "time": 1, "x": 1, "y": 0.5 }]
+        },
+        "torso": {
+          "shear": [{ "x": 5 }],
+          "translatex": [{ "value": 3 }, { "time": 1, "value": -3 }],
+          "scaley": [{ "value": 1.5 }]
+        },
+        "head": { "rotate": [{ "value": 10, "curve": [0.2, 30, 0.8, 30] }, { "time": 1, "value": 10 }] },
+        "front-shoulder": { "translate": [{ "x": 0 }, { "time": 1, "y": 10 }] }
+      },
+      "slots": {
+        "head": {
+          "attachment": [{ "time": 0.5, "name": "head-alt" }, { "time": 0.75, "name": null }],
+          "rgb": [{ "color": "ff0000" }, { "time": 1, "color": "0000ff" }]
+        },
+        "body": { "alpha": [{ "value": 1 }, { "time": 1, "value": 0 }] },
+        "skin": { "rgba2": [{ "light": "ffffffff", "dark": "000000" }, { "time": 1, "light": "808080ff", "dark": "101010" }] },
+        "clip": { "attachment": [{ "time": 0.5, "name": null }, { "time": 0.9, "name": "clip" }] }
+      },
+      "attachments": {
+        "default": {
+          "body": { "body": { "deform": [{ "offset": 2, "vertices": [5, 0], "curve": [0.25, 0, 0.75, 1] }, { "time": 1 }] } },
+          "skin": { "skin": { "deform": [{}, { "time": 1, "offset": 2, "vertices": [0, 5, 0, 5] }] } }
+        }
+      },
+      "drawOrder": [{ "time": 0.5, "offsets": [{ "slot": "head", "offset": -3 }] }, { "time": 1 }],
+      "events": [{ "time": 0.25, "name": "step", "int": 3 }, { "time": 0.75, "name": "sound" }],
+      "ik": {
+        "arm-ik": [
+          { "softness": 4, "bendPositive": false, "stretch": true, "curve": [0.25, 1, 0.75, 0, 0.25, 4, 0.75, 4] },
+          { "time": 1, "mix": 0, "softness": 4, "bendPositive": false, "stretch": true }
+        ]
+      },
+      "transform": { "other": [{ "mixRotate": 1 }] },
+      "path": { "p": { "mix": [{ "mixRotate": 1 }] } },
+      "physics": { "phys": { "mix": [{ "value": 1 }] } }
+    },
+    "soft": {
+      "ik": {
+        "arm-ik": [
+          { "softness": 4, "bendPositive": false, "stretch": true },
+          { "time": 1, "softness": 20, "bendPositive": false, "stretch": true },
+          { "time": 2, "softness": 4, "bendPositive": true, "stretch": true }
+        ]
+      }
+    }
+  }
+}

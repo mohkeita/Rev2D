@@ -11,7 +11,7 @@ import { COMMANDS } from '../src/cli/commands/index.js';
 import { commandFlags } from '../src/cli/help.js';
 import { PACKAGE_ROOT } from '../src/api/templates.js';
 
-const FILES = ['README.md', 'README.ko.md', 'AGENTS.md', 'CLAUDE.md', 'llms.txt', 'docs/RECIPES.md', 'docs/ARCHITECTURE.md', 'examples/README.md'];
+const FILES = ['README.md', 'README.ko.md', 'AGENTS.md', 'CLAUDE.md', 'llms.txt', 'docs/RECIPES.md', 'docs/ARCHITECTURE.md', 'docs/INTEROP.md', 'examples/README.md'];
 const PREFIX = /^(?:npx rev2d|rev2d|node (?:\S*\/)?bin\/rev2d\.js|npm run rev2d --)\s+(.*)$/;
 
 interface CommandLine {

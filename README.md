@@ -18,8 +18,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Node >= 22](https://img.shields.io/badge/node-%3E%3D22-339933?logo=nodedotjs&logoColor=white)
 ![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Tests: 1350+ passing](https://img.shields.io/badge/tests-1350%2B%20passing-brightgreen)
-[![MCP: 16 tools](https://img.shields.io/badge/MCP-16%20tools-6E56CF)](docs/MCP.md)
+![Tests: 1600+ passing](https://img.shields.io/badge/tests-1600%2B%20passing-brightgreen)
+[![MCP: 18 tools](https://img.shields.io/badge/MCP-18%20tools-6E56CF)](docs/MCP.md)
 
 <img src="docs/media/hero.gif" width="720" alt="Four Rev2D example models animating in a 2x2 grid: hana, an anime bust, idling and blinking; a slime jumping; a robot arm reaching with IK; textured koinobori fluttering on a pole">
 
@@ -37,9 +37,12 @@
 - **A deterministic, headless renderer.** Pure TypeScript with no GPU and no browser: the same
   model and inputs always give the same pixels. It renders debug overlays, contact sheets, GIFs and
   PNG sequences.
-- **Tools an agent can drive.** A 19-command CLI with `--json` output, atomic and validated edit
-  operations, and an MCP server with 16 tools that return renders as images. The whole workflow is
+- **Tools an agent can drive.** A 21-command CLI with `--json` output, atomic and validated edit
+  operations, and an MCP server with 18 tools that return renders as images. The whole workflow is
   in [How AI agents use Rev2D](#how-ai-agents-use-rev2d).
+- **Spine and Live2D files in and out.** Spine skeletons import as models and models export to
+  Spine runtimes; Live2D motions, expressions and physics move both ways. See
+  [Spine and Live2D interop](#spine-and-live2d-interop).
 - **A live editor for the human.** A React + WebGL2 [editor](#the-editor) reloads every change the
   AI writes, and the AI can see and drive the view you are looking at.
 
@@ -57,7 +60,7 @@ An agent connects in one of three ways:
 
 | Way in | Use it for | Start here |
 | --- | --- | --- |
-| **MCP server** | Claude Code, Claude Desktop and other MCP clients | [Connect Claude Code](#connect-claude-code-or-any-mcp-client), 16 tools |
+| **MCP server** | Claude Code, Claude Desktop and other MCP clients | [Connect Claude Code](#connect-claude-code-or-any-mcp-client), 18 tools |
 | **CLI** | Any agent with a shell | `--json` on every command; the guide is [AGENTS.md](AGENTS.md) |
 | **Editor bridge** | Working together while a human watches in the editor | `rev2d edit`, then `rev2d editor ...` commands or the MCP `rev2d_editor_*` tools |
 
@@ -274,7 +277,7 @@ with the same core as the CLI.
 | **Timeline & layers** | Play, loop, speed, physics on/off, keys per track, and extra animation layers with weight, `add`, `start` and `once`. |
 | **Outliner & inspector** | Rig tree, parts in draw order, warps, parameters, animations, bindings, IK and physics. Edit any object as JSON (`Ctrl+Enter` applies it), and watch live IK and physics diagnostics. |
 | **Problems & undo** | Validation diagnostics as you edit; undo and redo for inspector edits. |
-| **File menu** | New… (`Alt+N`), Open… (`Ctrl+O`), Open Recent, Save (`Ctrl+S`), Save As… (`Ctrl+Shift+S`), Import from computer… (or drop a model `.json` with its PNGs), Download copy, Export PNG of the view, Reload from disk, Close. |
+| **File menu** | New… (`Alt+N`), Open… (`Ctrl+O`), Open Recent, Save (`Ctrl+S`), Save As… (`Ctrl+Shift+S`), Import from computer… (or drop a model `.json` with its PNGs, or a Spine export), Import Live2D motions…, Download copy, Export PNG of the view, Export to ▸ Spine… / Live2D motions…, Reload from disk, Close. |
 | **Start screen** | New model, Open, Import, recent files, and example cards (hana, robot arm, slime, textured, minimal) that copy an example into your workspace and leave the original untouched. |
 | **Safety** | An edit is saved as you make it. If a write fails (an invalid model, a conflict, a deleted file), the editor keeps your version and asks Save / Don't save / Cancel before New, Open, Import, Close or Reload replaces it. |
 | **Workspace** | The editor works inside one folder: `rev2d edit [model or dir] --root <dir>` (default: the model's folder, else the current one). It opens, creates, saves and imports only there and refuses paths outside it, including through symlinks. Without a model it starts on the start screen. |
@@ -299,6 +302,35 @@ Press `?` in the editor for every shortcut.
 | Textures | both | PNG textures, atlas crops as image grids, textured meshes with UVs |
 
 Format details: [docs/SPEC.md](docs/SPEC.md). Which example uses which technique: [examples/README.md](examples/README.md).
+
+## Spine and Live2D interop
+
+Rev2D reads and writes the public JSON formats of Spine and Live2D Cubism. Every conversion comes with
+a **report** that lists each feature it approximated or dropped, with a stable code, where it was
+found and a hint, so nothing is lost without you knowing.
+
+| | Import | Export |
+| --- | --- | --- |
+| **Spine** (3.8 – 4.2 JSON + atlas + PNG pages) | a new Rev2D model: bones, textured and weighted meshes, image sequences, clipping, IK, skins, every animation; shear, inheritance modes and transform constraints are emulated, path / physics constraints and two-color tint are reported | skeleton JSON + atlas + pages for Spine runtimes; parameters, warps, physics and IK are baked into the animations |
+| **Live2D** motion3 / exp3 / physics3 / cdi3 / model3 JSON | motions, expressions, physics and names, into an existing model (as validated ops) | motions, physics, names and a partial model3.json for a Live2D model with the same parameters |
+
+```sh
+node bin/rev2d.js import spine spineboy/spineboy-pro.json -o models/spineboy.r2d.json
+node bin/rev2d.js export spine hero.r2d.json -o out/hero-spine
+node bin/rev2d.js export live2d hero.r2d.json -o out/hero-live2d --anim wave
+node bin/rev2d.js import live2d Hiyori/hiyori.model3.json --into hero.r2d.json --dry-run
+```
+
+The same conversions are MCP tools (`rev2d_import`, `rev2d_export`) and editor commands (File >
+Import from computer takes a Spine export; File > Import Live2D motions…; File > Export to).
+
+**The Live2D `.moc3` model is not supported.** It is a proprietary, undocumented binary. You can move
+motions, expressions, physics and display names between a Live2D model and a Rev2D model with the
+same parameter ids, but not the Live2D model's art or deformers. In practice an AI can author a motion
+on a Rev2D model such as `hana` (Live2D standard parameters), check it with renders and numbers,
+export it as a `.motion3.json`, and you play it on your Live2D model in Cubism Viewer or an SDK app.
+Support matrix, coordinate conversion, the parameter map and step-by-step workflows:
+[docs/INTEROP.md](docs/INTEROP.md).
 
 ## Quick start
 
@@ -357,19 +389,20 @@ UVs and a texture-alpha mask. Details and a feature matrix: [examples/README.md]
 | [docs/SPEC.md](docs/SPEC.md) | The model format and evaluation semantics (authoritative) |
 | [docs/CLI.md](docs/CLI.md) | Every command, flag, exit code and `--json` shape |
 | [docs/OPS.md](docs/OPS.md) | The 16 edit operations, reference handling and the `bind_warp` math |
-| [docs/MCP.md](docs/MCP.md) | MCP setup, the 16 tools, the editor bridge and troubleshooting |
+| [docs/MCP.md](docs/MCP.md) | MCP setup, the 18 tools, the editor bridge and troubleshooting |
+| [docs/INTEROP.md](docs/INTEROP.md) | Spine and Live2D import / export: support matrix, coordinates, parameter map, workflows, limitations |
 | [docs/RECIPES.md](docs/RECIPES.md) | 21 copy-paste rig recipes with the commands that verify them, all run by the test suite |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, modules, data contracts, determinism and the editor protocol |
 | [examples/README.md](examples/README.md) | The five example models and the techniques each one shows |
 | [llms.txt](llms.txt) | An index for LLM tools |
 
-The tool serves the same docs offline: `rev2d docs <spec|ops|cli|mcp|agents|recipes|architecture|examples>`,
+The tool serves the same docs offline: `rev2d docs <spec|ops|cli|mcp|agents|recipes|interop|architecture|examples>`,
 or MCP `rev2d_docs`.
 
 ## Status and roadmap
 
 Rev2D is at **v0.1**. The format (version 1), the CLI, the MCP tools and the editor work and are
-covered by 1,350+ tests, but they may still change before 1.0. There is no npm release yet: run it
+covered by 1,600+ tests, but they may still change before 1.0. There is no npm release yet: run it
 from a checkout.
 
 Rev2D does not replace Live2D Cubism or Spine for production pipelines. It is a text-first toolkit
@@ -385,7 +418,7 @@ Ideas and use cases are welcome in the issues.
 ## Development
 
 ```sh
-npm test                    # the full vitest suite (1,350+ tests)
+npm test                    # the full vitest suite (1,600+ tests)
 npm run typecheck           # tsc --noEmit -p tsconfig.json
 npm run editor:dev          # editor UI with hot reload; proxies /api to rev2d edit on :4777
 npm run editor:build        # build the editor UI into dist/editor (served by rev2d edit)

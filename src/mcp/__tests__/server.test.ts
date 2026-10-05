@@ -95,6 +95,8 @@ describe('mcp server: discovery', () => {
         'rev2d_editor_state',
         'rev2d_guide',
         'rev2d_hit_test',
+        'rev2d_export',
+        'rev2d_import',
         'rev2d_info',
         'rev2d_inspect',
         'rev2d_render',

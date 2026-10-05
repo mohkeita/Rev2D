@@ -20,6 +20,9 @@
  *   history and the view state (Save As keeps the view). Actions that replace an unsaved document
  *   ask first (files/guard.ts). "file-changed" events (another tab or an AI switched files) are
  *   followed; with no model open the UI shows its start screen (status 'empty').
+ * - Interop: Import from computer also takes a Spine export (the server converts it; its conversion
+ *   report is offered from the toast). Live2D files are converted by the server into the document
+ *   shown and written as one undoable edit; exports to Spine / Live2D go into a workspace folder.
  */
 import {
   Rig,
@@ -37,7 +40,21 @@ import {
 } from '../../../src/core/index.js';
 import { formatModelJson } from '../../../src/core/format.js';
 import * as api from '../api.js';
-import type { EditorCommand, EditorState, FileChangedEvent, ModelChangedEvent, NewRequest, OpenResult, WorkspaceInfo } from '../api.js';
+import type {
+  EditorCommand,
+  EditorState,
+  ExportRequest,
+  ExportResponse,
+  FileChangedEvent,
+  InteropReport,
+  Live2dImportRequest,
+  Live2dImportResponse,
+  ModelChangedEvent,
+  NewRequest,
+  OpenResult,
+  WorkspaceInfo,
+} from '../api.js';
+import { live2dFormatFromName } from '../../../src/interop/detect.js';
 import { GUARD_IDLE, guardStep, type GuardChoice, type GuardEffect, type GuardEvent, type GuardState } from '../files/guard.js';
 import { modelTextProblem, planImport, readImportFiles } from '../files/importing.js';
 import { summarizeNotes } from '../files/notes.js';
@@ -54,6 +71,7 @@ import {
   type OverlayLayer,
   type PanelName,
   type Toast,
+  type ToastAction,
 } from './app.js';
 import {
   DocHistory,
@@ -105,6 +123,14 @@ export interface EditResult {
 
 /** Outcome of a file operation (dialogs show `error` inline; `exists` asks to replace the target). */
 export type FileOpResult = { ok: true } | { ok: false; error?: string; hint?: string; exists?: boolean; cancelled?: boolean };
+
+/** Outcome of a Live2D import: the server's conversion (report, op results) and whether it was written. */
+export type Live2dImportOutcome =
+  | { ok: true; response: Live2dImportResponse; written: boolean }
+  | { ok: false; error?: string; hint?: string; cancelled?: boolean; response?: Live2dImportResponse };
+
+/** Outcome of an export: the written files and the report, or why nothing was written. */
+export type ExportOutcome = { ok: true; response: ExportResponse } | Extract<FileOpResult, { ok: false }>;
 
 type FocusTarget = Rect | 'fit' | 'canvas' | 'selection';
 
@@ -1136,6 +1162,34 @@ export class Session {
     this.importPicker?.();
   }
 
+  private live2dPicker: (() => void) | null = null;
+
+  /** The hidden file input of "Import Live2D motions…" registers how to open its picker. */
+  setLive2dPicker(fn: (() => void) | null): void {
+    this.live2dPicker = fn;
+  }
+
+  /** "Import Live2D motions…": the browser's file picker; the picked files open the Live2D dialog. */
+  pickLive2dFiles(): void {
+    if (this.get().status === 'ready') this.live2dPicker?.();
+  }
+
+  /**
+   * Files picked with "Import from computer" or dropped on the window: Live2D JSON files (all the
+   * picked .json files end in .motion3/.exp3/.physics3/.cdi3/.model3.json) are imported into the open
+   * model, anything else is imported into the workspace.
+   */
+  openPickedFiles(files: File[]): void {
+    const json = files.filter((f) => /\.jsonc?$/i.test(f.name));
+    const live2d = json.length > 0 && json.every((f) => live2dFormatFromName(f.name) !== null);
+    this.openDialog(live2d && this.get().status === 'ready' ? { kind: 'live2d', files } : { kind: 'import', files });
+  }
+
+  /** Show a conversion report (Spine import) in a dialog. */
+  showReport(title: string, report: InteropReport, subtitle?: string): void {
+    this.openDialog({ kind: 'report', title, report, ...(subtitle ? { subtitle } : {}) });
+  }
+
   openDialog(dialog: AppState['dialog']): void {
     if (dialog && dialog.kind === 'saveAs' && this.get().status !== 'ready') return;
     this.store.set({ dialog, helpOpen: false });
@@ -1205,7 +1259,7 @@ export class Session {
    * the last one is handled (its own echo is recognized by the file now shown; a switch by another
    * tab or an AI right after it is followed, with its toast), else the server is re-read.
    */
-  private async fileOp(label: string, run: () => Promise<FileOpResult>): Promise<FileOpResult> {
+  private async fileOp<T = FileOpResult>(label: string, run: () => Promise<T>): Promise<T> {
     this.fileOps++;
     this.store.set({ fileBusy: label });
     try {
@@ -1236,12 +1290,12 @@ export class Session {
   }
 
   /** Show a model the server just opened (open / new / save-as / import). */
-  private async adopt(result: OpenResult, message: string, opts: { keepView?: boolean } = {}): Promise<void> {
+  private async adopt(result: OpenResult, message: string, opts: { keepView?: boolean; action?: ToastAction } = {}): Promise<void> {
     this.resetDocument(opts);
     this.store.set({ status: 'loading', dialog: null });
     await this.ingest(result.text, { file: result.file, mtimeMs: result.mtimeMs, history: 'reset', seq: this.seq });
     const { text, details } = summarizeNotes(message, result.notes);
-    this.toast('success', text, details.length ? { details } : {});
+    this.toast('success', text, { ...(details.length ? { details } : {}), ...(opts.action ? { action: opts.action } : {}) });
     await this.refreshWorkspace();
   }
 
@@ -1320,10 +1374,68 @@ export class Session {
     return this.fileOp(`Importing ${plan.model}…`, async () => {
       try {
         const result = await api.importFiles({ dir, files: payload, overwrite });
-        await this.adopt(result, `Imported ${this.displayPath(result.file)}`);
+        const report = result.report;
+        const shown = this.displayPath(result.file);
+        await this.adopt(result, `Imported ${shown}`, report ? { action: { label: 'Report', run: () => this.showReport(`Spine import report`, report, `${plan.model} → ${shown}`) } } : {});
         return { ok: true };
       } catch (e) {
         return failure(e);
+      }
+    });
+  }
+
+  /**
+   * Import Live2D files into the document shown: the server converts them into ops and returns the
+   * resulting document, which is written like any edit (one undo step, conflict-checked).
+   */
+  async importLive2d(files: readonly File[], opts: Omit<Live2dImportRequest, 'files' | 'doc'>): Promise<Live2dImportOutcome> {
+    if (this.writing) await this.writing.catch(() => false);
+    if (this.get().status !== 'ready') return { ok: false, error: 'No model is open.' };
+    if (!this.get().doc) return { ok: false, error: 'The model file is not valid JSON; fix it before importing into it.' };
+    let payload: Live2dImportRequest['files'];
+    try {
+      payload = await Promise.all(files.filter((f) => /\.jsonc?$/i.test(f.name)).map(async (f) => ({ name: f.name, text: await f.text() })));
+    } catch (e) {
+      return { ok: false, error: `Could not read the picked files: ${messageOf(e)}` };
+    }
+    const label = files.length === 1 ? files[0].name : `${files.length} Live2D files`;
+    return this.fileOp(`Importing ${label}…`, async (): Promise<Live2dImportOutcome> => {
+      const s = this.get();
+      let response: Live2dImportResponse;
+      try {
+        response = await api.live2dImport({ ...opts, files: payload, doc: s.doc });
+      } catch (e) {
+        const f = failure(e);
+        return { ok: false, error: f.ok ? undefined : f.error, hint: f.ok ? undefined : f.hint };
+      }
+      if (!response.ok) {
+        const op = response.results.find((r) => !r.ok);
+        const errors = errorCount(response.diagnostics);
+        return {
+          ok: false,
+          response,
+          error: op ? `The import failed: op #${op.index} (${op.op}): ${op.message}` : `The imported model would have ${errors} validation error${errors === 1 ? '' : 's'}; nothing was changed.`,
+          hint: op?.hint,
+        };
+      }
+      if (!response.changed || this.get().file !== s.file) return { ok: true, response, written: false };
+      const doc = response.doc as RawDoc;
+      this.history.push(doc, `Import ${label}`);
+      const written = await this.writeDoc(doc, false, s.mtimeMs);
+      return { ok: true, response, written };
+    });
+  }
+
+  /** Export the document shown (unsaved edits included) to Spine or Live2D files in a workspace folder. */
+  async exportModel(req: Omit<ExportRequest, 'doc'>): Promise<ExportOutcome> {
+    if (this.writing) await this.writing.catch(() => false);
+    const s = this.get();
+    if (s.status !== 'ready') return { ok: false, error: 'No model is open.' };
+    return this.fileOp(`Exporting to ${req.format === 'spine' ? 'Spine' : 'Live2D'}…`, async (): Promise<ExportOutcome> => {
+      try {
+        return { ok: true, response: await api.exportModel({ ...req, ...(s.doc ? { doc: s.doc } : {}) }) };
+      } catch (e) {
+        return failure(e) as Extract<FileOpResult, { ok: false }>;
       }
     });
   }
@@ -1332,7 +1444,7 @@ export class Session {
   async closeModel(): Promise<FileOpResult> {
     if (this.get().status !== 'ready' && this.get().status !== 'failed') return { ok: true };
     if (!(await this.confirmUnsaved('close it'))) return { ok: false, cancelled: true };
-    const r = await this.fileOp('Closing…', async () => {
+    const r = await this.fileOp<FileOpResult>('Closing…', async () => {
       try {
         await api.closeModel();
         this.showStartScreen();

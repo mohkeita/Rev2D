@@ -13,8 +13,9 @@ Reference docs: [docs/SPEC.md](docs/SPEC.md) (format and semantics, authoritativ
 [docs/OPS.md](docs/OPS.md) (edit ops), [docs/CLI.md](docs/CLI.md) (every command and `--json`
 shape), [docs/MCP.md](docs/MCP.md) (MCP server), [docs/RECIPES.md](docs/RECIPES.md) (copy-paste
 rig recipes), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (pipeline and modules),
-[examples/README.md](examples/README.md) (five annotated example models). The same docs are
-available offline: `rev2d docs <spec|ops|cli|mcp|agents|recipes|architecture|examples>` and MCP
+[examples/README.md](examples/README.md) (five annotated example models),
+[docs/INTEROP.md](docs/INTEROP.md) (Spine and Live2D import / export). The same docs are
+available offline: `rev2d docs <spec|ops|cli|mcp|agents|recipes|interop|architecture|examples>` and MCP
 `rev2d_docs {topic}`.
 
 ---
@@ -370,7 +371,7 @@ with a hint and diagnostics, never as a crash.
 | --- | --- |
 | `rev2d_guide` | The **Rev2D quickstart for AI authors**: conventions, workflow, addresses, recipes. Call first. |
 | `rev2d_schema {name?}` | JSON Schema of the model or one sub-schema (`Part`, `Binding`, `Physics`, ...) |
-| `rev2d_docs {topic}` | `spec`, `ops`, `cli`, `mcp`, `recipes`, `architecture`, `examples`, `agents` (this file) |
+| `rev2d_docs {topic}` | `spec`, `ops`, `cli`, `mcp`, `recipes`, `interop`, `architecture`, `examples`, `agents` (this file) |
 | `rev2d_create_model {path, template?, width?, height?}` | new model from `blank`, `empty` or an example |
 | `rev2d_validate {path}` | diagnostics |
 | `rev2d_info {path}` | outline: parameters and what they drive, bone tree, warps, parts, ... |
@@ -381,6 +382,8 @@ with a hint and diagnostics, never as a crash.
 | `rev2d_hit_test {path, x, y}` | parts under a canvas point |
 | `rev2d_apply_ops {path, ops, dry_run?, render_after?}` | atomic, validated edits |
 | `rev2d_diff_images {a, b}` | pixel diff with a visualization |
+| `rev2d_import {format: "spine" \| "live2d", path, out? \| into}` | a Spine skeleton export -> a new model; Live2D motion3 / exp3 / physics3 / cdi3 / model3 files -> ops on `into` ([§1.11](#111-spine-and-live2d-files)) |
+| `rev2d_export {format, path, out_dir}` | Spine JSON + atlas + PNG pages, or Live2D motion3 / physics3 / cdi3 / model3 JSON |
 | `rev2d_editor_state` / `rev2d_editor_command` / `rev2d_editor_screenshot` | see and drive the human's live editor; `{type: "open", file}` switches it to another model of its workspace ([§1.10](#110-working-with-a-human-the-live-editor)) |
 
 Pose arguments: `params` (explicit values beat animations and physics), `animations` as layer
@@ -388,7 +391,7 @@ strings (`["look_around", "talk@0.8,add", "wink,once,start=2.5"]`) or objects
 `{id, weight?, mode?, start?, hold?, time?}`, `time`, `physics`.
 
 Resources: `rev2d://guide`, `rev2d://docs/spec`, `rev2d://docs/ops`, `rev2d://docs/recipes`,
-`rev2d://schema`. Relative paths resolve against the server's working directory; models are
+`rev2d://docs/interop`, `rev2d://schema`. Relative paths resolve against the server's working directory; models are
 re-read from disk on every call.
 
 ## 1.10 Working with a human: the live editor
@@ -459,6 +462,47 @@ rev2d edit models/hero.r2d.json --root .     # a model, with the whole project a
   to open one. If the open model's file is deleted or moved away on disk, the editor keeps it open
   as unsaved (Save writes it back).
 
+## 1.11 Spine and Live2D files
+
+Rev2D converts from and to the public JSON formats of Spine and Live2D Cubism
+([docs/INTEROP.md](docs/INTEROP.md) has the support matrix and the workflows):
+
+```sh
+rev2d import spine hero/hero.json -o models/hero.r2d.json          # Spine 3.8-4.2 JSON + atlas + PNG pages -> a new model
+rev2d export spine models/hero.r2d.json -o out/hero-spine           # -> Spine 4.x JSON + atlas + pages (everything baked)
+rev2d import live2d idle.motion3.json --into hana.r2d.json          # motion3 / exp3 / physics3 / cdi3 / model3 -> ops
+rev2d export live2d hana.r2d.json -o out/hana-live2d --anim wave    # -> motions/*.motion3.json, physics3, cdi3, model3
+```
+
+- **Read the report.** Every conversion lists what it approximated or dropped: severity, a stable
+  `code`, `where` in the SOURCE data, a `hint`. Warnings matter (a skipped constraint, an unknown
+  parameter); info notes document choices (baked physics, renamed ids). Mention the warnings to the
+  human instead of claiming a perfect conversion.
+- **Verify an import like any rig**: `validate`, a `render` with `--overlay bones`, a `sheet` per
+  animation and `analyze` for loops and physics. Spine rigs that rely on path or physics constraints
+  import with visibly wrong limbs; the report names them. Shear, inheritance modes and transform
+  constraints are emulated with sampled tracks: moving those bones' parents or targets in Rev2D does
+  not re-apply the Spine rule (the report says which bones), so edit their motion in Spine and
+  re-import.
+- **Live2D: the `.moc3` model is not supported** (proprietary). Motions, expressions, physics and
+  display names move between models by **parameter id**; the model's art does not. To write a motion
+  for a Live2D model, author it on a Rev2D model with the same parameters (`hana` uses the Live2D
+  standard ids), verify it, export it, and tell the human where to add the `.motion3.json` in their
+  model3.json (`Motions`). `--param-map` (MCP `param_map`) maps other ids: `standard` (default),
+  `none`, `prefix` or a JSON file `{"<Rev2D id>": "<Live2D id>"}`.
+- **A Live2D import is an atomic op batch**: `--dry-run` first on a model you care about. An
+  animation with the same id is replaced: the report **warns** (`live2d-animation-replaced`) when
+  that animation was made in Rev2D, and only notes it when an earlier Live2D import wrote it. To keep
+  it, rename it first (`rename` op) or pass `--id` for a single motion3 / exp3 file. `--physics
+  replace` (default) removes the model's physics groups that drive the same parameters (`merge`
+  keeps them).
+- **Spine exports are baked**: parameters, warps, physics and IK end up in the animations. Export the
+  animations the human needs (`--anim`), add `--param-poses` for min / max poses of each parameter,
+  and raise `--texture-scale` for crisper vector parts.
+- In the live editor the human has File > Import from computer (Spine exports), File > Import Live2D
+  motions… (one undoable edit) and File > Export to > Spine… / Live2D motions… (into
+  `exports/<model>-spine|-live2d`).
+
 ---
 
 # Part 2: Developing Rev2D
@@ -477,9 +521,12 @@ npx tsx scripts/build-examples.ts             # regenerate examples/*/*.r2d.json
 npx tsx scripts/render-examples.ts            # render every example into out/examples/
 ```
 
-`test/editor-e2e.test.ts` drives the built UI in headless Chrome through playwright-core
-(SwiftShader WebGL2) and skips with a logged reason when `dist/editor` or Chrome is missing. Scratch
-output goes to `out/` (git-ignored).
+The `test/*-e2e.test.ts` files drive the built UI in headless Chrome through playwright-core
+(SwiftShader WebGL2) and skip with a logged reason when `dist/editor` or Chrome is missing. Software
+WebGL takes many threads, so `vitest.config.ts` runs them as a project of their own (`chrome`) after
+the other files (`node`), one file at a time: `npx vitest run --project node` skips them, and a new
+test that launches Chrome belongs in a `*-e2e.test.ts` file. Scratch output goes to `out/`
+(git-ignored).
 
 ## 2.2 Architecture in one screen
 
@@ -488,7 +535,8 @@ output goes to `out/` (git-ignored).
               src/core/validate   src/core/rig   Pose              RenderList       │   (src/render, pure TS)
                                                                                     └─► WebGL2 viewport (editor/src/gl)
  front ends: src/cli (rev2d) · src/mcp (MCP server) · src/server (editor HTTP/SSE) · editor/ (React UI)
- shared:     src/api (render/sheet/inspect/hit/info) · src/ops (edit engine) · src/node (files, registry)
+ shared:     src/api (render/sheet/inspect/hit/info) · src/ops (edit engine) · src/node (files, registry, interop IO)
+ interop:    src/interop (Spine JSON + atlas, Live2D motion3/exp3/physics3/cdi3/model3; pure) ◄─► src/node/interop.ts
 ```
 
 Details, data contracts and extension points: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -502,10 +550,12 @@ Details, data contracts and extension points: [docs/ARCHITECTURE.md](docs/ARCHIT
 | `src/node` | loading model files and textures, editor registry (`~/.rev2d/editors`: URL, open file and workspace root of each running editor) and the editor protocol types | core, render, Node |
 | `src/api` | JSON-friendly high-level operations shared by CLI/MCP/server: layer syntax (`layers.ts`), pose options (`pose.ts`), frames and view boxes (`frame.ts`), sampling plans (`sampling.ts`), notes (`stats.ts`), sheets (`sheet.ts`), inspect/series/tracks (`inspect.ts`), `analyze.ts`, hit, info, templates, doc summaries (`docs.ts`); `index.ts` re-exports them | core, render, node |
 | `src/ops` | edit ops on the **raw** document (`applyOps`, `describeOps`); `compose` and `follow` evaluate the model through `Rig` | core |
+| `src/interop` | pure converters: Spine import / export (`spine/`), Live2D JSON files (`live2d/`), file detection (`detect.ts`); every result carries an `InteropReport` | core, render (raster, PNG); ops types only |
+| `src/node/interop.ts` | interop file IO shared by CLI, MCP and server: reading a Spine export folder, writing output files, Live2D files -> ops, atomic model-file edits, report text | interop, ops, core, render, Node |
 | `src/cli` | `rev2d` commands, flags, help, `--json` output | api, ops, node, render, core; server and mcp are imported lazily by `edit` / `mcp` |
 | `src/mcp` | MCP server and tools | api, ops, node, render, core |
 | `src/server` | editor HTTP server: model file API, SSE live reload, AI bridge (state/command/screenshot), file management confined to a workspace root (`workspace.ts`, `workspace-routes.ts`) | api, node, render, core |
-| `editor/` | React 19 + WebGL2 editor UI | `src/core` via relative imports (`src/render/browser.ts` is available when it needs raster code); type-only imports from `src/node/editor-registry.ts` |
+| `editor/` | React 19 + WebGL2 editor UI | `src/core` via relative imports (`src/render/browser.ts` is available when it needs raster code), `src/interop/detect.ts` (file detection); type-only imports from `src/node/editor-registry.ts` and `src/node/interop.ts` |
 | `scripts/` | example builders, texture generator, render scripts, demo media pipeline (`scripts/video/` → `docs/media/`) | anything |
 
 Keep these boundaries: anything the editor imports must stay browser-safe, and `stdout` inside
@@ -535,7 +585,8 @@ Keep these boundaries: anything the editor imports must stay browser-safe, and `
   applies the guide recipes; `test/docs-recipes.test.ts` applies every RECIPES.md batch, runs every
   command block and checks the numbers the recipes quote; `test/docs-links.test.ts` checks links
   and anchors; `test/docs-commands.test.ts` checks that every `rev2d` command line in the guides
-  uses real commands and flags).
+  uses real commands and flags; `test/docs-interop.test.ts` checks that every Spine / Live2D report
+  code the guides name is one the converters use).
 - **Examples are generated.** Change `scripts/examples/<name>.ts`, run
   `npx tsx scripts/build-examples.ts`; `test/examples.test.ts` checks that each shipped file equals
   its builder's output and that the examples/README.md feature matrix is true.
@@ -561,6 +612,7 @@ Keep these boundaries: anything the editor imports must stay browser-safe, and `
 | New editor bridge command | `EditorCommand` in `src/node/editor-registry.ts`, parsing in `src/server/protocol.ts`, handling in `editor/src/state/session.ts`, CLI sugar in `src/cli/commands/live.ts`, MCP `rev2d_editor_command` |
 | New workspace (file-management) endpoint | a handler in `src/server/workspace-routes.ts` + `ROUTES` in `src/server/routes.ts`, request/result types in `src/node/editor-registry.ts`, validation in `src/server/protocol.ts`; resolve every path through `WorkspaceRoot` (`src/server/workspace.ts`); the client in `editor/src/api.ts`, UI in `editor/src/files/`; tests in `src/server/__tests__/workspace.test.ts`; the protocol section of CLI.md and ARCHITECTURE §5 |
 | New example | `scripts/examples/<name>.ts` + `scripts/examples/index.ts`, rebuild, examples/README.md (text and feature matrix), predicates in `test/examples.test.ts` |
+| New interop feature (a Spine / Live2D field) | the converter in `src/interop/spine/` or `src/interop/live2d/` (report what it cannot convert with a stable code), its tests with hand-written fixtures (never official sample assets); file IO in `src/node/interop.ts`; front ends in `src/cli/commands/interop.ts`, `src/mcp/tools/interop.ts`, `src/server/interop-routes.ts`, `editor/src/files/InteropDialogs.tsx`; docs/INTEROP.md |
 
 ## 2.6 Before you finish
 

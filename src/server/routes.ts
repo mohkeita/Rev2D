@@ -1,7 +1,8 @@
 /**
  * /api/* endpoints of the editor protocol. Each handler either writes a response or throws an
  * HttpError / ApiError that the server turns into a JSON error body. The workspace endpoints (file
- * management) live in workspace-routes.ts.
+ * management) live in workspace-routes.ts, the interop endpoints (Live2D import, Spine / Live2D export)
+ * in interop-routes.ts.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
@@ -14,6 +15,7 @@ import type { EditorLayer, EditorState } from '../node/editor-registry.js';
 import { OVERLAY_LAYERS, modelInfo, resolveViewBox, toPoseOptions, type PoseInput } from '../api/index.js';
 import { drawOverlay, encodePNG, renderImage, type OverlayLayer } from '../render/index.js';
 import { HttpError, readJson, sendJson } from './http.js';
+import { postExport, postLive2dImport } from './interop-routes.js';
 import type { ModelStore } from './model-store.js';
 import { MAX_SCREENSHOT_PIXELS, parseCommand, parseEditorState, parseScreenshotQuery } from './protocol.js';
 import type { SseHub } from './sse.js';
@@ -78,6 +80,8 @@ const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
   '/api/import': { POST: postImport },
   '/api/download': { GET: getDownload },
   '/api/templates': { GET: getTemplates },
+  '/api/live2d-import': { POST: postLive2dImport },
+  '/api/export': { POST: postExport },
 };
 
 const TEXTURE_PREFIX = '/api/texture/';

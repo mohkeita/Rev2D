@@ -1,0 +1,23 @@
+{
+  "Version": 3,
+  "FileReferences": {
+    "Moc": "mini.moc3",
+    "Textures": ["mini.1024/texture_00.png"],
+    "Physics": "mini.physics3.json",
+    "Pose": "mini.pose3.json",
+    "DisplayInfo": "mini.cdi3.json",
+    "Expressions": [
+      { "Name": "Smile", "File": "expressions/smile.exp3.json" },
+      { "Name": "Gone", "File": "expressions/gone.exp3.json" }
+    ],
+    "Motions": {
+      "Idle": [{ "File": "motions/wave.motion3.json", "FadeInTime": 0.5, "FadeOutTime": 0.5 }],
+      "Tap": [{ "File": "motions/free.motion3.json", "Sound": "sounds/tap.wav" }]
+    }
+  },
+  "Groups": [
+    { "Target": "Parameter", "Name": "EyeBlink", "Ids": ["ParamEyeLOpen", "ParamEyeROpen"] },
+    { "Target": "Parameter", "Name": "LipSync", "Ids": ["ParamMouthOpenY"] }
+  ],
+  "HitAreas": [{ "Id": "HitAreaHead", "Name": "Head" }]
+}

@@ -1,6 +1,7 @@
 /** Every command, in help order. */
 import type { Command } from '../command.js';
 import { create, ops, set } from './edit.js';
+import { exportLive2d, exportSpine, importLive2d, importSpine } from './interop.js';
 import { edit, editorCommand, editorScreenshot, editorState, mcp } from './live.js';
 import { analyze, hit, info, inspect, validate } from './model.js';
 import { docs, schema } from './reference.js';
@@ -21,6 +22,10 @@ export const COMMANDS: Command[] = [
   create,
   ops,
   set,
+  importSpine,
+  importLive2d,
+  exportSpine,
+  exportLive2d,
   watch,
   edit,
   editorState,
@@ -33,6 +38,14 @@ export const COMMANDS: Command[] = [
 
 /** Commands that are reached through a parent word ("editor state"). */
 export const PARENTS: Record<string, { summary: string; subcommands: Command[] }> = {
+  import: {
+    summary: 'convert Spine exports into models, Live2D motions/physics into a model (spine, live2d)',
+    subcommands: [importSpine, importLive2d],
+  },
+  export: {
+    summary: 'write Spine JSON + atlas, or Live2D motion3/physics3/cdi3 JSON (spine, live2d)',
+    subcommands: [exportSpine, exportLive2d],
+  },
   editor: {
     summary: 'talk to a running editor (state, command, screenshot)',
     subcommands: [editorState, editorCommand, editorScreenshot],

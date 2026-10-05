@@ -14,7 +14,8 @@ npm run rev2d -- ...           # same, via the package script
 
 Contents: [Conventions](#conventions) · [AI verification loop](#ai-verification-loop) ·
 [Shared flags](#shared-flags) ([animation layers](#animation-layers), [sampling](#sampling-flags)) ·
-[Commands](#commands) · [Editor protocol types](#editor-protocol-types)
+[Commands](#commands) ([import & export: Spine, Live2D](#import--export-spine-live2d)) ·
+[Editor protocol types](#editor-protocol-types)
 
 ---
 
@@ -876,6 +877,235 @@ rev2d set hero.r2d.json bone:head.rotation=15
 rev2d set hero.r2d.json part:eye.fill=#223344 part:eye.shape.ry=12 --render out/eye.png --viewbox fit
 ```
 
+### Import & export (Spine, Live2D)
+
+Convert between Rev2D and the public JSON formats of Spine and Live2D Cubism. Every conversion prints
+a **report**: each approximated or dropped feature with a stable code, where it was found in the
+source data and a hint (`report: 3 warnings, 12 info`, then `warnings:` and `info:` lines of the form
+`code  where: message  → hint`, then `stats:`). `--json` adds the whole report as
+`{format, direction, issues: [{severity, code, message, where?, hint?}], stats}`. What is converted
+and how: [INTEROP.md](INTEROP.md) (`rev2d docs interop`). The Live2D `.moc3` model binary is
+proprietary and is never read or written.
+
+### rev2d import spine
+
+```
+rev2d import spine <skeleton.json> -o <out.r2d.json> [--atlas file] [--skin name] [--scale n] [--padding px]
+                   [--name text] [--force] [--json]
+```
+
+Reads a Spine 3.8 - 4.2 skeleton JSON export with its atlas and page PNGs and writes a new model: the
+model file at `-o` and the pages in `textures/` next to it (written with 5 decimals, so atlas
+coordinates stay sub-pixel exact). Shear, non-normal transform inheritance, transform constraints and
+image sequences are emulated (sampled where needed); path and physics constraints, two-color tint and
+the other skins are not converted. The report lists all of them. The written model is validated with
+its textures; exit 1 when it has errors. Existing files are never overwritten without `--force`
+(identical texture files are fine). Binary `.skel` files are refused with a hint to export JSON.
+
+| Flag | Meaning |
+| --- | --- |
+| `-o, --out <out.r2d.json>` | the model file to write (required) |
+| `--atlas <file>` | the texture atlas (default: `<skeleton>.atlas` or `.atlas.txt` next to the skeleton, `x.atlas` for `x-pro.json` / `x-ess.json`, else the only atlas in that folder; several candidates are a usage error). Without any atlas the attachments are imported untextured (a note says so) |
+| `--skin <name>` | the skin to import over `default` (default: `default`; the other skins are listed in the report) |
+| `--scale <n>` | extra uniform scale of the skeleton (default 1) |
+| `--padding <px>` | canvas margin around the setup-pose bounds (default 32) |
+| `--name <text>` | `meta.name` (default: the output file name) |
+| `--force` | overwrite an existing model or different texture files |
+
+```
+imported Spine skeleton spine/hero.json into models/hero.r2d.json: 12 bones, 9 parts, 2 animations
+  atlas  spine/hero.atlas
+  pages  spine/hero.png
+wrote models/hero.r2d.json, models/textures/hero.png
+report: 11 warnings, 16 info
+warnings:
+  spine-dark-color             slots[4] (head): two-color tint (dark color 202020) is not supported; ...  → bake the dark tint into the texture, ...
+  ...
+info:
+  spine-bone-shear-pair        bones[8] (sheared): shear (setup 10°, 0°) is reproduced exactly with an extra bone "sheared-shear" ...
+  ...
+stats: animations 2, attachments.boundingbox 1, ..., bones 12, ..., parts 9, ..., slots 8, ..., tracks 39
+validation: 0 errors, 0 warnings
+next steps:
+  rev2d render models/hero.r2d.json -o models/hero.png --overlay bones,labels
+  ...
+```
+
+`--json`:
+
+```jsonc
+{
+  "ok": true,                                   // the written model has no validation errors
+  "file": "/abs/models/hero.r2d.json",
+  "sources": { "skeleton": "/abs/spine/hero.json", "atlas": "/abs/spine/hero.atlas", "pages": ["/abs/spine/hero.png"] },
+  "files": [ { "path": "/abs/models/hero.r2d.json", "status": "new", "bytes": 12877 },   // status: new | replaced | unchanged
+             { "path": "/abs/models/textures/hero.png", "status": "new", "bytes": 143 } ],
+  "report": { "format": "spine", "direction": "import", "issues": [...], "stats": {...} },
+  "diagnostics": [],                            // validation of the written model (textures included)
+  "notes": [],                                  // atlas choice, pages that could not be read
+  "next": ["rev2d render ...", "rev2d sheet ...", "rev2d edit ..."]
+}
+```
+
+```sh
+rev2d import spine spineboy/spineboy-pro.json -o models/spineboy.r2d.json
+rev2d import spine hero.json --atlas hero-pma.atlas --skin armored -o hero.r2d.json --json
+```
+
+### rev2d import live2d
+
+```
+rev2d import live2d <file.json>... --into <model.r2d.json> [--param-map standard|none|prefix|map.json] [--id name]
+                    [--physics replace|merge|skip] [--display-info fill|overwrite|skip] [--no-motions] [--no-expressions]
+                    [--dry-run] [--json]
+```
+
+Imports Live2D JSON files into an existing model, as edit ops applied atomically like
+[`rev2d ops`](#rev2d-ops): every op applies and the result validates, or nothing is written (exit 1).
+The file is rewritten formatted, keeping its line endings; the files are read as given (JSONC is not
+accepted for Live2D files).
+
+| File | Becomes |
+| --- | --- |
+| `.motion3.json` | an animation named after the file (parameter tracks, part opacity, events) |
+| `.exp3.json` | a one-key animation `exp_<name>` for `add` layering (`--anim "exp_smile,add"`) |
+| `.physics3.json` | physics groups (an approximation) |
+| `.cdi3.json` | parameter and part descriptions, parameter groups |
+| `.model3.json` | all of the above that it lists, read relative to it (at most one per call); files it lists that are also given on the command line are imported once, through it |
+
+| Flag | Meaning |
+| --- | --- |
+| `--into <model.r2d.json>` | the model to import into, edited in place (required) |
+| `--param-map <spec>` | Live2D <-> Rev2D parameter ids: `standard` (default: `AngleX` <-> `ParamAngleX`, `MouthOpen` <-> `ParamMouthOpenY`, ...), `none`, `prefix` (`Param` + id), or a JSON file `{"<Rev2D id>": "<Live2D id>"}` merged over the standard preset. Curves for parameters the model lacks are dropped and reported with a did-you-mean |
+| `--id <name>` | the animation id of a single motion3 / exp3 file (usage error with several) |
+| `--physics <mode>` | `replace` (default: removes the model's physics groups that drive the same parameters), `merge` (keeps them), `skip` |
+| `--display-info <mode>` | `fill` (default: only missing descriptions / groups), `overwrite`, `skip` |
+| `--motions`, `--expressions` | import the motions / expressions a model3.json lists (default on; `--no-motions`, `--no-expressions`) |
+| `--dry-run` | convert, apply and validate, write nothing |
+
+```
+import into hana.r2d.json: 3 animations (exp_Smile, wave, free), 2 physics groups (PhysicsSetting1, PhysicsSetting2), removed physics hairFront, hairBack
+  mini/mini.model3.json           model3
+  mini/motions/wave.motion3.json  motion3  via mini/mini.model3.json
+wrote hana.r2d.json
+report: 12 warnings, 22 info
+warnings:
+  live2d-physics-replaced           mini/mini.model3.json: mini.physics3.json: existing physics group(s) hairFront, hairBack removed: ...  → use physics "merge" to keep them
+  ...
+info:
+  live2d-moc-ignored                mini/mini.model3.json: FileReferences.Moc: the model binary "mini.moc3" is not read (the .moc3 format is proprietary and undocumented)  → ...
+  ...
+stats: parameters 3, parameterGroups 2, parts 1, physicsSettings 2, ...
+```
+
+**An animation with the same id is replaced.** When the model's animation was made in Rev2D (not
+written by an earlier Live2D import), the report says so with a warning, because its tracks and
+events are gone afterwards; replacing an earlier import is only noted. Check with `--dry-run` first,
+and keep an animation by renaming it (`rev2d ops` with a `rename` op) or by importing the file under
+another id (`--id`):
+
+```
+import into hana.r2d.json (dry run): 1 animation (idle; replaced: idle)
+  idle.motion3.json  motion3
+dry run: nothing written; without --dry-run this would write hana.r2d.json
+report: 3 warnings, 4 info
+warnings:
+  ...
+  live2d-animation-replaced    idle.motion3.json: animation "idle" already exists and was not written by a Live2D import: the imported animation replaces it (its tracks and events are no longer in the model)  → to keep it, rename it first ({"op":"rename","kind":"animation","from":"idle","to":"idle_own"}) and import again, or give a single motion3 / exp3 file another animation id (CLI --id, MCP id)
+info:
+  ...
+```
+
+`--json`: `{ok, file, written, dryRun, changed, sources: [{file, kind, via?}], summary: {animations,
+replaced, physics, removedPhysics, updates}, files: [{path, status}] (the model when written),
+results (per op, as in rev2d ops), diagnostics (validation of the result), report}`.
+
+```sh
+rev2d import live2d idle.motion3.json --into hana.r2d.json
+rev2d import live2d Hiyori/hiyori.model3.json --into hana.r2d.json --physics merge --dry-run
+rev2d import live2d F01.exp3.json --into hana.r2d.json --id smile --param-map map.json
+```
+
+### rev2d export spine
+
+```
+rev2d export spine <model> -o <dir> [--anim ids] [--fps n] [--texture-scale n] [--param-poses] [--name base]
+                   [--tolerance n] [--max-page-size px] [--spine-version v] [--straight-alpha] [--json]
+```
+
+Writes `<base>.json` (a Spine 4.x skeleton), `<base>.atlas` and its PNG pages into the directory
+(created; files of an earlier export are replaced, and the file list says which ones changed). Each
+visible part becomes a slot with a textured mesh (its paint rasterized), warps become grids of bones
+with exactly weighted meshes, shape changes deform timelines; parameters, bindings, physics and IK
+are **baked** into the sampled animations. The pages have premultiplied alpha (`pma: true`), which
+Spine runtimes expect.
+
+| Flag | Meaning |
+| --- | --- |
+| `-o, --out <dir>` | output directory (required) |
+| `--anim <ids>` | animations to export, comma list or repeated (default: all; did-you-mean on typos) |
+| `--fps <n>` | sampling rate of the baked motion (default 30); key times are sampled too and fast motion is refined |
+| `--texture-scale <n>` | raster scale of the part textures (default 1; 2 = crisper vector parts) |
+| `--param-poses` | also export every bound parameter's min and max pose as one-frame animations `param/<id>/min`, `param/<id>/max` |
+| `--name <base>` | base file name (default: `meta.name`) |
+| `--tolerance <n>` | key reduction tolerance in px and degrees (default 0.05; 0 keeps every sampled key) |
+| `--max-page-size <px>` | largest atlas page side (default 2048) |
+| `--spine-version <v>` | version written to `skeleton.spine` (default `4.2.00`; `4.0.x` uses the 4.0 deform layout) |
+| `--straight-alpha` | straight-alpha pages instead (configure the runtime with premultiplied alpha off) |
+
+```
+exported hero.r2d.json to Spine in out/hero-spine: 16 bones, 28 slots, 4 animations, 1 atlas page
+  out/hero-spine/hero.json   220.4 kB  new
+  out/hero-spine/hero.atlas  1.1 kB    new
+  out/hero-spine/hero.png    37.9 kB   new
+report: 0 warnings, 6 info
+info:
+  spine-root-renamed        bones: the synthetic Spine root bone is "rev2d-root" because a Rev2D bone is already called "root"
+  ...
+  spine-ik-baked            ik: 1 IK constraint(s) are baked into the bone rotations of every animation and exported with mix 0 ...
+  ...
+stats: animations 4, attachments 27, bones 16, ..., keys 560, keysSampled 4967, ..., slots 28
+next: load out/hero-spine/hero.json with its atlas in a Spine runtime or the Spine editor (Import Data); the pages have premultiplied alpha (pma: true)
+```
+
+`--json`: `{ok, file, dir, files: [{path, status: new | replaced | unchanged, bytes}], report}`.
+
+```sh
+rev2d export spine hero.r2d.json -o out/hero-spine
+rev2d export spine hero.r2d.json -o out/hero-spine --anim idle,walk --texture-scale 2 --param-poses
+```
+
+### rev2d export live2d
+
+```
+rev2d export live2d <model> -o <dir> [--anim ids] [--param-map standard|none|prefix|map.json] [--fps n] [--name base]
+                    [--tolerance n] [--json]
+```
+
+Writes `motions/<id>.motion3.json` for every animation, `<base>.physics3.json` (when the model has
+physics; an approximation), `<base>.cdi3.json` (parameter names and groups) and a partial
+`<base>.model3.json` that lists them (no `Moc`, no `Textures`). The files drive a Live2D model built
+in Cubism Editor whose parameter ids match (`--param-map`): copy them into its folder and merge the
+model3.json `FileReferences` into its own. Eases are written as exact Bézier segments where Live2D can
+express them and fitted within the tolerance otherwise (both reported); tracks a motion3 cannot hold
+(bones, shapes) are reported.
+
+| Flag | Meaning |
+| --- | --- |
+| `-o, --out <dir>` | output directory (required) |
+| `--anim <ids>` | animations to export (default: all) |
+| `--param-map <spec>` | as for `import live2d` |
+| `--fps <n>` | `Meta.Fps` and the rate where curves must be sampled (default 30) |
+| `--name <base>` | base name of the physics3 / cdi3 / model3 files (default: `meta.name`) |
+| `--tolerance <n>` | allowed error of fitted eases, as a fraction of each segment's change (default 0.001) |
+
+`--json`: `{ok, file, dir, files: [{path, status, bytes}], report}`.
+
+```sh
+rev2d export live2d hana.r2d.json -o out/hana-live2d
+rev2d export live2d hana.r2d.json -o out/motions --anim idle,talk --param-map map.json --json
+```
+
 ### Live editing
 
 ### rev2d watch
@@ -1099,7 +1329,7 @@ rev2d docs [topic] [--json]
 Prints bundled documentation verbatim (Markdown). Topics: `spec` (docs/SPEC.md), `ops`
 (docs/OPS.md), `cli` (this file), `mcp` (docs/MCP.md), `agents` (docs/AGENTS.md or AGENTS.md),
 `recipes` (docs/RECIPES.md: one ops batch per technique, each with the commands that verify it),
-`architecture` (docs/ARCHITECTURE.md: modules, evaluation pipeline, renderer, editor, MCP),
+`interop` (docs/INTEROP.md: Spine and Live2D import / export), `architecture` (docs/ARCHITECTURE.md: modules, evaluation pipeline, renderer, editor, MCP),
 `examples` (examples/README.md). Without a topic, lists them and whether each is installed; the
 `recipes` description names every recipe, read from the numbered `## N. Name: ...` headings of the
 installed docs/RECIPES.md, so it never drifts from the file (`22 recipes: starter model, head turn,
@@ -1169,6 +1399,30 @@ interface FileListing {
 }
 interface OpenResult { file: string; text: string; mtimeMs: number; notes: string[] }
 interface TemplateInfo { name: string; description: string }
+
+// Interop (src/node/interop.ts)
+interface Live2dImportRequest {
+  files: Array<{ name: string; text: string }>;   // .model3 / .motion3 / .exp3 / .physics3 / .cdi3 .json
+  doc?: object;                                   // the model to import into (default: the open file)
+  paramMap?: 'standard' | 'none' | 'prefix' | Record<string, string>;
+  id?: string; physics?: 'replace' | 'merge' | 'skip'; displayInfo?: 'fill' | 'overwrite' | 'skip';
+  motions?: boolean; expressions?: boolean;
+}
+interface Live2dImportResponse {
+  ok: boolean; changed: boolean; doc: object;     // the resulting model (not written)
+  results: OpResult[]; diagnostics: Diagnostic[]; report: InteropReport;
+  summary: { animations: string[]; replaced: string[]; physics: string[]; removedPhysics: string[]; updates: number };
+  sources: Array<{ file: string; kind: 'model3' | 'motion3' | 'exp3' | 'physics3' | 'cdi3'; via?: string }>;
+}
+interface ExportRequest {
+  format: 'spine' | 'live2d';
+  dir?: string;                                   // default exports/<model file name>-spine | -live2d
+  doc?: object;                                   // default: the open file
+  overwrite?: boolean; animations?: string[]; fps?: number; name?: string; tolerance?: number;
+  textureScale?: number; paramPoses?: boolean; premultipliedAlpha?: boolean;   // spine
+  paramMap?: 'standard' | 'none' | 'prefix' | Record<string, string>;          // live2d
+}
+interface ExportResponse { dir: string; files: Array<{ path: string; status: 'new' | 'replaced' | 'unchanged'; bytes: number }>; report: InteropReport; notes: string[] }
 ```
 
 Because `params` already hold the physics results the human sees, `editor screenshot` renders the
@@ -1200,7 +1454,9 @@ must resolve inside it, else **403** with a hint):
 | `POST /api/new` | `{file, template?, name?, width?, height?, overwrite?}` | `OpenResult`; creates parent directories, copies example textures, appends `.r2d.json` to a bare name; 409 when the file (or a different texture file) exists without `overwrite` |
 | `POST /api/save-as` | `{file, doc? \| text?, overwrite?}` | `OpenResult`; writes the doc (or the open file as it is on disk), rewriting relative texture paths for the new location; 409 when the file exists without `overwrite` |
 | `POST /api/close` | | `WorkspaceInfo` (no model open) |
-| `POST /api/import` | `{dir?, files: [{name, text? \| base64?}], overwrite?}` | `OpenResult`; one model plus PNG textures written into `dir`; invalid JSON / non-models are refused with 422 and diagnostics, different existing files with 409, nothing is written on any error |
+| `POST /api/import` | `{dir?, files: [{name, text? \| base64?}], overwrite?}` | `OpenResult`; one model plus PNG textures written into `dir`; invalid JSON / non-models are refused with 422 and diagnostics, different existing files with 409, nothing is written on any error. A **Spine skeleton** JSON with its `.atlas` (text) and PNG pages is converted into `<skeleton name>.r2d.json` + `textures/` and opened; the answer adds `report` (the conversion report) and the notes summarize it |
+| `POST /api/live2d-import` | `Live2dImportRequest` | `Live2dImportResponse`: the Live2D files converted into ops and applied to `doc` (or the open file), validated, **not written**: the editor writes the resulting `doc` with `PUT /api/model {doc, baseMtimeMs}` as one undoable edit. A model3.json finds the files it lists among `files` by path, else by file name. 400 bad options, 422 files that are not Live2D JSON |
+| `POST /api/export` | `ExportRequest` | `ExportResponse`: `doc` (or the open file) exported into `dir` inside the workspace root; 422 with diagnostics when the model has errors, 400 unknown animations, 409 `{error, hint, files}` when different files exist without `overwrite` |
 | `GET /api/download` | | the open model file with `Content-Disposition: attachment` |
 
 While no model is open, the endpoints that need one (`/api/model`, `/api/texture/:id`,

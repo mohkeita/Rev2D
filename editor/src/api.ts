@@ -18,8 +18,14 @@ import type {
   TemplateInfo,
   WorkspaceInfo,
 } from '../../src/node/editor-registry.js';
+import type { ExportRequest, ExportResponse, Live2dImportRequest, Live2dImportResponse } from '../../src/node/interop.js';
+import type { InteropReport } from '../../src/interop/types.js';
 
 export type { EditorCommand, EditorState, FileEntry, FileListing, ImportRequest, NewRequest, OpenResult, SaveAsRequest, TemplateInfo, WorkspaceInfo };
+export type { ExportRequest, ExportResponse, InteropReport, Live2dImportRequest, Live2dImportResponse };
+
+/** POST /api/import answer: a Spine export converted on the way carries its conversion report. */
+export type ImportResult = OpenResult & { report?: InteropReport };
 
 export interface ModelFile {
   /** Absolute path of the model file on the server. */
@@ -282,8 +288,25 @@ export async function saveAs(req: SaveAsRequest): Promise<OpenResult> {
   return openResult(await postJson<Partial<OpenResult>>('/api/save-as', req, 'POST /api/save-as', { exists: true }), 'POST /api/save-as');
 }
 
-export async function importFiles(req: ImportRequest): Promise<OpenResult> {
-  return openResult(await postJson<Partial<OpenResult>>('/api/import', req, 'POST /api/import', { exists: true }), 'POST /api/import');
+export async function importFiles(req: ImportRequest): Promise<ImportResult> {
+  const body = await postJson<Partial<ImportResult>>('/api/import', req, 'POST /api/import', { exists: true });
+  const report = body?.report;
+  const valid = !!report && Array.isArray(report.issues) && typeof report.stats === 'object';
+  return { ...openResult(body, 'POST /api/import'), ...(valid ? { report } : {}) };
+}
+
+/** Convert Live2D files into the editor's document; nothing is written (the answer holds the resulting doc). */
+export async function live2dImport(req: Live2dImportRequest): Promise<Live2dImportResponse> {
+  const body = await postJson<Live2dImportResponse>('/api/live2d-import', req, 'POST /api/live2d-import');
+  if (!body || typeof body.ok !== 'boolean' || !body.report) throw new ApiRequestError('POST /api/live2d-import returned an unexpected body', 200);
+  return body;
+}
+
+/** Export the model into a workspace folder (409 FileExistsError when different files are there). */
+export async function exportModel(req: ExportRequest): Promise<ExportResponse> {
+  const body = await postJson<ExportResponse>('/api/export', req, 'POST /api/export', { exists: true });
+  if (!body || !Array.isArray(body.files) || !body.report) throw new ApiRequestError('POST /api/export returned an unexpected body', 200);
+  return body;
 }
 
 export async function closeModel(): Promise<void> {

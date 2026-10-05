@@ -102,7 +102,7 @@ with `InMemoryTransport`). Both live in `src/mcp/server.ts`.
 | --- | --- | --- |
 | `rev2d_guide` | — | Quickstart for AI authors: conventions, workflow, address grammar, op recipes (head turn with `bind_warp`, blink, physics hair, idle), pitfalls. **Call first.** |
 | `rev2d_schema` | `name?` | JSON Schema of the model, or of one sub-schema (`Part`, `Shape`, `Binding`, `Animation`, `Physics`, ...; case-insensitive). |
-| `rev2d_docs` | `topic`: `spec` \| `ops` \| `cli` \| `mcp` \| `recipes` \| `architecture` \| `examples` \| `agents` | The documentation file for the topic (`recipes` = docs/RECIPES.md, copy-paste op batches with their checks; the tool description lists every recipe by name; `architecture` = docs/ARCHITECTURE.md); `examples` lists every template with its parameters and animations; `agents` is AGENTS.md (the quickstart when an installation has none). |
+| `rev2d_docs` | `topic`: `spec` \| `ops` \| `cli` \| `mcp` \| `recipes` \| `interop` \| `architecture` \| `examples` \| `agents` | The documentation file for the topic (`recipes` = docs/RECIPES.md, copy-paste op batches with their checks; the tool description lists every recipe by name; `interop` = docs/INTEROP.md, Spine and Live2D import / export; `architecture` = docs/ARCHITECTURE.md); `examples` lists every template with its parameters and animations; `agents` is AGENTS.md (the quickstart when an installation has none). |
 | `rev2d_validate` | `path` | One line per diagnostic + JSON `{ok, file, errors, warnings, diagnostics}`; `isError` when the model has errors. |
 | `rev2d_info` | `path` | Outline (parameters and what they drive, bone tree, warps, parts, bindings, IK, physics, animations) + the same as JSON. |
 | `rev2d_render` | `path`, pose, `overlay?`, `only?` + `onlyChain?` (overlay focus on these bone/warp/part ids), `scale?`, `viewBox?` (`"fit"` or `[x,y,w,h]`), `padding?`, `background?`, `save_to?` | PNG + summary: image size, viewBox, scale, non-default params, visible and hidden parts, events, IK reach per constraint (`IK: armIk extension 1.08 (out of reach: misses the target by 12 px)`; otherwise `reaches the target`, `within reach; softness keeps the tip 2 px short` or, for a one-bone constraint, `one bone aiming at the target`) and `note:` lines for problems: IK targets out of reach or chains nearly straight (snap risk), physics outputs clamped to their parameter range, visible parts entirely outside the view (only when the view box is the canvas: an explicit crop leaves parts out on purpose) and nothing visible in the view box. |
@@ -116,6 +116,8 @@ with `InMemoryTransport`). Both live in `src/mcp/server.ts`.
 | `rev2d_editor_state` | `model?`, `url?` | What the human sees in a running editor: the model it has open and its workspace root (or that no model is open: start screen, with the recent files), time, playing, animation layers (as layer strings you can pass back, e.g. `["idle","blink,add,once,start=1"]`), non-default params, the params the human pinned (explicit values that beat animation and physics), physics toggle, selection, overlay, hidden parts, view; full state as JSON. |
 | `rev2d_editor_command` | `command`, `model?`, `url?` | Sends `setParams`, `play`, `pause`, `seek`, `setAnimations` (layers with `weight`, `mode`, `start`, `hold`), `select`, `setOverlay`, `focus`, `reload` or `message` to the editor tabs; ids and layer options are checked against the model first. `{type: "open", file}` switches the editor to another model of its workspace (the tabs follow). |
 | `rev2d_editor_screenshot` | `model?`, `url?`, `overlay?`, `scale?`, `viewBox?` | PNG of exactly what the editor shows (rendered by the editor server from its current state) + the state summary. |
+| `rev2d_import` | `format` (`"spine"` \| `"live2d"`), `path` (a skeleton .json; or Live2D file(s)), spine: `out?`, `atlas?`, `skin?`, `scale?`, `padding?`, `name?`, `overwrite?`; live2d: `into`, `param_map?`, `id?`, `physics?`, `display_info?`, `motions?`, `expressions?`, `dry_run?` | Spine: a new model (+ `textures/`) with its conversion report; Live2D: ops applied to `into` atomically. Text: summary, files, report lines; JSON `{ok, file, files, report, ...}`. See below. |
+| `rev2d_export` | `format`, `path`, `out_dir`, `animations?`, `fps?`, `name?`, `tolerance?`; spine: `texture_scale?`, `param_poses?`, `max_page_size?`, `spine_version?`, `premultiplied_alpha?`; live2d: `param_map?` | Spine JSON + atlas + PNG pages, or Live2D motion3 / physics3 / cdi3 / model3 JSON, in `out_dir`; each file new / replaced / unchanged; the report. |
 
 "pose" = `time?` (seconds), `animations?` (layer strings or objects, see Conventions),
 `params?` (`{"AngleX": 30}`, beat animation and physics), `physics?` (default on when the model has
@@ -137,6 +139,35 @@ carries one example per op and `rev2d_docs {topic: "ops"}` the full catalogue.
   refuses to overwrite a file that another program (the editor, a human) saved while it was running.
 - **`render_after`** renders the result (with `dry_run`: a preview). A render problem, e.g. an unknown
   parameter in its options, is reported as text; it never hides that the edit was written.
+
+### Spine and Live2D: `rev2d_import`, `rev2d_export`
+
+Conversions from and to the public JSON formats of Spine and Live2D Cubism; what is converted and
+how is in [INTEROP.md](INTEROP.md) (`rev2d_docs {topic: "interop"}`). Every result carries the
+**report**: each approximated or dropped feature with a stable `code`, a `where` in the source data
+and a `hint`. The text lists up to 80 issues (warnings first); the JSON block has all of them as
+`report: {format, direction, issues, stats}`.
+
+- **Spine import** (`{format: "spine", path: "hero/hero.json", out: "models/hero.r2d.json"}`): reads
+  the skeleton (3.8 - 4.2 JSON), its atlas (`atlas`, default found next to it) and PNG pages, writes
+  a new model and its pages in `textures/` next to it, and validates it. Refuses to replace an
+  existing `out` unless `overwrite: true`.
+- **Live2D import** (`{format: "live2d", path: ["idle.motion3.json", "F01.exp3.json"], into: "hana.r2d.json"}`):
+  motions become animations, expressions `exp_<name>` animations for `add` layering, physics3
+  physics groups (`physics`: replace / merge / skip), cdi3 names (`display_info`), a model3.json
+  everything it lists. Applied as ops, atomically, like `rev2d_apply_ops` (`dry_run` reports without
+  writing). An animation with the same id is replaced: the report has a **warning**
+  (`live2d-animation-replaced`) when that animation was made in Rev2D rather than by an earlier
+  Live2D import, so run with `dry_run` first on a model the human cares about, and rename the
+  animation (`rename` op) or pass `id` to keep it. The `.moc3` model binary is proprietary and never
+  read: the model's own rig stays.
+- **Exports** (`{format: "spine" | "live2d", path, out_dir}`) write into `out_dir` (files of an
+  earlier export are replaced; the result says which files changed). Spine exports bake parameters,
+  warps, physics and IK into the animations; Live2D exports need a Live2D model whose parameter ids
+  match `param_map` (`"standard"` by default: `AngleX` <-> `ParamAngleX`, `MouthOpen` <->
+  `ParamMouthOpenY`, ...; or `"none"`, `"prefix"`, an object, a JSON file).
+- Options of the other format are refused with a hint (`into` with `format: "spine"`,
+  `texture_scale` with `format: "live2d"`), as are unknown animation ids (did-you-mean).
 
 ### Editor bridge
 
@@ -197,6 +228,7 @@ editor, so the human sees every edit.
 | `rev2d://docs/spec` | docs/SPEC.md |
 | `rev2d://docs/ops` | docs/OPS.md (or the op catalogue compiled into the ops module) |
 | `rev2d://docs/recipes` | docs/RECIPES.md |
+| `rev2d://docs/interop` | docs/INTEROP.md |
 | `rev2d://schema` | JSON Schema of a model file. |
 
 ## Example session

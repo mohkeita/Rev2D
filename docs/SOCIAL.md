@@ -18,8 +18,11 @@ the `rev2d docs` command does not serve it.
 | `hero.gif` | 8 s loop, 720×540 | 3.8 MB | Post 4 alternative (a GIF loops without a play button) |
 | `poster.png` | 1280×720 | 0.2 MB | Optional image for post 5, and the GitHub social preview |
 
-`poster.png` and the end of `rev2d-demo.mp4` show the test count at capture time (1,351). The
-posts say "1,350+" so they agree with the media and stay true as tests are added.
+`poster.png` and the end of `rev2d-demo.mp4` show the counts at capture time: 1,351 tests, 19 CLI
+commands, 16 MCP tools. The posts say "1,350+" tests so they agree with the media and stay true as
+tests are added. Their command and tool counts are the current ones (21 and 18: `import` / `export`
+and `rev2d_import` / `rev2d_export` came later), so they no longer match the numbers on the poster;
+capture the media again (`scripts/video/`) before posting if the two should agree.
 
 ## English thread
 
@@ -76,11 +79,11 @@ textured carp streamers fluttering on a pole.
 ### 5/5 · no media (or `poster.png`)
 
 ```text
-Plug it into Claude Code (16 MCP tools):
+Plug it into Claude Code (18 MCP tools):
 
 claude mcp add rev2d -- node /path/to/Rev2D/bin/rev2d.js mcp
 
-Plus a 19-command CLI, a live web editor with a File menu, and 1,350+ tests. v0.1, Node 22+. Feedback welcome!
+Plus a 21-command CLI, a live web editor with a File menu, and 1,350+ tests. v0.1, Node 22+. Feedback welcome!
 
 https://github.com/RevStudio/Rev2D
 ```
@@ -138,11 +141,11 @@ unknown parent "bodyWarpp" → did you mean "bodyWarp"?
 ### 5/5 · 미디어 없음 (또는 `poster.png`)
 
 ```text
-Claude Code에 연결하면 MCP 도구 16개를 쓸 수 있습니다:
+Claude Code에 연결하면 MCP 도구 18개를 쓸 수 있습니다:
 
 claude mcp add rev2d -- node /path/to/Rev2D/bin/rev2d.js mcp
 
-CLI 명령 19개, 파일 메뉴가 있는 라이브 웹 에디터, 테스트 1,350개 이상. v0.1, Node 22+. 피드백 환영합니다!
+CLI 명령 21개, 파일 메뉴가 있는 라이브 웹 에디터, 테스트 1,350개 이상. v0.1, Node 22+. 피드백 환영합니다!
 
 https://github.com/RevStudio/Rev2D
 ```
@@ -176,7 +179,7 @@ link counted as a link.
 GitHub allows up to 350 characters.
 
 ```text
-Live2D/Spine-style 2D rigging & animation, built for AI agents. A rig is one JSON file; a deterministic headless renderer, a CLI and an MCP server (16 tools) let an agent author, render, measure and fix it, and a live web editor lets the AI see and drive what you are looking at.
+Live2D/Spine-style 2D rigging & animation, built for AI agents. A rig is one JSON file; a deterministic headless renderer, a CLI and an MCP server (18 tools) let an agent author, render, measure and fix it, and a live web editor lets the AI see and drive what you are looking at.
 ```
 
 ### Topics

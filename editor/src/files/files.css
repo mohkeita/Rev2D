@@ -1367,3 +1367,137 @@ button.file-chip:hover {
   margin-top: 2px;
   color: var(--text-2);
 }
+
+/* ------------------------------------------------------------------------------------------ interop */
+
+.menu-sub-short {
+  min-width: 190px;
+}
+
+.import-file.is-atlas .icon {
+  color: var(--kind-texture);
+}
+
+.tag-warning {
+  background: rgba(240, 180, 41, 0.18);
+  color: #ffd166;
+}
+
+.field-label-actions {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+.export-anims {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 96px;
+  overflow: auto;
+}
+
+.export-anims .toggle {
+  height: 24px;
+}
+
+.export-option {
+  align-self: flex-start;
+  height: auto;
+  min-height: 26px;
+}
+
+/* The conversion report: counts, then the issues (warnings first) in a scrolling list. */
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.report-counts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.report-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(340px, calc(100vh - 360px));
+  min-height: 60px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-0);
+}
+
+.report-issue {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.report-issue + .report-issue,
+.report-toggle + .report-issue {
+  border-top: 1px solid var(--line);
+}
+
+.report-issue > .icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-2);
+}
+
+.report-issue.is-warning > .icon {
+  color: #ffd166;
+}
+
+.report-issue-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.report-issue-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.report-code {
+  font: 11px var(--mono);
+  color: var(--text-0);
+}
+
+.report-where {
+  font: 11px var(--mono);
+  color: var(--text-2);
+}
+
+.report-message {
+  color: var(--text-1);
+}
+
+.report-hint {
+  color: var(--text-2);
+}
+
+.report-toggle {
+  padding: 6px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.report-stats {
+  margin: 0;
+  font: 10.5px var(--mono);
+  overflow-wrap: anywhere;
+}

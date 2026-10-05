@@ -59,6 +59,10 @@ export const DOC_TOPICS: Record<string, DocTopic> = {
   mcp: { files: ['docs/MCP.md'], description: 'MCP server tools for AI agents ("rev2d mcp")' },
   agents: { files: ['docs/AGENTS.md', 'AGENTS.md'], description: 'guide for AI agents authoring Rev2D models' },
   recipes: { files: ['docs/RECIPES.md'], description: RECIPES_SUMMARY, describe: recipesDescription },
+  interop: {
+    files: ['docs/INTEROP.md'],
+    description: 'Spine and Live2D import / export: support matrix, coordinate conversion, parameter map, limitations (.moc3 is not supported), workflows',
+  },
   architecture: { files: ['docs/ARCHITECTURE.md'], description: 'how Rev2D is built: modules, evaluation pipeline, renderer, editor, MCP' },
   examples: {
     files: ['examples/README.md'],
@@ -146,7 +150,7 @@ async function readTopic(topic: DocTopic): Promise<{ text: string; path: string 
 export const docs: Command = {
   name: 'docs',
   group: 'reference',
-  summary: 'print bundled documentation (spec, ops, cli, mcp, agents, recipes, architecture, examples)',
+  summary: 'print bundled documentation (spec, ops, cli, mcp, agents, recipes, interop, architecture, examples)',
   usage: 'docs [topic] [--json]',
   args: ['[topic]'],
   flags: [],
@@ -154,7 +158,7 @@ export const docs: Command = {
   description: [
     'Without a topic, lists the topics with their installed file and a description ("recipes" lists every recipe heading of docs/RECIPES.md). The text is printed verbatim (Markdown). "ops" falls back to the op catalogue built into rev2d, and "examples" always ends with the list of templates.',
   ],
-  examples: ['rev2d docs', 'rev2d docs spec', 'rev2d docs ops', 'rev2d docs recipes'],
+  examples: ['rev2d docs', 'rev2d docs spec', 'rev2d docs ops', 'rev2d docs recipes', 'rev2d docs interop'],
   async run(ctx) {
     const topic = ctx.args.positionals[0];
     const names = Object.keys(DOC_TOPICS);

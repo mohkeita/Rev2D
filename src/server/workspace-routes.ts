@@ -1,6 +1,7 @@
 /**
  * Workspace endpoints of the editor protocol (file management; see the "workspace" section of
- * src/node/editor-registry.ts): list, open, new, save as, close, import, download and templates.
+ * src/node/editor-registry.ts): list, open, new, save as, close, import (Rev2D models, and Spine exports
+ * converted on the way), download and templates.
  * Every request path goes through WorkspaceRoot, so nothing outside the workspace root is read or
  * written. Operations that switch the open model run one at a time (ApiContext.exclusive).
  */
@@ -13,6 +14,9 @@ import { formatModelJson } from '../core/format.js';
 import { parseJsonc, parseModelText } from '../core/validate.js';
 import type { OpenResult, WorkspaceInfo } from '../node/editor-registry.js';
 import { BUILTIN_TEMPLATES, EXAMPLES_DIR, listTemplates, loadTemplate } from '../api/templates.js';
+import { isAtlasName, looksLikeSpineSkeleton } from '../interop/detect.js';
+import type { InteropReport } from '../interop/types.js';
+import { InteropError, countsText, importSpineUpload, issueLine, spineModelText } from '../node/interop.js';
 import { HttpError, readJson, sendJson } from './http.js';
 import { ModelStore } from './model-store.js';
 import { parseImportRequest, parseNewRequest, parseOpenRequest, parseSaveAsRequest } from './protocol.js';
@@ -283,11 +287,92 @@ interface ImportFile {
   abs?: string;
 }
 
+/** Warning lines of a conversion report shown in the import notes (the answer's `report` has all). */
+const REPORT_NOTE_LINES = 6;
+
+/**
+ * Write `files` into the import folder `dir`: files identical to what is there are fine, different
+ * ones are refused (409 naming them) unless `overwrite`; nothing is written when any check fails.
+ * The caller holds ctx.exclusive.
+ */
+async function writeImport(ctx: ApiContext, dir: string, files: ImportFile[], overwrite: boolean | undefined, notes: string[]): Promise<ImportFile[]> {
+  const written: ImportFile[] = [];
+  const clashes: string[] = [];
+  for (const f of files) {
+    f.abs = await ctx.root.resolveNew(path.join(dir, ...f.segments), 'files');
+    const st = await stat(f.abs).catch(() => null);
+    if (st?.isDirectory()) throw new HttpError(400, `${ctx.root.rel(f.abs)} is a directory`, 'rename the file, or import into another directory');
+    const current = st ? await readFile(f.abs).catch(() => null) : null;
+    if (current?.equals(f.bytes)) notes.push(`${ctx.root.rel(f.abs)} is already there (identical)`);
+    else if (current && !overwrite) clashes.push(ctx.root.rel(f.abs));
+    else written.push(f);
+  }
+  if (clashes.length) {
+    throw new HttpError(409, `files already exist: ${clashes.join(', ')}; nothing was imported`, 'pass "overwrite": true to replace them, or import into another directory ("dir")');
+  }
+  for (const f of written) await writeOut(ctx, f.abs!, f.bytes);
+  return written;
+}
+
+/**
+ * A Spine export (skeleton JSON + atlas + PNG pages) among the imported files: converted into
+ * <skeleton name>.r2d.json with its pages in textures/, written into the import folder and opened.
+ * The answer carries the conversion report; the notes summarize it.
+ */
+async function importSpineExport(
+  ctx: ApiContext,
+  r: { dir?: string; overwrite?: boolean },
+  skeleton: ImportFile,
+  atlases: ImportFile[],
+  images: ImportFile[],
+  notes: string[],
+): Promise<OpenResult & { report: InteropReport }> {
+  let conv: ReturnType<typeof importSpineUpload>;
+  try {
+    conv = importSpineUpload(
+      { name: skeleton.name, text: stripBom(skeleton.bytes.toString('utf8')) },
+      atlases.map((a) => ({ name: a.name, text: stripBom(a.bytes.toString('utf8')) })),
+      images.map((i) => ({ name: i.name, bytes: i.bytes })),
+    );
+  } catch (e) {
+    if (e instanceof InteropError) throw new HttpError(e.kind === 'usage' ? 400 : 422, `${e.message}; nothing was imported`, e.hint);
+    throw e;
+  }
+  const stem = skeleton.segments[skeleton.segments.length - 1].replace(/\.jsonc?$/i, '') || 'spine';
+  const modelSegments = [...skeleton.segments.slice(0, -1), `${stem}.r2d.json`];
+  const modelFile: ImportFile = { name: modelSegments.join('/'), segments: modelSegments, bytes: Buffer.from(spineModelText(conv.doc), 'utf8') };
+  const textures: ImportFile[] = conv.files.map((f) => {
+    const segments = [...skeleton.segments.slice(0, -1), ...f.path.split('/')];
+    for (const seg of segments) checkNameSegment(seg, 'a converted texture name');
+    return { name: segments.join('/'), segments, bytes: Buffer.from(f.bytes ?? Buffer.from(f.text ?? '', 'utf8')) };
+  });
+  return ctx.exclusive(async () => {
+    const dir = await ctx.root.resolveNew(r.dir ?? '', 'dir');
+    const dirShown = ctx.root.rel(dir);
+    const dirStat = await stat(dir).catch(() => null);
+    if (dirStat && !dirStat.isDirectory()) throw new HttpError(400, `${dirShown} is a file, not a directory`, 'import into a directory ("dir" relative to the workspace root)');
+    const own: string[] = [];
+    const written = await writeImport(ctx, dir, [modelFile, ...textures], r.overwrite, own);
+    const stats = conv.report.stats;
+    const warnings = conv.report.issues.filter((i) => i.severity === 'warning');
+    const head = [
+      `imported Spine skeleton ${skeleton.name} as ${ctx.root.rel(modelFile.abs!)}: ${plural(stats.bones ?? 0, 'bone')}, ${plural(stats.parts ?? 0, 'part')}, ${plural(stats.animations ?? 0, 'animation')}`,
+      `conversion report: ${countsText(conv.report)}`,
+      ...warnings.slice(0, REPORT_NOTE_LINES).map((w) => issueLine(w)),
+      ...(warnings.length > REPORT_NOTE_LINES ? [`... ${warnings.length - REPORT_NOTE_LINES} more warnings in the conversion report`] : []),
+    ];
+    const tail = [...conv.notes, ...notes, ...own, written.length ? `wrote ${written.map((f) => ctx.root.rel(f.abs!)).join(', ')}` : 'nothing new was written'];
+    const { result } = await openModel(ctx, modelFile.abs!, 'editor', [...head, ...tail]);
+    return { ...result, report: conv.report };
+  });
+}
+
 export async function postImport(ctx: ApiContext, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const r = parseImportRequest(await readJson(req, ctx.maxImportBytes));
   const notes: string[] = [];
   const models: ImportFile[] = [];
   const images: ImportFile[] = [];
+  const atlases: ImportFile[] = [];
   const seen = new Set<string>();
   r.files.forEach((f, i) => {
     const segments = f.name.split('/');
@@ -303,15 +388,17 @@ export async function postImport(ctx: ApiContext, req: IncomingMessage, res: Ser
         throw new HttpError(422, `${f.name} is not a PNG file; nothing was imported`, 'only PNG textures are supported');
       }
       images.push({ name: f.name, segments, bytes });
+    } else if (isAtlasName(f.name)) {
+      atlases.push({ name: f.name, segments, bytes });
     } else {
-      notes.push(`skipped ${f.name}: only a model (.json) and PNG textures are imported`);
+      notes.push(`skipped ${f.name}: only a model (.json) with its PNG textures, or a Spine export (.json + .atlas + PNG pages), is imported`);
     }
   });
   if (models.length !== 1) {
     throw new HttpError(
       400,
       models.length ? `import one model at a time (got ${models.map((m) => m.name).join(', ')})` : 'no model file among the imported files',
-      'send exactly one model file (*.r2d.json or *.json) plus the PNG textures it uses',
+      'send exactly one model file (*.r2d.json or *.json) plus the PNG textures it uses, or one Spine skeleton .json with its .atlas and PNG pages',
     );
   }
   const model = models[0];
@@ -322,32 +409,25 @@ export async function postImport(ctx: ApiContext, req: IncomingMessage, res: Ser
   const parsed = parseJsonc(stripBom(text));
   if (!parsed.ok) throw new HttpError(422, `${model.name} is not valid JSON; nothing was imported`, 'fix the syntax error (see diagnostics) and import it again', { diagnostics: [parsed.error] });
   if (!isRev2dObject(parsed.value)) {
-    throw new HttpError(422, `${model.name} is not a Rev2D model; nothing was imported`, 'a model file is a JSON object with "format": "rev2d" (see diagnostics)', {
-      diagnostics: errorsOf(parseModelText(text).diagnostics).slice(0, 20),
-    });
+    if (looksLikeSpineSkeleton(parsed.value)) {
+      sendJson(res, 200, await importSpineExport(ctx, r, model, atlases, images, notes));
+      return;
+    }
+    throw new HttpError(
+      422,
+      `${model.name} is not a Rev2D model; nothing was imported`,
+      'a model file is a JSON object with "format": "rev2d" (see diagnostics); a Spine skeleton export (JSON with "skeleton" and "bones") is converted',
+      { diagnostics: errorsOf(parseModelText(text).diagnostics).slice(0, 20) },
+    );
   }
+  for (const a of atlases) notes.push(`skipped ${a.name}: an atlas belongs to a Spine skeleton, and ${model.name} is a Rev2D model`);
 
   const result = await ctx.exclusive(async () => {
     const dir = await ctx.root.resolveNew(r.dir ?? '', 'dir');
     const dirShown = ctx.root.rel(dir);
     const dirStat = await stat(dir).catch(() => null);
     if (dirStat && !dirStat.isDirectory()) throw new HttpError(400, `${dirShown} is a file, not a directory`, 'import into a directory ("dir" relative to the workspace root)');
-    const files = [model, ...images];
-    const written: ImportFile[] = [];
-    const clashes: string[] = [];
-    for (const f of files) {
-      f.abs = await ctx.root.resolveNew(path.join(dir, ...f.segments), 'files');
-      const st = await stat(f.abs).catch(() => null);
-      if (st?.isDirectory()) throw new HttpError(400, `${ctx.root.rel(f.abs)} is a directory`, 'rename the file, or import into another directory');
-      const current = st ? await readFile(f.abs).catch(() => null) : null;
-      if (current?.equals(f.bytes)) notes.push(`${ctx.root.rel(f.abs)} is already there (identical)`);
-      else if (current && !r.overwrite) clashes.push(ctx.root.rel(f.abs));
-      else written.push(f);
-    }
-    if (clashes.length) {
-      throw new HttpError(409, `files already exist: ${clashes.join(', ')}; nothing was imported`, 'pass "overwrite": true to replace them, or import into another directory ("dir")');
-    }
-    for (const f of written) await writeOut(ctx, f.abs!, f.bytes);
+    const written = await writeImport(ctx, dir, [model, ...images], r.overwrite, notes);
     const modelAbs = model.abs!;
     // Textures the model references that are neither imported nor already there.
     const textures = (parsed.value as { textures?: unknown }).textures;
