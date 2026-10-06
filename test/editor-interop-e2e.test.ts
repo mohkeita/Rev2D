@@ -131,7 +131,8 @@ describe.skipIf(!ready)('editor interop end to end (server + built UI + Chrome)'
 
   beforeAll(async () => {
     mkdirSync(SHOTS, { recursive: true });
-    page = await e.browser.newPage({ viewport: { width: 1440, height: 900 } });
+    // The editor follows the browser's language: pin it, the assertions below read English labels.
+    page = await e.browser.newPage({ viewport: { width: 1440, height: 900 }, locale: 'en-US' });
     page.on('pageerror', (err) => pageErrors.push(err.message));
     // Under heavy load Chrome occasionally aborts the first navigation (net::ERR_ABORTED): retry.
     for (let attempt = 1; ; attempt++) {
@@ -172,7 +173,8 @@ describe.skipIf(!ready)('editor interop end to end (server + built UI + Chrome)'
     await page.locator('[data-testid=live2d-dialog]').waitFor({ state: 'detached' });
 
     // Undo takes the whole import back (and writes it).
-    await page.locator('body').click({ position: { x: 700, y: 860 } });
+    // (The focus leaves the dialog's button: undo is a global shortcut of the editor.)
+    await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined));
     await page.keyboard.press('Control+z');
     await expect.poll(() => animationIds().includes('turnHead'), { timeout: 10000 }).toBe(false);
     await page.keyboard.press('Control+y');
@@ -188,8 +190,10 @@ describe.skipIf(!ready)('editor interop end to end (server + built UI + Chrome)'
     await page.locator('[data-testid=export-dialog]').waitFor();
     expect(await page.inputValue('[data-testid=export-dir]')).toBe('exports/robot-spine');
     // Only the wave animation, sampled at 15 fps.
-    await page.click('[data-testid=export-dialog] .field-label-actions >> text=none');
-    await page.click('[data-testid=export-anims] label:has-text("wave")');
+    await page.click('[data-testid=export-anims-none]');
+    await page.click('[data-testid=export-anim-wave]');
+    expect(await page.getAttribute('[data-testid=export-anim-wave]', 'aria-checked')).toBe('true');
+    expect(await page.locator('[data-testid=export-anims] [role=switch][aria-checked=true]').count()).toBe(1);
     await page.fill('[data-testid=export-fps]', '15');
     await shot('export-spine');
     await clickConvert('[data-testid=export-confirm]');
@@ -237,10 +241,11 @@ describe.skipIf(!ready)('editor interop end to end (server + built UI + Chrome)'
     await page.locator('[data-testid=import-dialog]').waitFor();
     await page.locator('[data-testid=import-spine-note]').waitFor();
     const files = await page.textContent('[data-testid=import-files]');
-    expect(files).toContain('Spine skeleton');
-    expect(files).toContain('atlas');
-    expect(files).toContain('page');
-    expect(await page.textContent('[data-testid=import-confirm]')).toBe('Convert and open');
+    // Each picked file is labelled with its role in the conversion.
+    expect(files).toContain('Spine Skeleton');
+    expect(files).toContain('Atlas');
+    expect(files).toContain('Page');
+    expect(await page.textContent('[data-testid=import-confirm]')).toBe('Convert and Open');
     await shot('import-spine');
     await clickConvert('[data-testid=import-confirm]');
     await waitOpen('robot-spine.r2d.json');
@@ -248,7 +253,7 @@ describe.skipIf(!ready)('editor interop end to end (server + built UI + Chrome)'
     expect(s.errors).toBe(0);
     expect(s.draws).toBeGreaterThan(10);
     expect(existsSync(path.join(e.root, 'textures', 'robot.png'))).toBe(true);
-    const toast = page.locator('.toast', { hasText: 'Imported Spine skeleton robot-spine.json as robot-spine.r2d.json' });
+    const toast = page.locator('[data-testid=toast]', { hasText: 'Imported Spine skeleton robot-spine.json as robot-spine.r2d.json' });
     await toast.waitFor({ timeout: 10000 });
     await shot('import-spine-done');
     await toast.locator('button', { hasText: 'Report' }).click();

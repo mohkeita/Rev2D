@@ -1,19 +1,23 @@
 /**
  * File dialogs: Open (workspace browser + recent files), New (template picker + name, canvas size,
  * location), Save As (folder + file name), Import (files picked on the computer + target folder; a
- * Spine export is converted on the way) and the unsaved-changes prompt; the interop dialogs (Live2D
- * import, export to Spine / Live2D, conversion report) live in InteropDialogs.tsx. All are modal
- * (ui/Modal.tsx: Esc cancels, Enter confirms, focus is kept inside). Replacing an existing file
- * always asks first.
+ * Spine export is converted on the way) and the unsaved-changes alert; the interop dialogs (Live2D
+ * import, export to Spine / Live2D, conversion report) live in InteropDialogs.tsx. All are sheets of
+ * the design system (ui/Dialog.tsx: Esc cancels, Enter confirms, the focus is kept inside).
+ * Replacing an existing file always asks first, in an alert on top of the dialog.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { FileEntry } from '../api.js';
+import { AvatarHost } from '../avatar/AvatarHost.js';
+import { Badge, Button, Icon, List, ListRow, ListSection, Spinner, TextField } from '../design/index.js';
+import { useT } from '../i18n/index.js';
 import { useApp, useSession } from '../state/context.js';
 import type { Session } from '../state/session.js';
 import type { FileOpResult } from '../state/session.js';
 import type { UnsavedPrompt } from '../state/app.js';
-import { Icon } from '../ui/icons.js';
-import { Modal } from '../ui/Modal.js';
+import { Dialog, useLingering } from '../ui/Dialog.js';
+import { FieldRow, LinkButton, Notice } from '../ui/kit.js';
+import { ErrorNote, FileRow, PathInfo, ReplaceAlert } from './dialog-parts.js';
 import { FileBrowser } from './FileBrowser.js';
 import { ExportDialog, Live2dDialog, Live2dPicker, ReportDialog } from './InteropDialogs.js';
 import { jsonKind, planImport, spinePageCheck, textureCheck, texturePlacement } from './importing.js';
@@ -31,8 +35,9 @@ import {
   slugify,
   uniqueFileName,
 } from './paths.js';
-import { SIZED_TEMPLATES, shortDescription, templateThumbnail, templateTitle } from './templates.js';
+import { SIZED_TEMPLATES, templateSummary, templateThumbnail, templateTitle } from './templates.js';
 import { useTemplates } from './useTemplates.js';
+import './file-dialogs.css';
 
 /** Folder the last dialog worked in (used when no model is open). */
 let lastDir = '';
@@ -62,45 +67,12 @@ function existsIn(entries: readonly FileEntry[], name: string): boolean {
   return entries.some((e) => e.type !== 'dir' && e.name.toLowerCase() === n);
 }
 
-/** Inline "X already exists. Replace it?" row (`target` may list several files, comma-separated). */
-function ReplaceConfirm({ target, onReplace, onCancel, busy }: { target: string; onReplace(): void; onCancel(): void; busy: boolean }) {
-  const many = target.includes(', ');
-  return (
-    <div className="notice notice-warning replace-confirm" role="alert" data-testid="replace-confirm">
-      <Icon name="warning" />
-      <span>
-        <b className="mono">{target}</b> {many ? 'already exist. Replace them?' : 'already exists. Replace it?'}
-      </span>
-      <span className="replace-actions">
-        <button className="button button-small" onClick={onCancel} disabled={busy}>
-          {many ? 'Keep them' : 'Keep it'}
-        </button>
-        <button className="button button-small button-danger" onClick={onReplace} disabled={busy} data-testid="replace-confirm-yes">
-          Replace
-        </button>
-      </span>
-    </div>
-  );
-}
-
-function ErrorNote({ result }: { result: { error?: string; hint?: string } | null }) {
-  if (!result?.error) return null;
-  return (
-    <div className="notice notice-error" role="alert" data-testid="dialog-error">
-      <Icon name="error" />
-      <span>
-        {result.error}
-        {result.hint && <span className="notice-hint">{result.hint}</span>}
-      </span>
-    </div>
-  );
-}
-
 type Failure = Extract<FileOpResult, { ok: false }>;
 
 // ----------------------------------------------------------------------------- Open
 
-function OpenDialog() {
+function OpenDialog({ open }: { open: boolean }) {
+  const t = useT();
   const session = useSession();
   const { rootName, currentRel, root } = useWorkspaceInfo();
   const recent = useApp((s) => s.workspace?.recent ?? []);
@@ -110,83 +82,84 @@ function OpenDialog() {
   const [failure, setFailure] = useState<Failure | null>(null);
   const close = () => session.closeDialog();
 
-  const open = async (file: string): Promise<void> => {
+  const openFile = async (file: string): Promise<void> => {
     setFailure(null);
     lastDir = dir;
+    // An avatar project's avatar.json opens the project: its built model, or the project alone (Avatar mode).
     const r = await session.openFile(file);
     if (!r.ok && !r.cancelled) setFailure(r);
   };
-  const canOpen = !!selected && isOpenable(selected) && !busy;
+  const openable = !!selected && isOpenable(selected);
+  const canOpen = openable && !busy;
   const recentInRoot = recent
     .map((abs) => ({ abs, rel: root ? relativeToRoot(abs, root) : null }))
     .filter((r): r is { abs: string; rel: string } => r.rel !== null);
 
   return (
-    <Modal
-      title="Open model"
+    <Dialog
+      open={open}
+      title={t('files.open.title')}
       icon="folderOpen"
-      size="wide"
+      size="lg"
       onCancel={close}
-      onConfirm={() => canOpen && void open(selected!.path)}
+      onConfirm={() => canOpen && void openFile(selected!.path)}
       testId="open-dialog"
-      footer={
-        selected ? (
-          <span className="mono ellipsis" title={selected.path}>
-            {selected.path}
-          </span>
-        ) : (
-          <span className="muted">Pick a model file. Double-click or Enter opens it.</span>
-        )
-      }
+      footer={selected ? <span className="ed-dialog-path ed-mono-small" title={selected.path}>{selected.path}</span> : t('files.open.hint')}
       actions={
         <>
-          <button className="button" onClick={close}>
-            Cancel
-          </button>
-          <button className="button button-primary" disabled={!canOpen} onClick={() => void open(selected!.path)} data-testid="open-confirm">
-            {busy ? 'Opening…' : 'Open'}
-          </button>
+          <Button size="lg" onClick={close}>
+            {t('common.cancel')}
+          </Button>
+          <Button size="lg" variant="filled" disabled={!openable} loading={!!busy} onClick={() => canOpen && void openFile(selected!.path)} data-testid="open-confirm">
+            {busy ? t('files.open.opening') : t('common.open')}
+          </Button>
         </>
       }
     >
-      <div className="open-layout">
-        <aside className="open-side" aria-label="Recent files">
-          <div className="side-title">
-            <Icon name="clock" size={13} /> Recent
+      <div className="ed-open">
+        <section className="ed-open-recent" aria-label={t('files.recent.title')}>
+          <div className="ed-open-recent-title">
+            <Icon name="clock" size={14} />
+            <span>{t('files.recent.title')}</span>
           </div>
-          {recentInRoot.length === 0 && <p className="side-empty">Models you open show up here.</p>}
-          {recentInRoot.map((r) => (
-            <button
-              key={r.abs}
-              className={`side-item${currentRel === r.rel ? ' is-current' : ''}`}
-              title={r.rel}
-              onClick={() => void open(r.abs)}
-              disabled={!!busy}
-              data-testid="open-recent-item"
-            >
-              <Icon name="file" size={14} />
-              <span className="side-item-text">
-                <span className="side-item-name">{baseName(r.rel)}</span>
-                <span className="side-item-dir">{dirOf(r.rel) || rootName}</span>
-              </span>
-            </button>
-          ))}
-        </aside>
+          {recentInRoot.length === 0 ? (
+            <p className="ed-open-recent-empty">{t('files.open.recentEmpty')}</p>
+          ) : (
+            <List variant="sidebar" className="ed-open-recent-list r2-scroll">
+              <ListSection>
+                {recentInRoot.map((r) => (
+                  <ListRow
+                    key={r.abs}
+                    icon="file"
+                    iconColor="var(--r2-kind-part)"
+                    title={baseName(r.rel)}
+                    subtitle={dirOf(r.rel) || rootName}
+                    selected={currentRel === r.rel}
+                    disabled={!!busy}
+                    onSelect={() => void openFile(r.abs)}
+                    data-testid="open-recent-item"
+                  />
+                ))}
+              </ListSection>
+            </List>
+          )}
+        </section>
         <FileBrowser
           mode="open"
+          variant="fill"
           dir={dir}
           onDir={setDir}
           selected={selected?.path ?? null}
           onSelect={setSelected}
-          onActivate={(e) => void open(e.path)}
+          onActivate={(e) => void openFile(e.path)}
           rootName={rootName}
           autoFocus
           currentRel={currentRel}
-          className="open-browser"
+          className="ed-open-browser"
         />
       </div>
       <ErrorNote result={failure} />
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -197,7 +170,8 @@ function parseSize(v: string): number | null {
   return v.trim() !== '' && Number.isInteger(n) && n >= 1 && n <= 8192 ? n : null;
 }
 
-function NewDialog({ initialTemplate }: { initialTemplate?: string }) {
+function NewDialog({ open, initialTemplate }: { open: boolean; initialTemplate?: string }) {
+  const t = useT();
   const session = useSession();
   const { rootName, currentRel } = useWorkspaceInfo();
   const busy = useApp((s) => s.fileBusy);
@@ -220,12 +194,14 @@ function NewDialog({ initialTemplate }: { initialTemplate?: string }) {
   const autoFile = uniqueFileName(modelFileName(slugify(name)), entries.map((e) => e.name));
   const effectiveFile = fileTouched ? fileName : autoFile;
   const target = joinPath(dir, modelFileName(effectiveFile));
-  const problem = fileNameProblem(modelFileName(effectiveFile)) ?? (sized && (!parseSize(width) || !parseSize(height)) ? 'Canvas width and height are whole numbers from 1 to 8192.' : null);
+  const nameProblem = fileNameProblem(modelFileName(effectiveFile));
+  const sizeProblem = sized && (!parseSize(width) || !parseSize(height)) ? t('files.new.sizeProblem') : null;
+  const problem = nameProblem ?? sizeProblem;
 
-  const pick = (t: string): void => {
-    setTemplate(t);
+  const pick = (id: string): void => {
+    setTemplate(id);
     setReplace(null);
-    if (!nameTouched) setName(SIZED_TEMPLATES.has(t) ? 'untitled' : t);
+    if (!nameTouched) setName(SIZED_TEMPLATES.has(id) ? 'untitled' : id);
   };
 
   const create = async (overwrite = false): Promise<void> => {
@@ -250,7 +226,7 @@ function NewDialog({ initialTemplate }: { initialTemplate?: string }) {
 
   const list = templates ?? [];
   const onListKey = (e: KeyboardEvent<HTMLDivElement>): void => {
-    const i = list.findIndex((t) => t.name === template);
+    const i = list.findIndex((x) => x.name === template);
     const d = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
     if (!d || !list.length) return;
     e.preventDefault();
@@ -260,147 +236,157 @@ function NewDialog({ initialTemplate }: { initialTemplate?: string }) {
   };
 
   return (
-    <Modal
-      title="New model"
-      icon="fileNew"
-      size="wide"
-      onCancel={() => session.closeDialog()}
-      onEscape={() => (replace ? setReplace(null) : session.closeDialog())}
-      onConfirm={() => void create()}
-      testId="new-dialog"
-      footer={
-        <span className="mono ellipsis" title={target}>
-          <span className="muted">Creates </span>
-          {target}
-        </span>
-      }
-      actions={
-        <>
-          <button className="button" onClick={() => session.closeDialog()}>
-            Cancel
-          </button>
-          <button className="button button-primary" disabled={!!problem || !!busy} onClick={() => void create()} data-testid="new-confirm">
-            {busy ? 'Creating…' : 'Create'}
-          </button>
-        </>
-      }
-    >
-      <div className="new-layout">
-        <div className="template-list" role="radiogroup" aria-label="Template" ref={listRef} onKeyDown={onListKey} data-testid="template-list">
-          {templates === null && <div className="fb-empty">Loading templates…</div>}
-          {templatesError && <div className="fb-empty error-text">Templates unavailable: {templatesError}</div>}
-          {list.map((t) => {
-            const thumb = templateThumbnail(t.name);
-            const on = t.name === template;
-            return (
-              <button
-                key={t.name}
-                role="radio"
-                aria-checked={on}
-                tabIndex={on ? 0 : -1}
-                className={`template-item${on ? ' is-on' : ''}`}
-                onClick={() => pick(t.name)}
-                data-template={t.name}
-                data-testid={`template-${t.name}`}
-              >
-                <span className={`template-thumb${thumb ? '' : ' is-empty'}`}>{thumb ? <img src={thumb} alt="" /> : <Icon name={t.name === 'empty' ? 'plus' : 'model'} size={18} />}</span>
-                <span className="template-text">
-                  <span className="template-name">
-                    {templateTitle(t.name)}
-                    {SIZED_TEMPLATES.has(t.name) ? <span className="tag tag-dim">starter</span> : <span className="tag tag-accent">example</span>}
+    <>
+      <Dialog
+        open={open}
+        title={t('files.new.title')}
+        icon="fileNew"
+        size="lg"
+        onCancel={() => session.closeDialog()}
+        onEscape={() => (replace ? setReplace(null) : session.closeDialog())}
+        onConfirm={() => void create()}
+        testId="new-dialog"
+        footer={<PathInfo label={t('files.new.creates')} path={target} />}
+        actions={
+          <>
+            <Button size="lg" onClick={() => session.closeDialog()}>
+              {t('common.cancel')}
+            </Button>
+            <Button size="lg" variant="filled" disabled={!!problem} loading={!!busy} onClick={() => void create()} data-testid="new-confirm">
+              {busy ? t('files.new.creating') : t('files.new.create')}
+            </Button>
+          </>
+        }
+      >
+        <div className="ed-new">
+          <div className="ed-tpl-list r2-scroll" role="radiogroup" aria-label={t('files.new.template')} ref={listRef} onKeyDown={onListKey} data-testid="template-list">
+            {templates === null && (
+              <div className="ed-tpl-note">
+                <Spinner size={14} />
+                <span>{t('files.new.loadingTemplates')}</span>
+              </div>
+            )}
+            {templatesError && <div className="ed-tpl-note ed-danger-text">{t('files.new.templatesError', { error: templatesError })}</div>}
+            {list.map((tpl) => {
+              const thumb = templateThumbnail(tpl.name);
+              const on = tpl.name === template;
+              const starter = SIZED_TEMPLATES.has(tpl.name);
+              return (
+                <button
+                  key={tpl.name}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  tabIndex={on ? 0 : -1}
+                  className="ed-tpl"
+                  onClick={() => pick(tpl.name)}
+                  title={tpl.description}
+                  data-template={tpl.name}
+                  data-testid={`template-${tpl.name}`}
+                >
+                  <span className="ed-tpl-thumb">{thumb ? <img src={thumb} alt="" /> : <Icon name={tpl.name === 'empty' ? 'plus' : 'model'} size={20} />}</span>
+                  <span className="ed-tpl-text">
+                    <span className="ed-tpl-name">
+                      <span className="ed-ellipsis">{templateTitle(tpl.name)}</span>
+                      <Badge tone={starter ? 'neutral' : 'tint'}>{starter ? t('files.new.starter') : t('files.new.example')}</Badge>
+                    </span>
+                    <span className="ed-tpl-desc">{templateSummary(tpl.name, tpl.description)}</span>
                   </span>
-                  <span className="template-desc">{shortDescription(t.description)}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="new-form">
-          <label className="field">
-            <span className="field-label">Name</span>
-            <input
-              className="text-input"
-              type="text"
+                </button>
+              );
+            })}
+          </div>
+          <div className="ed-new-form">
+            <TextField
+              label={t('files.new.name')}
               value={name}
-              onChange={(e) => {
-                setName(e.target.value);
+              onChange={(v) => {
+                setName(v);
                 setNameTouched(true);
                 setReplace(null);
               }}
               data-autofocus=""
-              spellCheck={false}
               data-testid="new-name"
             />
-          </label>
-          {sized && (
-            <div className="field">
-              <span className="field-label">Canvas</span>
-              <span className="size-inputs">
-                <input className="text-input num" type="text" inputMode="numeric" value={width} onChange={(e) => {
-                    setWidth(e.target.value);
+            {sized && (
+              <FieldRow label={t('files.new.canvas')} error={sizeProblem ?? undefined}>
+                <TextField
+                  className="ed-new-size"
+                  inputMode="numeric"
+                  value={width}
+                  onChange={(v) => {
+                    setWidth(v);
                     setReplace(null);
-                  }} aria-label="Canvas width" data-testid="new-width" />
-                <span className="muted">×</span>
-                <input className="text-input num" type="text" inputMode="numeric" value={height} onChange={(e) => {
-                    setHeight(e.target.value);
+                  }}
+                  aria-label={t('files.new.canvasWidth')}
+                  data-testid="new-width"
+                />
+                <span className="ed-faint" aria-hidden="true">
+                  ×
+                </span>
+                <TextField
+                  className="ed-new-size"
+                  inputMode="numeric"
+                  value={height}
+                  onChange={(v) => {
+                    setHeight(v);
                     setReplace(null);
-                  }} aria-label="Canvas height" data-testid="new-height" />
-                <span className="muted">px</span>
-              </span>
-            </div>
-          )}
-          <div className="field field-grow">
-            <span className="field-label">Location</span>
-            <FileBrowser
-              mode="folder"
-              dir={dir}
-              onDir={(d) => {
-                setDir(d);
-                setReplace(null);
-              }}
-              selected={selected?.path ?? null}
-              onSelect={(e) => {
-                setSelected(e);
-                if (e && isOpenable(e)) {
-                  setFileName(e.name);
-                  setFileTouched(true);
-                }
-              }}
-              onActivate={() => undefined}
-              rootName={rootName}
-              currentRel={currentRel}
-              onEntries={setEntries}
-              className="compact"
-            />
-          </div>
-          <label className="field">
-            <span className="field-label">File name</span>
-            <input
-              className="text-input mono"
-              type="text"
+                  }}
+                  aria-label={t('files.new.canvasHeight')}
+                  data-testid="new-height"
+                />
+                <span className="ed-muted">px</span>
+              </FieldRow>
+            )}
+            <FieldRow label={t('files.new.location')} className="ed-new-location">
+              <FileBrowser
+                mode="folder"
+                variant="compact"
+                dir={dir}
+                onDir={(d) => {
+                  setDir(d);
+                  setReplace(null);
+                }}
+                selected={selected?.path ?? null}
+                onSelect={(e) => {
+                  setSelected(e);
+                  if (e && isOpenable(e)) {
+                    setFileName(e.name);
+                    setFileTouched(true);
+                  }
+                }}
+                onActivate={() => undefined}
+                rootName={rootName}
+                currentRel={currentRel}
+                onEntries={setEntries}
+              />
+            </FieldRow>
+            <TextField
+              label={t('files.fileName')}
+              mono
               value={effectiveFile}
-              onChange={(e) => {
-                setFileName(e.target.value);
+              onChange={(v) => {
+                setFileName(v);
                 setFileTouched(true);
                 setReplace(null);
               }}
-              spellCheck={false}
+              error={nameProblem && effectiveFile ? nameProblem : undefined}
+              hint={!sized ? t('files.new.exampleNote') : undefined}
               data-testid="new-file"
             />
-          </label>
-          {!sized && <p className="field-note muted">Example textures are copied next to the new model; the example itself is never changed.</p>}
-          {problem && effectiveFile && <p className="field-note error-text">{problem}</p>}
+          </div>
         </div>
-      </div>
-      {replace && <ReplaceConfirm target={replace} busy={!!busy} onCancel={() => setReplace(null)} onReplace={() => void create(true)} />}
-      <ErrorNote result={failure} />
-    </Modal>
+        <ErrorNote result={failure} />
+      </Dialog>
+      <ReplaceAlert target={replace} busy={!!busy} onCancel={() => setReplace(null)} onReplace={() => void create(true)} />
+    </>
   );
 }
 
 // ----------------------------------------------------------------------------- Save As
 
-function SaveAsDialog() {
+function SaveAsDialog({ open }: { open: boolean }) {
+  const t = useT();
   const session = useSession();
   const { rootName, currentRel } = useWorkspaceInfo();
   const file = useApp((s) => s.file);
@@ -431,76 +417,72 @@ function SaveAsDialog() {
   };
 
   return (
-    <Modal
-      title="Save As"
-      icon="saveAs"
-      size="medium"
-      onCancel={() => session.closeDialog()}
-      onEscape={() => (replace ? setReplace(null) : session.closeDialog())}
-      onConfirm={() => void save()}
-      testId="save-as-dialog"
-      footer={<span className="muted">Relative texture paths are rewritten so they still find the same PNG files.</span>}
-      actions={
-        <>
-          <button className="button" onClick={() => session.closeDialog()}>
-            Cancel
-          </button>
-          <button className="button button-primary" disabled={!!problem || !!busy} onClick={() => void save()} data-testid="save-as-confirm">
-            {busy ? 'Saving…' : 'Save'}
-          </button>
-        </>
-      }
-    >
-      <FileBrowser
-        mode="folder"
-        dir={dir}
-        onDir={(d) => {
-          setDir(d);
-          setReplace(null);
-        }}
-        selected={selected?.path ?? null}
-        onSelect={(e) => {
-          setSelected(e);
-          if (e && isOpenable(e)) {
-            setFileName(e.name);
-            setReplace(null);
-          }
-        }}
-        onActivate={() => undefined}
-        rootName={rootName}
-        currentRel={currentRel}
-        onEntries={setEntries}
-        className="save-browser"
-      />
-      <label className="field field-inline">
-        <span className="field-label">File name</span>
-        <input
-          className="text-input mono"
-          type="text"
-          value={fileName}
-          onChange={(e) => {
-            setFileName(e.target.value);
+    <>
+      <Dialog
+        open={open}
+        title={t('files.saveAs.title')}
+        icon="saveAs"
+        size="md"
+        onCancel={() => session.closeDialog()}
+        onEscape={() => (replace ? setReplace(null) : session.closeDialog())}
+        onConfirm={() => void save()}
+        testId="save-as-dialog"
+        footer={<PathInfo label={t('files.saveAs.savesTo')} path={target} />}
+        actions={
+          <>
+            <Button size="lg" onClick={() => session.closeDialog()}>
+              {t('common.cancel')}
+            </Button>
+            <Button size="lg" variant="filled" disabled={!!problem} loading={!!busy} onClick={() => void save()} data-testid="save-as-confirm">
+              {busy ? t('common.saving') : t('common.save')}
+            </Button>
+          </>
+        }
+      >
+        <FileBrowser
+          mode="folder"
+          dir={dir}
+          onDir={(d) => {
+            setDir(d);
             setReplace(null);
           }}
+          selected={selected?.path ?? null}
+          onSelect={(e) => {
+            setSelected(e);
+            if (e && isOpenable(e)) {
+              setFileName(e.name);
+              setReplace(null);
+            }
+          }}
+          onActivate={() => undefined}
+          rootName={rootName}
+          currentRel={currentRel}
+          onEntries={setEntries}
+        />
+        <TextField
+          label={t('files.fileName')}
+          mono
+          value={fileName}
+          onChange={(v) => {
+            setFileName(v);
+            setReplace(null);
+          }}
+          error={problem && fileName ? problem : undefined}
+          hint={t('files.saveAs.textureNote')}
           data-autofocus="stem"
-          spellCheck={false}
           data-testid="save-as-name"
         />
-      </label>
-      <p className="field-note">
-        <span className="muted">Saves to </span>
-        <span className="mono">{target || '…'}</span>
-        {problem && fileName && <span className="error-text"> — {problem}</span>}
-      </p>
-      {replace && <ReplaceConfirm target={replace} busy={!!busy} onCancel={() => setReplace(null)} onReplace={() => void save(true)} />}
-      <ErrorNote result={failure} />
-    </Modal>
+        <ErrorNote result={failure} />
+      </Dialog>
+      <ReplaceAlert target={replace} busy={!!busy} onCancel={() => setReplace(null)} onReplace={() => void save(true)} />
+    </>
   );
 }
 
 // ----------------------------------------------------------------------------- Import
 
-function ImportDialog({ files }: { files: File[] }) {
+function ImportDialog({ open, files }: { open: boolean; files: File[] }) {
+  const t = useT();
   const session = useSession();
   const { rootName, currentRel } = useWorkspaceInfo();
   const busy = useApp((s) => s.fileBusy);
@@ -555,168 +537,151 @@ function ImportDialog({ files }: { files: File[] }) {
   };
 
   return (
-    <Modal
-      title={spine ? 'Import a Spine export' : 'Import from computer'}
-      icon="upload"
-      size="medium"
-      onCancel={() => session.closeDialog()}
-      onEscape={() => (replace ? setReplace(null) : session.closeDialog())}
-      onConfirm={() => void run()}
-      testId="import-dialog"
-      footer={
-        target ? (
-          <span className="mono ellipsis" title={target}>
-            <span className="muted">Opens </span>
-            {target}
-          </span>
-        ) : null
-      }
-      actions={
-        <>
-          <button className="button" onClick={() => session.closeDialog()}>
-            Cancel
-          </button>
-          <button className="button" onClick={() => session.pickImportFiles()} title="Pick other files">
-            Choose other files…
-          </button>
-          <button className="button button-primary" disabled={!!plan.error || !!busy} onClick={() => void run()} data-testid="import-confirm">
-            {busy ? (spine ? 'Converting…' : 'Importing…') : spine ? 'Convert and open' : 'Import and open'}
-          </button>
-        </>
-      }
-    >
-      <div className="import-files" data-testid="import-files">
-        {files.map((f) => {
-          const kind =
-            f.name === plan.model ? 'model' : plan.textures.includes(f.name) ? 'texture' : spine && plan.atlases.includes(f.name) ? 'atlas' : 'skipped';
-          const tag = kind === 'model' && spine ? 'Spine skeleton' : kind === 'texture' && spine ? (pages && pages.unused.includes(f.name) ? 'not a page' : 'page') : kind;
-          return (
-            <div key={f.name} className={`import-file is-${kind}`}>
-              <Icon name={kind === 'model' || kind === 'atlas' ? 'file' : kind === 'texture' ? 'texture' : 'close'} />
-              <span className="import-name mono" title={placement[f.name] ? `${f.name}, written as ${placement[f.name]} (the path the model uses)` : undefined}>
-                {placement[f.name] ?? f.name}
-              </span>
-              <span className="import-size muted">{formatSize(f.size)}</span>
-              <span className={`tag ${kind === 'model' ? 'tag-accent' : kind === 'skipped' ? 'tag-dim' : ''}`}>{tag}</span>
-            </div>
-          );
-        })}
-      </div>
-      {plan.error && (
-        <div className="notice notice-error" role="alert">
-          <Icon name="error" />
-          <span>{plan.error}</span>
-        </div>
-      )}
-      {plan.skipped.length > 0 && !plan.error && <p className="field-note muted">Only one .json model with .png textures (or a Spine .json with its .atlas and pages) is imported; the other files are skipped.</p>}
-      {spine && (
-        <p className="field-note muted" data-testid="import-spine-note">
-          The Spine skeleton is converted into <span className="mono">{spineModel}</span> with its pages in <span className="mono">textures/</span>; the conversion report lists
-          what was approximated or dropped.
-        </p>
-      )}
-      {spine && plan.atlases.length === 0 && (
-        <div className="notice notice-warning">
-          <Icon name="warning" />
-          <span>No atlas picked: the attachments are imported untextured. Pick the skeleton&apos;s .atlas file and its PNG pages too.</span>
-        </div>
-      )}
-      {spine && pages && pages.missing.length > 0 && (
-        <div className="notice notice-warning">
-          <Icon name="warning" />
-          <span>
-            The atlas uses {pages.missing.length === 1 ? 'a page' : 'pages'} you did not pick: <span className="mono">{pages.missing.join(', ')}</span>. Their regions are imported
-            untextured.
-          </span>
-        </div>
-      )}
-      {check && check.missing.length > 0 && (
-        <div className="notice notice-warning">
-          <Icon name="warning" />
-          <span>
-            The model uses {check.missing.length === 1 ? 'a texture' : 'textures'} you did not pick: <span className="mono">{check.missing.join(', ')}</span>. Pick{' '}
-            {check.missing.length === 1 ? 'it' : 'them'} too, or copy {check.missing.length === 1 ? 'it' : 'them'} into the folder later.
-          </span>
-        </div>
-      )}
-      <div className="field field-grow">
-        <span className="field-label">Into folder</span>
-        <FileBrowser
-          mode="folder"
-          dir={dir}
-          onDir={(d) => {
-            setDir(d);
-            setReplace(null);
-          }}
-          selected={selected?.path ?? null}
-          onSelect={setSelected}
-          onActivate={() => undefined}
-          rootName={rootName}
-          currentRel={currentRel}
-          autoFocus
-          className="compact"
-        />
-      </div>
-      {replace && <ReplaceConfirm target={replace} busy={!!busy} onCancel={() => setReplace(null)} onReplace={() => void run(true)} />}
-      <ErrorNote result={failure} />
-    </Modal>
+    <>
+      <Dialog
+        open={open}
+        title={spine ? t('files.import.titleSpine') : t('files.import.title')}
+        icon="upload"
+        size="md"
+        onCancel={() => session.closeDialog()}
+        onEscape={() => (replace ? setReplace(null) : session.closeDialog())}
+        onConfirm={() => void run()}
+        testId="import-dialog"
+        footer={target ? <PathInfo label={t('files.import.opens')} path={target} /> : null}
+        actions={
+          <>
+            <Button size="lg" onClick={() => session.closeDialog()}>
+              {t('common.cancel')}
+            </Button>
+            <Button size="lg" variant="filled" disabled={!!plan.error} loading={!!busy} onClick={() => void run()} data-testid="import-confirm">
+              {busy ? (spine ? t('files.import.converting') : t('files.import.importing')) : spine ? t('files.import.confirmSpine') : t('files.import.confirm')}
+            </Button>
+          </>
+        }
+      >
+        <FieldRow
+          label={t('files.import.files', { n: files.length })}
+          labelTrailing={
+            <LinkButton onClick={() => session.pickImportFiles()} data-testid="import-choose">
+              {t('files.import.chooseOther')}
+            </LinkButton>
+          }
+        >
+          <div className="ed-filelist r2-scroll" data-testid="import-files">
+            {files.map((f) => {
+              const kind = f.name === plan.model ? 'model' : plan.textures.includes(f.name) ? 'texture' : spine && plan.atlases.includes(f.name) ? 'atlas' : 'skipped';
+              const label =
+                kind === 'model'
+                  ? spine
+                    ? t('files.import.kind.spine')
+                    : t('files.import.kind.model')
+                  : kind === 'texture'
+                    ? spine
+                      ? pages && pages.unused.includes(f.name)
+                        ? t('files.import.kind.notPage')
+                        : t('files.import.kind.page')
+                      : t('files.import.kind.texture')
+                    : kind === 'atlas'
+                      ? t('files.import.kind.atlas')
+                      : t('files.import.kind.skipped');
+              return (
+                <FileRow
+                  key={f.name}
+                  icon={kind === 'model' || kind === 'atlas' ? 'file' : kind === 'texture' ? 'texture' : 'close'}
+                  name={placement[f.name] ?? f.name}
+                  title={placement[f.name] ? t('files.import.placed', { name: f.name, path: placement[f.name] }) : undefined}
+                  size={formatSize(f.size)}
+                  dim={kind === 'skipped'}
+                  badge={<Badge tone={kind === 'model' ? 'tint' : 'neutral'}>{label}</Badge>}
+                />
+              );
+            })}
+          </div>
+        </FieldRow>
+        {plan.error && <Notice tone="danger">{plan.error}</Notice>}
+        {plan.skipped.length > 0 && !plan.error && <p className="ed-dialog-note">{t('files.import.skippedNote')}</p>}
+        {spine && (
+          <p className="ed-dialog-note" data-testid="import-spine-note">
+            {t('files.import.spineNote', { file: spineModel })}
+          </p>
+        )}
+        {spine && plan.atlases.length === 0 && <Notice tone="warning">{t('files.import.noAtlas')}</Notice>}
+        {spine && pages && pages.missing.length > 0 && <Notice tone="warning">{t('files.import.missingPages', { n: pages.missing.length, names: pages.missing.join(', ') })}</Notice>}
+        {check && check.missing.length > 0 && <Notice tone="warning">{t('files.import.missingTextures', { n: check.missing.length, names: check.missing.join(', ') })}</Notice>}
+        <FieldRow label={t('files.import.intoFolder')}>
+          <FileBrowser
+            mode="folder"
+            variant="compact"
+            dir={dir}
+            onDir={(d) => {
+              setDir(d);
+              setReplace(null);
+            }}
+            selected={selected?.path ?? null}
+            onSelect={setSelected}
+            onActivate={() => undefined}
+            rootName={rootName}
+            currentRel={currentRel}
+            autoFocus
+          />
+        </FieldRow>
+        <ErrorNote result={failure} />
+      </Dialog>
+      <ReplaceAlert target={replace} busy={!!busy} onCancel={() => setReplace(null)} onReplace={() => void run(true)} />
+    </>
   );
 }
 
 // ----------------------------------------------------------------------------- unsaved changes
 
-export function UnsavedDialog({ prompt }: { prompt: UnsavedPrompt }) {
+/** "Save changes to x?": Save (the default), Don't Save, Cancel; Save Anyway when the model was rejected. */
+export function UnsavedDialog({ prompt, open = true }: { prompt: UnsavedPrompt; open?: boolean }) {
+  const t = useT();
   const session = useSession();
   const saving = prompt.phase === 'saving';
   const asking = prompt.phase === 'asking' ? prompt : null;
   return (
-    <Modal
+    <Dialog
       alert
-      title={`Save changes to ${prompt.file}?`}
+      open={open}
       icon="warning"
-      tone="warning"
-      size="narrow"
+      className="ed-alert-warning"
+      title={t('files.unsaved.title', { file: prompt.file })}
+      description={t('files.unsaved.message', { action: prompt.action })}
       onCancel={() => !saving && session.resolveUnsaved('cancel')}
       onConfirm={() => !saving && session.resolveUnsaved('save')}
       testId="unsaved-dialog"
       actions={
         <>
-          <button className="button button-primary" onClick={() => session.resolveUnsaved('save')} disabled={saving} data-autofocus="" data-testid="unsaved-save">
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+          <Button size="lg" block onClick={() => session.resolveUnsaved('cancel')} disabled={saving} data-testid="unsaved-cancel">
+            {t('common.cancel')}
+          </Button>
+          <Button size="lg" block destructive onClick={() => session.resolveUnsaved('discard')} disabled={saving} data-testid="unsaved-discard">
+            {t('files.unsaved.discard')}
+          </Button>
           {asking?.canForce && (
-            <button className="button button-danger" onClick={() => session.resolveUnsaved('saveAnyway')} data-testid="unsaved-save-anyway">
-              Save anyway
-            </button>
+            <Button size="lg" block destructive onClick={() => session.resolveUnsaved('saveAnyway')} data-testid="unsaved-save-anyway">
+              {t('files.unsaved.saveAnyway')}
+            </Button>
           )}
-          <button className="button" onClick={() => session.resolveUnsaved('discard')} disabled={saving} data-testid="unsaved-discard">
-            Don&apos;t save
-          </button>
-          <button className="button" onClick={() => session.resolveUnsaved('cancel')} disabled={saving} data-testid="unsaved-cancel">
-            Cancel
-          </button>
+          <Button size="lg" block variant="filled" loading={saving} onClick={() => session.resolveUnsaved('save')} data-autofocus="" data-testid="unsaved-save">
+            {saving ? t('common.saving') : t('common.save')}
+          </Button>
         </>
       }
     >
-      <p className="dialog-text">
-        Your latest edit is not saved to disk. If you don&apos;t save, it is lost when you {prompt.action}.
-      </p>
-      {asking?.error && (
-        <div className="notice notice-error" role="alert">
-          <Icon name="error" />
-          <span>
-            {asking.error}
-            {asking.canForce && ' "Save anyway" writes it despite the errors (the Problems panel lists them).'}
-          </span>
-        </div>
-      )}
-    </Modal>
+      {asking?.error ? (
+        <Notice tone="danger" hint={asking.canForce ? t('files.unsaved.forceHint') : undefined} data-testid="unsaved-error">
+          {asking.error}
+        </Notice>
+      ) : null}
+    </Dialog>
   );
 }
 
 // ----------------------------------------------------------------------------- host
 
-/** Hidden file input behind "Import from computer…" (Live2D files it is given go to the Live2D import). */
+/** Hidden file input behind "Import from Computer…" (Live2D files it is given go to the Live2D import). */
 function ImportPicker() {
   const session = useSession();
   const ref = useRef<HTMLInputElement>(null);
@@ -730,7 +695,7 @@ function ImportPicker() {
       type="file"
       multiple
       accept=".json,.jsonc,.png,.atlas,.txt,application/json,image/png"
-      className="visually-hidden"
+      className="r2-visually-hidden"
       tabIndex={-1}
       aria-hidden="true"
       data-testid="import-input"
@@ -743,22 +708,35 @@ function ImportPicker() {
   );
 }
 
-/** Whichever file dialog is open, the unsaved-changes prompt above it, and the import file input. */
+/** A number that changes whenever `value` is another (non-null) object: a fresh dialog per request. */
+function useIdentityKey(value: object | null): number {
+  const ref = useRef<{ value: object | null; key: number }>({ value, key: 0 });
+  if (value !== null && ref.current.value !== value) ref.current = { value, key: ref.current.key + 1 };
+  return ref.current.key;
+}
+
+/** Whichever file dialog is open, the unsaved-changes alert above it, and the import file inputs. */
 export function FileDialogs() {
-  const dialog = useApp((s) => s.dialog);
-  const prompt = useApp((s) => s.unsavedPrompt);
+  const current = useApp((s) => s.dialog);
+  const key = useIdentityKey(current);
+  // Closed dialogs stay rendered (open={false}) while their closing animation plays.
+  const dialog = useLingering(current);
+  const prompt = useLingering(useApp((s) => s.unsavedPrompt));
+  const d = dialog.value;
   return (
     <>
-      {dialog?.kind === 'open' && <OpenDialog />}
-      {dialog?.kind === 'new' && <NewDialog key={dialog.template ?? ''} initialTemplate={dialog.template} />}
-      {dialog?.kind === 'saveAs' && <SaveAsDialog />}
-      {dialog?.kind === 'import' && <ImportDialog key={dialog.files.map((f) => f.name).join('|')} files={dialog.files} />}
-      {dialog?.kind === 'live2d' && <Live2dDialog key={dialog.files.map((f) => f.name).join('|')} files={dialog.files} />}
-      {dialog?.kind === 'export' && <ExportDialog key={dialog.format} format={dialog.format} />}
-      {dialog?.kind === 'report' && <ReportDialog title={dialog.title} subtitle={dialog.subtitle} report={dialog.report} />}
-      {prompt && <UnsavedDialog prompt={prompt} />}
+      {d?.kind === 'open' && <OpenDialog key={key} open={dialog.open} />}
+      {d?.kind === 'new' && <NewDialog key={key} open={dialog.open} initialTemplate={d.template} />}
+      {d?.kind === 'saveAs' && <SaveAsDialog key={key} open={dialog.open} />}
+      {d?.kind === 'import' && <ImportDialog key={key} open={dialog.open} files={d.files} />}
+      {d?.kind === 'live2d' && <Live2dDialog key={key} open={dialog.open} files={d.files} />}
+      {d?.kind === 'export' && <ExportDialog key={key} open={dialog.open} format={d.format} />}
+      {d?.kind === 'report' && <ReportDialog key={key} open={dialog.open} title={d.title} subtitle={d.subtitle} report={d.report} />}
+      {prompt.value && <UnsavedDialog prompt={prompt.value} open={prompt.open} />}
       <ImportPicker />
       <Live2dPicker />
+      {/* Avatar mode: its store, keys and the "Avatar from an Illustration" sheet. */}
+      <AvatarHost />
     </>
   );
 }

@@ -1,0 +1,180 @@
+/*
+ * Slider: thin capsule track, tinted fill, white capsule knob. The knob's centre travels between
+ * half a knob from each end, so it never leaves the track.
+ */
+
+.r2-slider {
+  --_h: var(--r2-control-md);
+  --_track: 4px;
+  --_thumb-w: 22px;
+  --_thumb-h: 16px;
+  /* Distance the knob's centre travels. */
+  --_travel: calc(100% - var(--_thumb-w));
+  position: relative;
+  display: block;
+  flex: 1 1 120px;
+  min-width: 72px;
+  height: var(--_h);
+  cursor: default;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.r2-slider[data-size='sm'] {
+  --_h: var(--r2-control-sm);
+  --_track: 3px;
+  --_thumb-w: 18px;
+  --_thumb-h: 13px;
+}
+
+.r2-slider-track {
+  position: absolute;
+  top: calc(50% - var(--_track) / 2);
+  right: 0;
+  left: 0;
+  height: var(--_track);
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-fill);
+}
+
+.r2-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--_thumb-w) / 2 + var(--r2-slider-fill-start) * var(--_travel));
+  width: calc((var(--r2-slider-fill-end) - var(--r2-slider-fill-start)) * var(--_travel));
+  border-radius: inherit;
+  background: var(--r2-tint-solid);
+}
+
+/* Filling from the minimum: the fill starts at the very end of the track. */
+.r2-slider[data-origin='min'] .r2-slider-fill {
+  left: 0;
+  width: calc(var(--_thumb-w) / 2 + var(--r2-slider-fill-end) * var(--_travel));
+}
+
+/* Tick marks sit under the track, like the marks of a ruler. */
+.r2-slider-tick {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: calc(var(--_thumb-w) / 2 + var(--r2-slider-tick) * var(--_travel) - 1px);
+  width: 2px;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--r2-label-4);
+}
+
+.r2-slider-thumb {
+  position: absolute;
+  top: calc(50% - var(--_thumb-h) / 2);
+  left: calc(var(--r2-slider-ratio) * var(--_travel));
+  width: var(--_thumb-w);
+  height: var(--_thumb-h);
+  border-radius: var(--r2-radius-capsule);
+  background: #ffffff;
+  box-shadow:
+    0 0 0 var(--r2-hairline) rgb(0 0 0 / 0.06),
+    0 0.5px 1px rgb(0 0 0 / 0.12),
+    0 2px 6px rgb(0 0 0 / 0.2);
+  transition:
+    transform var(--r2-duration-base) var(--r2-spring-snappy),
+    box-shadow var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.r2-slider:hover:not([data-disabled]) .r2-slider-thumb {
+  transform: scale(1.06);
+}
+
+.r2-slider[data-dragging] .r2-slider-thumb {
+  transform: scale(1.18, 1.22);
+  box-shadow:
+    0 0 0 var(--r2-hairline) rgb(0 0 0 / 0.06),
+    0 1px 2px rgb(0 0 0 / 0.12),
+    0 6px 14px rgb(0 0 0 / 0.24);
+}
+
+.r2-slider:dir(rtl) .r2-slider-thumb {
+  right: calc(var(--r2-slider-ratio) * var(--_travel));
+  left: auto;
+}
+
+.r2-slider:dir(rtl) .r2-slider-fill {
+  right: calc(var(--_thumb-w) / 2 + var(--r2-slider-fill-start) * var(--_travel));
+  left: auto;
+}
+
+.r2-slider:dir(rtl)[data-origin='min'] .r2-slider-fill {
+  right: 0;
+}
+
+.r2-slider:dir(rtl) .r2-slider-tick {
+  right: calc(var(--_thumb-w) / 2 + var(--r2-slider-tick) * var(--_travel) - 1px);
+  left: auto;
+}
+
+.r2-slider[data-disabled] {
+  opacity: 0.45;
+}
+
+.r2-slider-thumb:focus-visible {
+  outline-offset: 3px;
+}
+
+/* Value bubble: above the knob while dragging or focused from the keyboard. */
+.r2-slider-bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  padding: 3px 8px;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-material-thick);
+  -webkit-backdrop-filter: var(--r2-material-filter-thick);
+  backdrop-filter: var(--r2-material-filter-thick);
+  box-shadow:
+    0 0 0 var(--r2-hairline) var(--r2-glass-hairline),
+    var(--r2-shadow-2);
+  color: var(--r2-label);
+  font: var(--r2-text-footnote);
+  font-weight: var(--r2-weight-semibold);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, 4px) scale(0.92);
+  transform-origin: 50% 100%;
+  transition:
+    opacity var(--r2-duration-fast) var(--r2-ease-out),
+    transform var(--r2-duration-base) var(--r2-spring-snappy);
+  pointer-events: none;
+}
+
+.r2-slider[data-show-value='always'] .r2-slider-bubble,
+.r2-slider[data-dragging] .r2-slider-bubble,
+.r2-slider-thumb:focus-visible .r2-slider-bubble {
+  opacity: 1;
+  /* Undo the knob's own scale so the text stays crisp and undistorted. */
+  transform: translate(-50%, 0) scale(1);
+}
+
+.r2-slider[data-dragging] .r2-slider-bubble {
+  transform: translate(-50%, 0) scale(0.847, 0.82);
+}
+
+@media (forced-colors: active) {
+  .r2-slider-track {
+    border: 1px solid ButtonBorder;
+  }
+
+  .r2-slider-fill {
+    background: Highlight;
+  }
+
+  .r2-slider-thumb {
+    border: 2px solid ButtonText;
+    background: ButtonFace;
+  }
+
+  .r2-slider-bubble {
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+}

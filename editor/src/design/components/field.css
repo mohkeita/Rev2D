@@ -1,0 +1,177 @@
+/* TextField, SearchField, NumberField. */
+
+.r2-field {
+  --_h: var(--r2-control-md);
+  --_radius: var(--r2-radius-control);
+  --_px: 8px;
+  display: grid;
+  gap: var(--r2-space-1);
+  width: 100%;
+  min-width: 0;
+}
+
+.r2-field[data-size='sm'] {
+  --_h: var(--r2-control-sm);
+  --_radius: var(--r2-radius-control-sm);
+  --_px: 6px;
+}
+
+.r2-field[data-size='lg'] {
+  --_h: var(--r2-control-lg);
+  --_radius: var(--r2-radius-control-lg);
+  --_px: 12px;
+}
+
+.r2-field[data-shape='capsule'] {
+  --_radius: var(--r2-radius-capsule);
+  --_px: calc(var(--_h) * 0.36);
+}
+
+.r2-field-label {
+  font: var(--r2-text-subhead);
+  color: var(--r2-label-2);
+}
+
+.r2-field-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--_h);
+  min-width: 0;
+  padding: 0 var(--_px);
+  border-radius: var(--_radius);
+  background: var(--r2-fill-3);
+  color: var(--r2-label);
+  transition:
+    background-color var(--r2-duration-fast) var(--r2-ease-out),
+    box-shadow var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.r2-field-box:hover {
+  background: var(--r2-fill-2);
+}
+
+.r2-field-box:focus-within {
+  background: var(--r2-fill-4);
+  box-shadow: 0 0 0 var(--r2-focus-width) var(--r2-focus-color);
+}
+
+.r2-field-box[data-invalid] {
+  box-shadow: 0 0 0 1.5px var(--r2-danger);
+}
+
+.r2-field-input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none !important;
+  background: none;
+  font: var(--r2-text-body);
+  color: inherit;
+  text-overflow: ellipsis;
+  appearance: none;
+}
+
+.r2-field[data-size='sm'] .r2-field-input {
+  font: var(--r2-text-callout);
+}
+
+.r2-field-input.r2-text-mono {
+  font: var(--r2-text-mono);
+}
+
+.r2-field-input::placeholder {
+  color: var(--r2-placeholder);
+  opacity: 1;
+}
+
+.r2-field-input::-webkit-search-cancel-button,
+.r2-field-input::-webkit-search-decoration {
+  display: none;
+  appearance: none;
+}
+
+.r2-field-icon {
+  color: var(--r2-label-2);
+}
+
+.r2-field-trailing {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--r2-space-1);
+}
+
+.r2-field-unit {
+  color: var(--r2-label-3);
+  font: var(--r2-text-callout);
+}
+
+/* Scrub handle of a NumberField: drag sideways to change the value. */
+.r2-field-prefix {
+  flex: none;
+  min-width: 12px;
+  color: var(--r2-label-3);
+  font: var(--r2-text-subhead);
+  text-align: center;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.r2-field-prefix:hover {
+  color: var(--r2-tint);
+}
+
+.r2-number-field .r2-field-input {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.r2-field-clear {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--r2-label-3);
+  color: var(--r2-bg);
+  cursor: default;
+}
+
+.r2-field-clear:hover {
+  background: var(--r2-label-2);
+}
+
+.r2-field-note {
+  font: var(--r2-text-footnote);
+  color: var(--r2-label-2);
+}
+
+.r2-field-note[data-tone='danger'] {
+  color: var(--r2-danger-text);
+}
+
+.r2-field[data-disabled] {
+  opacity: 0.5;
+}
+
+@media (forced-colors: active) {
+  .r2-field-box {
+    border: 1px solid ButtonBorder;
+  }
+
+  .r2-field-box:focus-within {
+    outline: 2px solid Highlight;
+  }
+}

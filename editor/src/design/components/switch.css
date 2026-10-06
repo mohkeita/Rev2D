@@ -1,0 +1,108 @@
+/* Switch: capsule track, capsule knob that stretches while pressed. On = system green. */
+
+.r2-switch {
+  --_w: 40px;
+  --_h: 22px;
+  --_pad: 2px;
+  --_knob-w: 24px;
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: var(--_w);
+  height: var(--_h);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-fill);
+  cursor: default;
+  touch-action: manipulation;
+  transition: background-color var(--r2-duration-base) var(--r2-ease-out);
+}
+
+.r2-switch[data-size='sm'] {
+  --_w: 32px;
+  --_h: 18px;
+  --_knob-w: 19px;
+}
+
+.r2-switch[aria-checked='true'] {
+  background: var(--r2-green);
+}
+
+.r2-switch-knob {
+  position: absolute;
+  top: var(--_pad);
+  left: var(--_pad);
+  width: var(--_knob-w);
+  height: calc(var(--_h) - 2 * var(--_pad));
+  border-radius: var(--r2-radius-capsule);
+  background: #ffffff;
+  box-shadow:
+    0 0 0 var(--r2-hairline) rgb(0 0 0 / 0.04),
+    0 1px 1px rgb(0 0 0 / 0.08),
+    0 3px 7px rgb(0 0 0 / 0.16);
+  transition:
+    transform var(--r2-duration-base) var(--r2-spring-snappy),
+    width var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.r2-switch[aria-checked='true'] .r2-switch-knob {
+  transform: translateX(calc(var(--_w) - var(--_knob-w) - 2 * var(--_pad)));
+}
+
+/* Pressed: the knob stretches toward the other side, as if squeezed. */
+.r2-switch:active:not(:disabled) .r2-switch-knob {
+  width: calc(var(--_knob-w) + 4px);
+}
+
+.r2-switch[aria-checked='true']:active:not(:disabled) .r2-switch-knob {
+  transform: translateX(calc(var(--_w) - var(--_knob-w) - 2 * var(--_pad) - 4px));
+}
+
+.r2-switch:dir(rtl) .r2-switch-knob {
+  right: var(--_pad);
+  left: auto;
+}
+
+.r2-switch:dir(rtl)[aria-checked='true'] .r2-switch-knob {
+  transform: translateX(calc(-1 * (var(--_w) - var(--_knob-w) - 2 * var(--_pad))));
+}
+
+.r2-switch:disabled {
+  opacity: 0.45;
+}
+
+.r2-switch-field {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--r2-space-3);
+  font: var(--r2-text-body);
+  color: var(--r2-label);
+}
+
+.r2-switch-field[data-disabled] .r2-switch-label {
+  color: var(--r2-label-3);
+}
+
+@media (forced-colors: active) {
+  .r2-switch {
+    border: 1px solid ButtonBorder;
+    background: ButtonFace;
+  }
+
+  .r2-switch[aria-checked='true'] {
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+
+  .r2-switch-knob {
+    background: ButtonText;
+    forced-color-adjust: none;
+  }
+
+  .r2-switch[aria-checked='true'] .r2-switch-knob {
+    background: HighlightText;
+  }
+}

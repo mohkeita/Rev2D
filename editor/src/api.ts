@@ -7,6 +7,23 @@
  */
 import type { Diagnostic } from '../../src/core/index.js';
 import type {
+  AgentJobEventPayload,
+  AvatarBuildRequest,
+  AvatarChangedEvent,
+  AvatarInfo,
+  AvatarJobEvent,
+  AvatarNewRequest,
+  AvatarNewResult,
+  AvatarOpenResult,
+  AvatarRef,
+  AvatarSaveRequest,
+  AvatarSaveResult,
+  AvatarVariantRequestsRequest,
+  AvatarVariantRequestsResult,
+  AvatarVariantStatus,
+  AvatarVariantsImport,
+  AvatarVariantsImportRequest,
+  AvatarVariantsInfo,
   EditorCommand,
   EditorState,
   FileEntry,
@@ -21,8 +38,10 @@ import type {
 import type { ExportRequest, ExportResponse, Live2dImportRequest, Live2dImportResponse } from '../../src/node/interop.js';
 import type { InteropReport } from '../../src/interop/types.js';
 
-export type { EditorCommand, EditorState, FileEntry, FileListing, ImportRequest, NewRequest, OpenResult, SaveAsRequest, TemplateInfo, WorkspaceInfo };
+export type { AgentJobEventPayload, EditorCommand, EditorState, FileEntry, FileListing, ImportRequest, NewRequest, OpenResult, SaveAsRequest, TemplateInfo, WorkspaceInfo };
 export type { ExportRequest, ExportResponse, InteropReport, Live2dImportRequest, Live2dImportResponse };
+export type { AvatarBuildRequest, AvatarChangedEvent, AvatarInfo, AvatarJobEvent, AvatarNewRequest, AvatarNewResult, AvatarOpenResult, AvatarRef, AvatarSaveRequest, AvatarSaveResult };
+export type { AvatarVariantRequestsRequest, AvatarVariantRequestsResult, AvatarVariantStatus, AvatarVariantsImport, AvatarVariantsImportRequest, AvatarVariantsInfo };
 
 /** POST /api/import answer: a Spine export converted on the way carries its conversion report. */
 export type ImportResult = OpenResult & { report?: InteropReport };
@@ -51,6 +70,11 @@ export interface ModelChangedEvent {
 export interface FileChangedEvent {
   file: string | null;
   origin: 'editor' | 'ai';
+  /**
+   * The avatar project that is open now (with the model `file`, or alone while it has no built
+   * model: `file` null); absent when none is.
+   */
+  avatar?: AvatarRef;
 }
 
 export interface ErrorDetail {
@@ -237,6 +261,10 @@ async function postJson<T>(url: string, body: unknown, what: string, opts: { exi
   return (text ? JSON.parse(text) : null) as T;
 }
 
+function notesOf(body: { notes?: unknown } | null): string[] {
+  return Array.isArray(body?.notes) ? body.notes.filter((n): n is string => typeof n === 'string') : [];
+}
+
 function openResult(body: Partial<OpenResult> | null, what: string): OpenResult {
   if (!body || typeof body.file !== 'string' || typeof body.text !== 'string') {
     throw new ApiRequestError(`${what} returned an unexpected body (need {file, text, mtimeMs, notes})`, 200);
@@ -245,7 +273,9 @@ function openResult(body: Partial<OpenResult> | null, what: string): OpenResult 
     file: body.file,
     text: body.text,
     mtimeMs: Number(body.mtimeMs) || 0,
-    notes: Array.isArray(body.notes) ? body.notes.filter((n): n is string => typeof n === 'string') : [],
+    notes: notesOf(body),
+    // The avatar project the model belongs to (avatar mode).
+    ...(isAvatarRef(body.avatar) ? { avatar: body.avatar } : {}),
   };
 }
 
@@ -255,6 +285,8 @@ export async function fetchWorkspace(): Promise<WorkspaceInfo> {
     root: String(body.root ?? ''),
     current: typeof body.current === 'string' ? body.current : null,
     recent: Array.isArray(body.recent) ? body.recent.filter((r): r is string => typeof r === 'string') : [],
+    // The open avatar project (avatar mode), when the server reports one.
+    ...(isAvatarRef(body.avatar) ? { avatar: body.avatar } : {}),
   };
 }
 
@@ -276,8 +308,14 @@ export async function fetchTemplates(): Promise<TemplateInfo[]> {
   return list.filter((t) => t && typeof t.name === 'string').map((t) => ({ name: t.name, description: String(t.description ?? '') }));
 }
 
-export async function openModel(file: string): Promise<OpenResult> {
-  return openResult(await postJson<Partial<OpenResult>>('/api/open', { file }, 'POST /api/open'), 'POST /api/open');
+/**
+ * POST /api/open: a model (OpenResult), or, for an avatar project (its avatar.json or folder) that
+ * has no built model yet, the project alone (AvatarOpenResult: file null).
+ */
+export async function openModel(file: string): Promise<OpenResult | AvatarOpenResult> {
+  const body = await postJson<Partial<OpenResult> | Partial<AvatarOpenResult>>('/api/open', { file }, 'POST /api/open');
+  if (body && body.file === null && isAvatarRef(body.avatar)) return { file: null, text: null, mtimeMs: 0, notes: notesOf(body), avatar: body.avatar };
+  return openResult(body as Partial<OpenResult> | null, 'POST /api/open');
 }
 
 export async function newModel(req: NewRequest): Promise<OpenResult> {
@@ -340,8 +378,51 @@ export interface EventHandlers {
   /** Another model was opened (or the model was closed) by any tab or an AI. */
   onFileChanged?(e: FileChangedEvent): void;
   onCommand(c: EditorCommand): void;
+  /** Progress of an in-app agent job (SSE "agent-job"; see docs/AGENT-BRIDGE.md). */
+  onAgentJob?(e: AgentJobEventPayload): void;
   /** Malformed payloads are reported, never thrown. */
   onProtocolError(message: string): void;
+}
+
+/**
+ * Extra listeners of the editor's ONE event stream (the session opens it with connectEvents): feature
+ * modules such as the AI panel follow agent jobs and stream (re)connects here without a stream of
+ * their own. `onHello` runs on every (re)connect, `onError` when the stream drops.
+ */
+export interface StreamListener {
+  onHello?(): void;
+  onError?(): void;
+  onAgentJob?(e: AgentJobEventPayload): void;
+  onModelChanged?(e: ModelChangedEvent): void;
+  /** Files of the open avatar project changed on disk (SSE "avatar-changed"; avatar mode). */
+  onAvatarChanged?(e: AvatarChangedEvent): void;
+  /** Progress of an avatar build job (SSE "avatar-job"; avatar mode). */
+  onAvatarJob?(e: AvatarJobEvent): void;
+}
+
+const streamListeners = new Set<StreamListener>();
+
+/** Follow the event stream the session opened; returns the unsubscriber. */
+export function listenToEvents(listener: StreamListener): () => void {
+  streamListeners.add(listener);
+  return () => streamListeners.delete(listener);
+}
+
+function notifyListeners(call: (l: StreamListener) => void): void {
+  for (const l of [...streamListeners]) {
+    try {
+      call(l);
+    } catch (e) {
+      console.warn('[rev2d] event listener failed', e);
+    }
+  }
+}
+
+/** True for an "agent-job" payload: {job: {id, state, ...}, state, event?: {seq, type}}. */
+export function isAgentJobPayload(data: unknown): data is AgentJobEventPayload {
+  const d = data as { job?: { id?: unknown; state?: unknown }; event?: { seq?: unknown; type?: unknown } } | null;
+  if (!d || typeof d !== 'object' || !d.job || typeof d.job.id !== 'string' || typeof d.job.state !== 'string') return false;
+  return d.event === undefined || (typeof d.event === 'object' && d.event !== null && typeof d.event.seq === 'number' && typeof d.event.type === 'string');
 }
 
 /** Delays before re-opening an event stream the browser gave up on (the last one repeats). */
@@ -366,6 +447,7 @@ export function connectEvents(h: EventHandlers): () => void {
     const source = es;
     source.onerror = () => {
       h.onError();
+      notifyListeners((l) => l.onError?.());
       if (disposed || source.readyState !== EventSource.CLOSED || timer) return;
       const delay = RECONNECT_DELAYS_MS[Math.min(failures++, RECONNECT_DELAYS_MS.length - 1)];
       timer = setTimeout(open, delay);
@@ -393,16 +475,45 @@ function attach(es: EventSource, h: EventHandlers, connected: () => void): void 
     connected();
     const data = parse(ev, 'hello') as { file?: unknown } | undefined;
     h.onOpen(typeof data?.file === 'string' ? data.file : null);
+    notifyListeners((l) => l.onHello?.());
   });
   es.addEventListener('model-changed', (ev) => {
     const data = parse(ev, 'model-changed') as Partial<ModelChangedEvent> | undefined;
     if (!data) return;
-    h.onModelChanged({ origin: data.origin === 'editor' ? 'editor' : 'external', mtimeMs: Number(data.mtimeMs) || 0 });
+    const e: ModelChangedEvent = { origin: data.origin === 'editor' ? 'editor' : 'external', mtimeMs: Number(data.mtimeMs) || 0 };
+    h.onModelChanged(e);
+    notifyListeners((l) => l.onModelChanged?.(e));
+  });
+  es.addEventListener('agent-job', (ev) => {
+    const data = parse(ev, 'agent-job');
+    if (data === undefined) return;
+    if (!isAgentJobPayload(data)) {
+      h.onProtocolError(`malformed "agent-job" event: ${JSON.stringify(data).slice(0, 120)}`);
+      return;
+    }
+    h.onAgentJob?.(data);
+    notifyListeners((l) => l.onAgentJob?.(data));
+  });
+  es.addEventListener('avatar-changed', (ev) => {
+    const data = parse(ev, 'avatar-changed') as Partial<AvatarChangedEvent> | undefined;
+    if (!data || typeof data.project !== 'string') return;
+    const e: AvatarChangedEvent = {
+      origin: data.origin === 'editor' ? 'editor' : 'external',
+      project: data.project,
+      files: Array.isArray(data.files) ? data.files.filter((f): f is string => typeof f === 'string') : [],
+      mtimeMs: Number(data.mtimeMs) || 0,
+    };
+    notifyListeners((l) => l.onAvatarChanged?.(e));
+  });
+  es.addEventListener('avatar-job', (ev) => {
+    const data = parse(ev, 'avatar-job') as AvatarJobEvent | undefined;
+    if (!data || typeof data.job !== 'string' || typeof data.state !== 'string') return;
+    notifyListeners((l) => l.onAvatarJob?.(data));
   });
   es.addEventListener('file-changed', (ev) => {
-    const data = parse(ev, 'file-changed') as { file?: unknown; origin?: unknown } | undefined;
+    const data = parse(ev, 'file-changed') as { file?: unknown; origin?: unknown; avatar?: unknown } | undefined;
     if (!data) return;
-    h.onFileChanged?.({ file: typeof data.file === 'string' ? data.file : null, origin: data.origin === 'ai' ? 'ai' : 'editor' });
+    h.onFileChanged?.({ file: typeof data.file === 'string' ? data.file : null, origin: data.origin === 'ai' ? 'ai' : 'editor', ...(isAvatarRef(data.avatar) ? { avatar: data.avatar } : {}) });
   });
   es.addEventListener('command', (ev) => {
     const data = parse(ev, 'command') as { type?: unknown } | undefined;
@@ -413,4 +524,112 @@ function attach(es: EventSource, h: EventHandlers, connected: () => void): void 
     }
     h.onCommand(data as EditorCommand);
   });
+}
+
+// ----------------------------------------------------------------------------- avatar mode
+//
+// The open avatar project (src/server/avatar-routes.ts; the "avatar mode" section of
+// src/node/editor-registry.ts has the shapes). SSE "avatar-changed" / "avatar-job" reach feature
+// modules through listenToEvents.
+
+/** An AvatarRef as the server sends it (GET /api/workspace, hello, file-changed, open answers). */
+export function isAvatarRef(v: unknown): v is AvatarRef {
+  const r = v as Partial<AvatarRef> | null | undefined;
+  return !!r && typeof r === 'object' && typeof r.project === 'string' && typeof r.projectPath === 'string' && typeof r.specFile === 'string';
+}
+
+/** PUT /api/avatar answered 409: avatar.json changed on disk since the version the edit is based on. */
+export class AvatarConflictError extends ApiRequestError {
+  constructor(
+    message: string,
+    /** mtime of avatar.json on disk now (base a deliberate overwrite on it). */
+    readonly mtimeMs: number,
+    extra: ErrorDetail = {},
+  ) {
+    super(message, 409, extra);
+  }
+}
+
+/** GET /api/avatar (404 ApiRequestError while the open document is not an avatar project). */
+export async function fetchAvatar(signal?: AbortSignal): Promise<AvatarInfo> {
+  const res = await fetch('/api/avatar', { cache: 'no-store', signal });
+  if (!res.ok) throw await errorFrom(res, 'GET /api/avatar');
+  const body = (await res.json()) as AvatarInfo;
+  if (!body || typeof body.project !== 'string' || typeof body.built !== 'object' || body.built === null) {
+    throw new ApiRequestError('GET /api/avatar returned an unexpected body (need {project, specText, mtimeMs, image, built, diagnostics})', res.status);
+  }
+  return body;
+}
+
+/** PUT /api/avatar: write avatar.json (the server recompiles the model unless `compile` is false). */
+export async function putAvatar(req: AvatarSaveRequest): Promise<AvatarSaveResult> {
+  const res = await fetch('/api/avatar', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(req) });
+  let body: (Partial<AvatarSaveResult> & { error?: unknown; hint?: unknown }) | null = null;
+  try {
+    body = (await res.json()) as Partial<AvatarSaveResult> & { error?: unknown; hint?: unknown };
+  } catch {
+    body = null;
+  }
+  const detail = typeof body?.error === 'string' ? body.error : res.statusText;
+  const hint = typeof body?.hint === 'string' ? body.hint : undefined;
+  if (res.status === 409 && typeof body?.mtimeMs === 'number') {
+    throw new AvatarConflictError(`PUT /api/avatar failed (HTTP 409): ${detail}`, body.mtimeMs, { detail, hint });
+  }
+  if (!res.ok || !body || typeof body.written !== 'boolean') {
+    throw new ApiRequestError(`PUT /api/avatar failed (HTTP ${res.status}): ${detail}`, res.status, { detail, hint });
+  }
+  return body as AvatarSaveResult;
+}
+
+/** POST /api/avatar/build: the job's first event (202); the rest arrives as SSE "avatar-job". */
+export async function startAvatarBuild(req: AvatarBuildRequest = {}): Promise<AvatarJobEvent> {
+  return postJson<AvatarJobEvent>('/api/avatar/build', req, 'POST /api/avatar/build');
+}
+
+/** GET /api/avatar/build: the latest event of the last build job, or null. */
+export async function fetchAvatarJob(): Promise<AvatarJobEvent | null> {
+  const body = await getJson<{ job?: AvatarJobEvent | null }>('/api/avatar/build', 'GET /api/avatar/build');
+  return body?.job ?? null;
+}
+
+/** URL of a file of the open avatar project ("source.png", "textures/base.png", ...); `version` busts caches. */
+export function avatarFileUrl(file: string, version?: string | number): string {
+  return `/api/avatar/file?path=${encodeURIComponent(file)}${version !== undefined ? `&v=${encodeURIComponent(String(version))}` : ''}`;
+}
+
+/**
+ * A picture of the open avatar project, decoded. `premultiply`: as the WebGL renderer uploads
+ * textures (premultiplied, no colour conversion); without it, for drawing on a 2D canvas.
+ */
+export async function fetchAvatarBitmap(file: string, version?: string | number, opts: { premultiply?: boolean; signal?: AbortSignal } = {}): Promise<ImageBitmap> {
+  const res = await fetch(avatarFileUrl(file, version), { cache: 'no-cache', signal: opts.signal });
+  if (!res.ok) throw await errorFrom(res, `GET /api/avatar/file?path=${file}`);
+  const blob = await res.blob();
+  return opts.premultiply ? createImageBitmap(blob, { premultiplyAlpha: 'premultiply', colorSpaceConversion: 'none' }) : createImageBitmap(blob);
+}
+
+/** GET /api/avatar/variants: the state of every drawn variant of the open avatar project. */
+export async function fetchAvatarVariants(signal?: AbortSignal): Promise<AvatarVariantsInfo> {
+  const res = await fetch('/api/avatar/variants', { cache: 'no-store', signal });
+  if (!res.ok) throw await errorFrom(res, 'GET /api/avatar/variants');
+  const body = (await res.json()) as AvatarVariantsInfo;
+  if (!body || !Array.isArray(body.variants)) throw new ApiRequestError('GET /api/avatar/variants returned an unexpected body (need {variants, counts, areas, ...})', res.status);
+  return body;
+}
+
+/** POST /api/avatar/variants/import: a job like a build (its first event, 202); the rest arrives as SSE "avatar-job" (kind "variants"). */
+export async function startVariantsImport(req: AvatarVariantsImportRequest = {}): Promise<AvatarJobEvent> {
+  return postJson<AvatarJobEvent>('/api/avatar/variants/import', req, 'POST /api/avatar/variants/import');
+}
+
+/** POST /api/avatar/variants/request: write the masks and prompts for an image generator. */
+export async function requestAvatarVariants(req: AvatarVariantRequestsRequest = {}): Promise<AvatarVariantRequestsResult> {
+  return postJson<AvatarVariantRequestsResult>('/api/avatar/variants/request', req, 'POST /api/avatar/variants/request');
+}
+
+/** POST /api/avatar/new: a new avatar project from one PNG; the server opens it (without a model). */
+export async function newAvatar(req: AvatarNewRequest): Promise<AvatarNewResult> {
+  const body = await postJson<AvatarNewResult>('/api/avatar/new', req, 'POST /api/avatar/new', { exists: true });
+  if (!body || !isAvatarRef(body)) throw new ApiRequestError('POST /api/avatar/new returned an unexpected body', 200);
+  return body;
 }

@@ -628,8 +628,11 @@ describe('mcp server: client limits and robustness', () => {
     expect(texts(recipes)[0]).toBe(readFileSync(path.join(PACKAGE_ROOT, 'docs', 'RECIPES.md'), 'utf8'));
     const arch = await call('rev2d_docs', { topic: 'architecture' });
     expect(texts(arch)[0]).toBe(readFileSync(path.join(PACKAGE_ROOT, 'docs', 'ARCHITECTURE.md'), 'utf8'));
+    const avatar = await call('rev2d_docs', { topic: 'avatar' });
+    expect(texts(avatar)[0]).toBe(readFileSync(path.join(PACKAGE_ROOT, 'docs', 'AVATAR.md'), 'utf8'));
+    expect(docsTool.description).toContain('avatar = ');
     const { resources } = await client.listResources();
-    expect(resources.map((r) => r.uri)).toContain('rev2d://docs/recipes');
+    expect(resources.map((r) => r.uri)).toEqual(expect.arrayContaining(['rev2d://docs/recipes', 'rev2d://docs/avatar']));
   });
 
   it('falls back to the quickstart (agents) and the built-in op catalogue (ops) in an installation without those files', async () => {

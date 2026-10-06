@@ -102,7 +102,7 @@ with `InMemoryTransport`). Both live in `src/mcp/server.ts`.
 | --- | --- | --- |
 | `rev2d_guide` | — | Quickstart for AI authors: conventions, workflow, address grammar, op recipes (head turn with `bind_warp`, blink, physics hair, idle), pitfalls. **Call first.** |
 | `rev2d_schema` | `name?` | JSON Schema of the model, or of one sub-schema (`Part`, `Shape`, `Binding`, `Animation`, `Physics`, ...; case-insensitive). |
-| `rev2d_docs` | `topic`: `spec` \| `ops` \| `cli` \| `mcp` \| `recipes` \| `interop` \| `architecture` \| `examples` \| `agents` | The documentation file for the topic (`recipes` = docs/RECIPES.md, copy-paste op batches with their checks; the tool description lists every recipe by name; `interop` = docs/INTEROP.md, Spine and Live2D import / export; `architecture` = docs/ARCHITECTURE.md); `examples` lists every template with its parameters and animations; `agents` is AGENTS.md (the quickstart when an installation has none). |
+| `rev2d_docs` | `topic`: `spec` \| `ops` \| `cli` \| `mcp` \| `recipes` \| `interop` \| `avatar` \| `architecture` \| `examples` \| `agents` | The documentation file for the topic (`recipes` = docs/RECIPES.md, copy-paste op batches with their checks; the tool description lists every recipe by name; `interop` = docs/INTEROP.md, Spine and Live2D import / export; `avatar` = docs/AVATAR.md, an animated avatar from one illustration with the `rev2d avatar` CLI commands, which have no MCP tools yet; `architecture` = docs/ARCHITECTURE.md); `examples` lists every template with its parameters and animations; `agents` is AGENTS.md (the quickstart when an installation has none). |
 | `rev2d_validate` | `path` | One line per diagnostic + JSON `{ok, file, errors, warnings, diagnostics}`; `isError` when the model has errors. |
 | `rev2d_info` | `path` | Outline (parameters and what they drive, bone tree, warps, parts, bindings, IK, physics, animations) + the same as JSON. |
 | `rev2d_render` | `path`, pose, `overlay?`, `only?` + `onlyChain?` (overlay focus on these bone/warp/part ids), `scale?`, `viewBox?` (`"fit"` or `[x,y,w,h]`), `padding?`, `background?`, `save_to?` | PNG + summary: image size, viewBox, scale, non-default params, visible and hidden parts, events, IK reach per constraint (`IK: armIk extension 1.08 (out of reach: misses the target by 12 px)`; otherwise `reaches the target`, `within reach; softness keeps the tip 2 px short` or, for a one-bone constraint, `one bone aiming at the target`) and `note:` lines for problems: IK targets out of reach or chains nearly straight (snap risk), physics outputs clamped to their parameter range, visible parts entirely outside the view (only when the view box is the canvas: an explicit crop leaves parts out on purpose) and nothing visible in the view box. |
@@ -229,6 +229,7 @@ editor, so the human sees every edit.
 | `rev2d://docs/ops` | docs/OPS.md (or the op catalogue compiled into the ops module) |
 | `rev2d://docs/recipes` | docs/RECIPES.md |
 | `rev2d://docs/interop` | docs/INTEROP.md |
+| `rev2d://docs/avatar` | docs/AVATAR.md |
 | `rev2d://schema` | JSON Schema of a model file. |
 
 ## Example session

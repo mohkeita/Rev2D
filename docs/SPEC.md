@@ -7,6 +7,10 @@ address grammar. Evaluation is deterministic: the same model + inputs always pro
 
 The authoritative schema is `src/core/schema.ts` (JSON Schema: `rev2d schema`).
 
+Models generated from one illustration (`rev2d avatar build`) are ordinary v1 models in canvas =
+image pixels. Their source of truth is the avatar spec `avatar.json`, a separate format described in
+[AVATAR.md](AVATAR.md) (`rev2d avatar schema`).
+
 ---
 
 ## 1. Coordinate system
@@ -82,7 +86,8 @@ A root bone with `x=256, y=400` sits at canvas pixel (256, 400).
 ### 3.3 Warps (lattice deformers)
 `{ "id": "faceWarp", "parent": "head", "rect": [176, 120, 160, 180], "cols": 3, "rows": 3 }`
 
-A grid of `(cols+1) × (rows+1)` control points over `rect` (setup space). Point index
+A grid of `(cols+1) × (rows+1)` control points over `rect` (setup space); `cols` and `rows` are whole
+numbers from 1 to 64 (default 2). Point index
 `i = row * (cols + 1) + col`, rest position `(x + w·col/cols, y + h·row/rows)`.
 Bind `warp:<id>.offsets` (a point list of offsets from rest, setup-space pixels) to bend everything
 inside. Children (parts or warps whose `parent` is this warp) are mapped **bilinearly** through the

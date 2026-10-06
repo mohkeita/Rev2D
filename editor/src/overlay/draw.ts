@@ -3,14 +3,21 @@
  * coordinate grid, the model canvas frame, mesh wireframes, warp lattices, part bounds, bones, id
  * labels and the selection / hover highlights (a selected IK constraint shows its bone chain and
  * target, a physics group the bones and warps it moves). Line widths are constant on screen at any zoom.
+ *
+ * Colours come from the design tokens through an OverlayTheme (overlay/theme.ts), so the overlay
+ * follows the light / dark appearance. Selection uses the one tint: a tint line over a light
+ * underlay, and handles drawn as discs with a coloured ring (`drawHandle`, also for other modes).
+ * The canvas is full-bleed under the floating chrome: rulers sit at the edges of the free area
+ * (`insets`).
  */
 import type { DrawItem, Model, Pose, RGBA } from '../../../src/core/index.js';
 import { parseColor } from '../../../src/core/index.js';
 import type { OverlayLayer } from '../state/app.js';
 import type { EntityRef } from '../state/doc.js';
-import { visibleRect, worldToScreen, type Camera, type ViewportSize } from '../view/camera.js';
+import { NO_INSETS, visibleRect, worldToScreen, type Camera, type ViewInsets, type ViewportSize } from '../view/camera.js';
 import { boneGlyph, boundaryEdges, formatCoord, gridLines, gridSpacing, latticePolylines, uniqueEdges } from './geometry.js';
 import { rigHighlight, type RigHighlight } from './highlight.js';
+import type { OverlayTheme } from './theme.js';
 
 export interface OverlayInput {
   model: Model | null;
@@ -24,16 +31,12 @@ export interface OverlayInput {
   /** "part:<id>" or "bone:<id>" under the pointer. */
   hover: EntityRef | null;
   hidden: ReadonlySet<string>;
+  theme: OverlayTheme;
+  /** Part of the viewport covered by floating chrome (rulers and captions keep clear of it). */
+  insets?: ViewInsets;
 }
 
-const FONT = '11px "Segoe UI", system-ui, -apple-system, sans-serif';
-const MONO = '10px "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace';
-const ACCENT = '#4c9dff';
-const MESH = 'rgba(90, 190, 255, 0.42)';
-const WARP = 'rgba(255, 96, 214, 0.95)';
-const BOUNDS = 'rgba(255, 210, 70, 0.9)';
-const SHADOW = 'rgba(0, 0, 0, 0.55)';
-const BONE_PALETTE = ['#ff5a5a', '#58f070', '#5a9aff', '#ffcc33', '#ff5aff', '#33dddd', '#ff9933', '#aa77ff'];
+type ToScreen = (x: number, y: number) => [number, number];
 
 const edgeCache = new WeakMap<ArrayLike<number>, Uint32Array>();
 const outlineCache = new WeakMap<ArrayLike<number>, Uint32Array>();
@@ -62,14 +65,14 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, o: OverlayInput): voi
   ctx.lineCap = 'round';
   if (!o.model) return;
 
-  const S = (x: number, y: number): [number, number] => worldToScreen(o.camera, vp, x, y);
+  const S: ToScreen = (x, y) => worldToScreen(o.camera, vp, x, y);
   const L = o.layers;
   if (L.has('grid')) drawGrid(ctx, o);
   drawCanvasFrame(ctx, o, S);
   if (!o.pose) return;
   const hl = rigHighlight(o.model, o.selection);
   if (L.has('mesh')) drawMesh(ctx, o, S);
-  if (L.has('warps')) drawWarps(ctx, o.model, o.pose, S, null);
+  if (L.has('warps')) drawWarps(ctx, o, S, null);
   if (L.has('bounds')) drawBounds(ctx, o, S);
   drawHover(ctx, o, S);
   drawSelection(ctx, o, hl, S);
@@ -80,10 +83,56 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, o: OverlayInput): voi
   if (L.has('labels')) drawLabels(ctx, o, S);
 }
 
+// ------------------------------------------------------------------------------------ handles
+
+/**
+ * A handle: a disc ringed in `color`. `selected` handles are larger (14 px across), filled white
+ * and ringed in the tint. Shared by every mode that puts draggable points on the canvas.
+ */
+export function drawHandle(ctx: CanvasRenderingContext2D, theme: OverlayTheme, x: number, y: number, opts: { color?: string; selected?: boolean; radius?: number } = {}): void {
+  const selected = opts.selected === true;
+  const r = opts.radius ?? (selected ? 7 : 4.5);
+  ctx.beginPath();
+  ctx.arc(x, y, r + 1, 0, Math.PI * 2);
+  ctx.fillStyle = theme.haloSoft;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, r - 1, 0, Math.PI * 2);
+  ctx.fillStyle = selected ? theme.onAccent : theme.handleFill;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = selected ? theme.accent : (opts.color ?? theme.accent);
+  ctx.stroke();
+}
+
+/** Stroke the current path as a tint line over a light underlay (reads on any artwork). */
+function strokeAccent(ctx: CanvasRenderingContext2D, theme: OverlayTheme, width: number, alpha = 1): void {
+  ctx.globalAlpha = alpha * 0.9;
+  ctx.lineWidth = width + 2;
+  ctx.strokeStyle = theme.onAccent;
+  ctx.stroke();
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = width;
+  ctx.strokeStyle = theme.accent;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+/** Stroke the current path in `color` over a dark halo. */
+function strokeOverHalo(ctx: CanvasRenderingContext2D, theme: OverlayTheme, color: string, width: number): void {
+  ctx.lineWidth = width + 2;
+  ctx.strokeStyle = theme.halo;
+  ctx.stroke();
+  ctx.lineWidth = width;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+}
+
 // ------------------------------------------------------------------------------------ grid
 
 function drawGrid(ctx: CanvasRenderingContext2D, o: OverlayInput): void {
-  const { camera: cam, viewport: vp } = o;
+  const { camera: cam, viewport: vp, theme: T } = o;
+  const inset = o.insets ?? NO_INSETS;
   const [x0, y0, vw, vh] = visibleRect(cam, vp);
   const { minor, major } = gridSpacing(cam.zoom, 10);
   const isMajor = (v: number): boolean => Math.abs(v / major - Math.round(v / major)) < 1e-6;
@@ -107,54 +156,61 @@ function drawGrid(ctx: CanvasRenderingContext2D, o: OverlayInput): void {
     ctx.lineWidth = 1;
     ctx.stroke();
   };
-  lines((v) => !isMajor(v), 'rgba(150, 168, 200, 0.07)');
-  lines((v) => isMajor(v) && v !== 0, 'rgba(150, 168, 200, 0.17)');
+  lines((v) => !isMajor(v), T.gridMinor);
+  lines((v) => isMajor(v) && v !== 0, T.gridMajor);
   // Axes through the model origin.
   ctx.beginPath();
   ctx.moveTo(sx(0), 0);
   ctx.lineTo(sx(0), vp.height);
-  ctx.strokeStyle = 'rgba(110, 230, 140, 0.45)';
+  ctx.strokeStyle = T.axisX;
   ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(0, sy(0));
   ctx.lineTo(vp.width, sy(0));
-  ctx.strokeStyle = 'rgba(255, 110, 110, 0.45)';
+  ctx.strokeStyle = T.axisY;
   ctx.stroke();
 
-  // Coordinate rulers along the top and left edges.
-  ctx.font = MONO;
+  // Coordinate rulers along the top and leading edges of the free area.
+  const left = inset.left;
+  const top = inset.top;
+  const right = vp.width - inset.right;
+  const bottom = vp.height - inset.bottom;
+  if (right - left < 120 || bottom - top < 80) return;
+  ctx.font = T.mono;
   ctx.textBaseline = 'top';
-  ctx.fillStyle = 'rgba(12, 14, 18, 0.72)';
-  ctx.fillRect(0, 0, vp.width, 15);
-  ctx.fillRect(0, 15, 34, vp.height - 15);
-  ctx.fillStyle = 'rgba(200, 212, 235, 0.85)';
+  ctx.fillStyle = T.rulerPlate;
+  ctx.fillRect(left, top, right - left, 15);
+  ctx.fillRect(left, top + 15, 34, bottom - top - 15);
+  ctx.fillStyle = T.rulerText;
   for (const x of xs) {
     if (!isMajor(x)) continue;
     const px = sx(x);
-    if (px < 36) continue;
-    ctx.fillText(formatCoord(x, minor), px + 3, 2);
-    ctx.fillRect(px - 0.5, 10, 1, 5);
+    if (px < left + 36 || px > right - 4) continue;
+    ctx.fillText(formatCoord(x, minor), px + 3, top + 2);
+    ctx.fillRect(px - 0.5, top + 10, 1, 5);
   }
   ctx.textBaseline = 'middle';
   for (const y of ys) {
     if (!isMajor(y)) continue;
     const py = sy(y);
-    if (py < 22) continue;
+    if (py < top + 22 || py > bottom - 4) continue;
     ctx.save();
-    ctx.translate(12, py);
+    ctx.translate(left + 12, py);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'left';
     ctx.fillText(formatCoord(y, minor), 3, 0);
     ctx.restore();
-    ctx.fillRect(29, py - 0.5, 5, 1);
+    ctx.fillRect(left + 29, py - 0.5, 5, 1);
   }
   ctx.textAlign = 'left';
 }
 
 // ------------------------------------------------------------------------------------ canvas frame
 
-function drawCanvasFrame(ctx: CanvasRenderingContext2D, o: OverlayInput, S: (x: number, y: number) => [number, number]): void {
+/** The model canvas as an artboard: a hairline, a soft shadow around it and a small caption. */
+function drawCanvasFrame(ctx: CanvasRenderingContext2D, o: OverlayInput, S: ToScreen): void {
   const m = o.model!;
+  const T = o.theme;
   const [ax, ay] = S(0, 0);
   const [bx, by] = S(m.meta.width, m.meta.height);
   const x = Math.round(ax) + 0.5;
@@ -162,25 +218,25 @@ function drawCanvasFrame(ctx: CanvasRenderingContext2D, o: OverlayInput, S: (x: 
   const w = Math.round(bx) - Math.round(ax);
   const h = Math.round(by) - Math.round(ay);
   ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+  // Shadow: rings of fading strength just outside the frame, a little heavier below.
+  T.frameShadow.forEach((color, i) => {
+    const d = i + 1;
+    ctx.strokeStyle = color;
+    ctx.strokeRect(x - d, y - d + (i > 0 ? 1 : 0), w + 2 * d, h + 2 * d);
+  });
+  ctx.strokeStyle = T.frame;
   ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-  ctx.strokeRect(x, y, w, h);
-  ctx.font = MONO;
+  ctx.font = T.mono;
   ctx.textBaseline = 'bottom';
-  ctx.fillStyle = 'rgba(190, 200, 220, 0.7)';
+  ctx.fillStyle = T.frameLabel;
   const label = `${m.meta.name} · ${m.meta.width} × ${m.meta.height}`;
-  if (y - 4 > 18) ctx.fillText(label, x, y - 4);
+  const top = (o.insets ?? NO_INSETS).top;
+  if (y - 6 > top + 14) ctx.fillText(label, x, y - 6);
 }
 
 // ------------------------------------------------------------------------------------ mesh
 
-function strokeEdges(
-  ctx: CanvasRenderingContext2D,
-  positions: ArrayLike<number>,
-  edges: Uint32Array,
-  S: (x: number, y: number) => [number, number],
-): void {
+function strokeEdges(ctx: CanvasRenderingContext2D, positions: ArrayLike<number>, edges: Uint32Array, S: ToScreen): void {
   for (let i = 0; i < edges.length; i += 2) {
     const a = edges[i] * 2;
     const b = edges[i + 1] * 2;
@@ -191,28 +247,24 @@ function strokeEdges(
   }
 }
 
-function drawMesh(ctx: CanvasRenderingContext2D, o: OverlayInput, S: (x: number, y: number) => [number, number]): void {
+function drawMesh(ctx: CanvasRenderingContext2D, o: OverlayInput, S: ToScreen): void {
   ctx.beginPath();
   for (const item of o.draws) {
     if (o.hidden.has(item.partId)) continue;
     strokeEdges(ctx, item.positions, cached(edgeCache, item.indices, uniqueEdges), S);
   }
   ctx.lineWidth = 1;
-  ctx.strokeStyle = MESH;
+  ctx.strokeStyle = o.theme.mesh;
   ctx.stroke();
 }
 
 // ------------------------------------------------------------------------------------ warps
 
-function drawWarps(
-  ctx: CanvasRenderingContext2D,
-  model: Model,
-  pose: Pose,
-  S: (x: number, y: number) => [number, number],
-  only: ReadonlySet<string> | null,
-  color = WARP,
-): void {
-  for (const warp of model.warps) {
+/** Warp lattices. `only`: just these warps, as a selection (tint line, handles on the points). */
+function drawWarps(ctx: CanvasRenderingContext2D, o: OverlayInput, S: ToScreen, only: ReadonlySet<string> | null): void {
+  const T = o.theme;
+  const pose = o.pose!;
+  for (const warp of o.model!.warps) {
     if (only !== null && !only.has(warp.id)) continue;
     const wp = pose.warps[warp.id];
     if (!wp) continue;
@@ -225,17 +277,24 @@ function drawWarps(
         else ctx.lineTo(x, y);
       }
     }
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = SHADOW;
-    ctx.stroke();
-    ctx.lineWidth = only !== null ? 1.5 : 1;
-    ctx.strokeStyle = color;
-    ctx.stroke();
+    if (only !== null) {
+      strokeAccent(ctx, T, 1.5);
+      // Handles only while they do not crowd each other.
+      const [x0, y0] = S(wp.points[0], wp.points[1]);
+      const [x1, y1] = S(wp.points[2] ?? wp.points[0], wp.points[3] ?? wp.points[1]);
+      const spacing = Math.hypot(x1 - x0, y1 - y0);
+      for (let i = 0; i < wp.points.length; i += 2) {
+        const [x, y] = S(wp.points[i], wp.points[i + 1]);
+        drawHandle(ctx, T, x, y, { radius: spacing >= 22 ? 4 : 2.5 });
+      }
+      continue;
+    }
+    strokeOverHalo(ctx, T, T.warp, 1);
     for (let i = 0; i < wp.points.length; i += 2) {
       const [x, y] = S(wp.points[i], wp.points[i + 1]);
-      ctx.fillStyle = SHADOW;
+      ctx.fillStyle = T.halo;
       ctx.fillRect(x - 3, y - 3, 6, 6);
-      ctx.fillStyle = color;
+      ctx.fillStyle = T.warp;
       ctx.fillRect(x - 2, y - 2, 4, 4);
     }
   }
@@ -243,7 +302,7 @@ function drawWarps(
 
 // ------------------------------------------------------------------------------------ bounds
 
-function drawBounds(ctx: CanvasRenderingContext2D, o: OverlayInput, S: (x: number, y: number) => [number, number]): void {
+function drawBounds(ctx: CanvasRenderingContext2D, o: OverlayInput, S: ToScreen): void {
   ctx.beginPath();
   for (const id of o.pose!.drawOrder) {
     if (o.hidden.has(id)) continue;
@@ -253,48 +312,42 @@ function drawBounds(ctx: CanvasRenderingContext2D, o: OverlayInput, S: (x: numbe
     const [x1, y1] = S(b[0] + b[2], b[1] + b[3]);
     ctx.rect(Math.round(x0) + 0.5, Math.round(y0) + 0.5, Math.round(x1 - x0), Math.round(y1 - y0));
   }
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = SHADOW;
-  ctx.stroke();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = BOUNDS;
-  ctx.stroke();
+  strokeOverHalo(ctx, o.theme, o.theme.bounds, 1);
 }
 
 // ------------------------------------------------------------------------------------ bones
 
-/** Bone overlay color as "#rrggbb" (so an alpha suffix can be appended). */
-function boneColor(model: Model, index: number): string {
-  const c = model.bones[index].color;
+/** Bone overlay colour: the bone's own `color`, else one of the palette by index. */
+function boneColor(o: OverlayInput, index: number): string {
+  const c = o.model!.bones[index].color;
   const rgba = c !== undefined ? parseColor(c) : null;
-  return rgba ? hex(rgba) : BONE_PALETTE[index % BONE_PALETTE.length];
+  return rgba ? cssOf(rgba) : o.theme.bonePalette[index % o.theme.bonePalette.length];
 }
 
-function hex(c: RGBA): string {
-  return `#${[c[0], c[1], c[2]].map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('')}`;
+function cssOf(c: RGBA): string {
+  const ch = (v: number): number => Math.round(Math.min(1, Math.max(0, v)) * 255);
+  return `rgb(${ch(c[0])}, ${ch(c[1])}, ${ch(c[2])})`;
 }
 
-function drawBone(
-  ctx: CanvasRenderingContext2D,
-  joint: [number, number],
-  tip: [number, number],
-  color: string,
-  emphasis: 'normal' | 'hover' | 'selected',
-): void {
-  const glyph = boneGlyph(joint[0], joint[1], tip[0], tip[1], emphasis === 'selected' ? 8 : 7);
+function drawBone(ctx: CanvasRenderingContext2D, T: OverlayTheme, joint: [number, number], tip: [number, number], color: string, emphasis: 'normal' | 'hover' | 'selected'): void {
+  const selected = emphasis === 'selected';
+  const glyph = boneGlyph(joint[0], joint[1], tip[0], tip[1], selected ? 8 : 7);
   if (glyph) {
     ctx.beginPath();
     ctx.moveTo(glyph[0], glyph[1]);
     for (let i = 2; i < glyph.length; i += 2) ctx.lineTo(glyph[i], glyph[i + 1]);
     ctx.closePath();
-    ctx.fillStyle = emphasis === 'selected' ? 'rgba(76, 157, 255, 0.55)' : `${color}66`;
-    ctx.fill();
-    ctx.lineWidth = emphasis === 'normal' ? 1.25 : 2;
-    ctx.strokeStyle = SHADOW;
-    ctx.stroke();
-    ctx.strokeStyle = emphasis === 'selected' ? '#ffffff' : emphasis === 'hover' ? '#ffffffcc' : color;
-    ctx.lineWidth = emphasis === 'normal' ? 1 : 1.5;
-    ctx.stroke();
+    if (selected) {
+      ctx.fillStyle = T.accentFill;
+      ctx.fill();
+      strokeAccent(ctx, T, 1.5);
+    } else {
+      ctx.globalAlpha = emphasis === 'hover' ? 0.6 : 0.4;
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      strokeOverHalo(ctx, T, color, emphasis === 'hover' ? 1.5 : 1);
+    }
   } else {
     // Zero-length bone: a cross through the joint.
     ctx.beginPath();
@@ -302,23 +355,13 @@ function drawBone(
     ctx.lineTo(joint[0] + 6, joint[1] + 6);
     ctx.moveTo(joint[0] + 6, joint[1] - 6);
     ctx.lineTo(joint[0] - 6, joint[1] + 6);
-    ctx.lineWidth = 3.5;
-    ctx.strokeStyle = SHADOW;
-    ctx.stroke();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = emphasis === 'selected' ? '#ffffff' : color;
-    ctx.stroke();
+    if (selected) strokeAccent(ctx, T, 1.5);
+    else strokeOverHalo(ctx, T, color, 1.5);
   }
-  ctx.beginPath();
-  ctx.arc(joint[0], joint[1], emphasis === 'normal' ? 4 : 5, 0, Math.PI * 2);
-  ctx.fillStyle = emphasis === 'selected' ? ACCENT : 'rgba(10, 12, 16, 0.85)';
-  ctx.fill();
-  ctx.lineWidth = 1.75;
-  ctx.strokeStyle = emphasis === 'normal' ? color : '#ffffff';
-  ctx.stroke();
+  drawHandle(ctx, T, joint[0], joint[1], { color, selected, radius: selected ? 7 : emphasis === 'hover' ? 5.5 : 4.5 });
 }
 
-function drawBones(ctx: CanvasRenderingContext2D, o: OverlayInput, hl: RigHighlight, S: (x: number, y: number) => [number, number]): void {
+function drawBones(ctx: CanvasRenderingContext2D, o: OverlayInput, hl: RigHighlight, S: ToScreen): void {
   const model = o.model!;
   const pose = o.pose!;
   // Parent links: dashed joint-to-joint lines underneath.
@@ -335,7 +378,7 @@ function drawBones(ctx: CanvasRenderingContext2D, o: OverlayInput, hl: RigHighli
   }
   ctx.setLineDash([3, 3]);
   ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.strokeStyle = o.theme.boneLink;
   ctx.stroke();
   ctx.setLineDash([]);
 
@@ -343,44 +386,51 @@ function drawBones(ctx: CanvasRenderingContext2D, o: OverlayInput, hl: RigHighli
   model.bones.forEach((bone, i) => {
     const bp = pose.bones[bone.id];
     if (!bp || hl.bones.has(bone.id)) return;
-    drawBone(ctx, S(bp.x, bp.y), S(bp.tip[0], bp.tip[1]), boneColor(model, i), bone.id === hover ? 'hover' : 'normal');
+    drawBone(ctx, o.theme, S(bp.x, bp.y), S(bp.tip[0], bp.tip[1]), boneColor(o, i), bone.id === hover ? 'hover' : 'normal');
   });
 }
 
 // ------------------------------------------------------------------------------------ labels
 
-function pill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string, border?: string): [number, number, number, number] {
-  ctx.font = FONT;
-  const w = Math.ceil(ctx.measureText(text).width) + 8;
-  const h = 16;
-  ctx.fillStyle = 'rgba(12, 14, 18, 0.82)';
+function pill(ctx: CanvasRenderingContext2D, T: OverlayTheme, text: string, x: number, y: number, color: string, mark?: string): [number, number, number, number] {
+  ctx.font = T.font;
+  const w = Math.ceil(ctx.measureText(text).width) + (mark ? 14 : 10);
+  const h = 17;
+  ctx.fillStyle = T.haloSoft;
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 3);
+  ctx.roundRect(x - 0.5, y - 0.5, w + 1, h + 1, 5.5);
   ctx.fill();
-  if (border) {
-    ctx.fillStyle = border;
-    ctx.fillRect(x, y + 2, 2, h - 4);
+  ctx.fillStyle = T.pillPlate;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 5);
+  ctx.fill();
+  if (mark) {
+    ctx.fillStyle = mark;
+    ctx.beginPath();
+    ctx.arc(x + 7, y + h / 2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.fillStyle = color;
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, x + 5, y + h / 2 + 0.5);
+  ctx.fillText(text, x + (mark ? 12 : 5), y + h / 2 + 0.5);
   return [x, y, w, h];
 }
 
-function drawLabels(ctx: CanvasRenderingContext2D, o: OverlayInput, S: (x: number, y: number) => [number, number]): void {
+function drawLabels(ctx: CanvasRenderingContext2D, o: OverlayInput, S: ToScreen): void {
   const model = o.model!;
   const pose = o.pose!;
+  const T = o.theme;
   const placed: Array<[number, number, number, number]> = [];
   const free = (r: [number, number, number, number]): boolean =>
     !placed.some((p) => r[0] < p[0] + p[2] && p[0] < r[0] + r[2] && r[1] < p[1] + p[3] && p[1] < r[1] + r[3]);
-  const place = (text: string, x: number, y: number, color: string, border?: string): void => {
-    ctx.font = FONT;
-    const w = Math.ceil(ctx.measureText(text).width) + 8;
+  const place = (text: string, x: number, y: number, color: string, mark?: string): void => {
+    ctx.font = T.font;
+    const w = Math.ceil(ctx.measureText(text).width) + (mark ? 14 : 10);
     for (let k = 0; k < 8; k++) {
-      const dy = (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * 18;
-      const r: [number, number, number, number] = [x, y + dy, w, 16];
+      const dy = (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * 19;
+      const r: [number, number, number, number] = [x, y + dy, w, 17];
       if (free(r)) {
-        placed.push(pill(ctx, text, r[0], r[1], color, border));
+        placed.push(pill(ctx, T, text, r[0], r[1], color, mark));
         return;
       }
     }
@@ -389,14 +439,14 @@ function drawLabels(ctx: CanvasRenderingContext2D, o: OverlayInput, S: (x: numbe
     const bp = pose.bones[bone.id];
     if (!bp) return;
     const [x, y] = S(bp.x, bp.y);
-    place(bone.id, Math.round(x + 9), Math.round(y - 8), '#ffffff', boneColor(model, i));
+    place(bone.id, Math.round(x + 10), Math.round(y - 8), T.pillText, boneColor(o, i));
   });
   for (const id of pose.drawOrder) {
     if (o.hidden.has(id)) continue;
     const b = pose.parts[id]?.bounds;
     if (!b) continue;
     const [x, y] = S(b[0], b[1]);
-    place(id, Math.round(x + 2), Math.round(y + 2), 'rgb(255, 214, 90)');
+    place(id, Math.round(x + 2), Math.round(y + 2), T.pillPartText);
   }
 }
 
@@ -406,7 +456,7 @@ function partItems(o: OverlayInput, id: string): DrawItem[] {
   return o.draws.filter((d) => d.partId === id);
 }
 
-function outlinePart(ctx: CanvasRenderingContext2D, o: OverlayInput, id: string, S: (x: number, y: number) => [number, number]): boolean {
+function outlinePart(ctx: CanvasRenderingContext2D, o: OverlayInput, id: string, S: ToScreen): boolean {
   const items = partItems(o, id);
   if (items.length === 0) return false;
   ctx.beginPath();
@@ -414,40 +464,30 @@ function outlinePart(ctx: CanvasRenderingContext2D, o: OverlayInput, id: string,
   return true;
 }
 
-function drawHover(ctx: CanvasRenderingContext2D, o: OverlayInput, S: (x: number, y: number) => [number, number]): void {
+function drawHover(ctx: CanvasRenderingContext2D, o: OverlayInput, S: ToScreen): void {
   const h = o.hover;
   if (h?.kind !== 'part' || o.selection.some((r) => r.kind === 'part' && r.id === h.id)) return;
   if (!outlinePart(ctx, o, h.id, S)) return;
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-  ctx.stroke();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-  ctx.stroke();
+  strokeAccent(ctx, o.theme, 1, 0.7);
 }
 
-function drawSelection(ctx: CanvasRenderingContext2D, o: OverlayInput, hl: RigHighlight, S: (x: number, y: number) => [number, number]): void {
-  const model = o.model!;
+function drawSelection(ctx: CanvasRenderingContext2D, o: OverlayInput, hl: RigHighlight, S: ToScreen): void {
   const pose = o.pose!;
+  const T = o.theme;
   // Selected warps and the warps a selected physics group moves.
-  if (hl.warps.size) drawWarps(ctx, model, pose, S, hl.warps, ACCENT);
+  if (hl.warps.size) drawWarps(ctx, o, S, hl.warps);
   for (const ref of o.selection) {
     if (ref.kind === 'part') {
       const items = partItems(o, ref.id);
       if (items.length) {
-        // Faint triangle wireframe + tinted fill + strong silhouette.
+        // Faint triangle wireframe + strong silhouette.
         ctx.beginPath();
         for (const item of items) strokeEdges(ctx, item.positions, cached(edgeCache, item.indices, uniqueEdges), S);
         ctx.lineWidth = 1;
-        ctx.strokeStyle = 'rgba(76, 157, 255, 0.35)';
+        ctx.strokeStyle = T.accentSoft;
         ctx.stroke();
         outlinePart(ctx, o, ref.id, S);
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.stroke();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = ACCENT;
-        ctx.stroke();
+        strokeAccent(ctx, T, 2);
       } else {
         // Not drawn (hidden, invisible or empty): dashed bounds.
         const b = pose.parts[ref.id]?.bounds;
@@ -455,17 +495,18 @@ function drawSelection(ctx: CanvasRenderingContext2D, o: OverlayInput, hl: RigHi
         const [x0, y0] = S(b[0], b[1]);
         const [x1, y1] = S(b[0] + b[2], b[1] + b[3]);
         ctx.setLineDash([4, 4]);
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = ACCENT;
-        ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+        ctx.beginPath();
+        ctx.rect(x0, y0, x1 - x0, y1 - y0);
+        strokeAccent(ctx, T, 1.5);
         ctx.setLineDash([]);
       }
     }
   }
 }
 
-function drawSelectedBones(ctx: CanvasRenderingContext2D, o: OverlayInput, hl: RigHighlight, S: (x: number, y: number) => [number, number]): void {
+function drawSelectedBones(ctx: CanvasRenderingContext2D, o: OverlayInput, hl: RigHighlight, S: ToScreen): void {
   const pose = o.pose!;
+  const T = o.theme;
   // IK goal lines: chain tip -> target joint.
   for (const link of hl.links) {
     const from = pose.bones[link.from];
@@ -477,26 +518,21 @@ function drawSelectedBones(ctx: CanvasRenderingContext2D, o: OverlayInput, hl: R
     ctx.moveTo(ax, ay);
     ctx.lineTo(bx, by);
     ctx.setLineDash([5, 4]);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = SHADOW;
-    ctx.stroke();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = ACCENT;
-    ctx.stroke();
+    strokeAccent(ctx, T, 1.5);
     ctx.setLineDash([]);
   }
   for (const id of hl.bones) {
     const bp = pose.bones[id];
-    if (bp) drawBone(ctx, S(bp.x, bp.y), S(bp.tip[0], bp.tip[1]), ACCENT, 'selected');
+    if (bp) drawBone(ctx, T, S(bp.x, bp.y), S(bp.tip[0], bp.tip[1]), T.accent, 'selected');
   }
   for (const id of hl.targets) {
     const bp = pose.bones[id];
-    if (bp) drawTarget(ctx, S(bp.x, bp.y));
+    if (bp) drawTarget(ctx, T, S(bp.x, bp.y));
   }
 }
 
 /** IK goal marker: a ring with a cross hair. */
-function drawTarget(ctx: CanvasRenderingContext2D, [x, y]: [number, number]): void {
+function drawTarget(ctx: CanvasRenderingContext2D, T: OverlayTheme, [x, y]: [number, number]): void {
   ctx.beginPath();
   ctx.arc(x, y, 9, 0, Math.PI * 2);
   ctx.moveTo(x - 14, y);
@@ -507,10 +543,5 @@ function drawTarget(ctx: CanvasRenderingContext2D, [x, y]: [number, number]): vo
   ctx.lineTo(x, y - 4);
   ctx.moveTo(x, y + 4);
   ctx.lineTo(x, y + 14);
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = SHADOW;
-  ctx.stroke();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = ACCENT;
-  ctx.stroke();
+  strokeAccent(ctx, T, 2);
 }

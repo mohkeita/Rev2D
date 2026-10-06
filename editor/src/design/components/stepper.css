@@ -1,0 +1,59 @@
+/* Stepper: a capsule split in two. */
+
+.r2-stepper {
+  --_h: var(--r2-control-md);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: var(--_h);
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-fill-3);
+}
+
+.r2-stepper[data-size='sm'] {
+  --_h: var(--r2-control-sm);
+}
+
+.r2-stepper-button {
+  display: inline-grid;
+  place-items: center;
+  width: calc(var(--_h) + 6px);
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r2-radius-capsule);
+  background: none;
+  color: var(--r2-label);
+  cursor: default;
+  touch-action: manipulation;
+  transition: background-color var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.r2-stepper-button:hover:not(:disabled) {
+  background: var(--r2-fill-4);
+}
+
+.r2-stepper-button:active:not(:disabled) {
+  background: var(--r2-fill);
+}
+
+.r2-stepper-button:disabled {
+  color: var(--r2-label-4);
+}
+
+.r2-stepper-divider {
+  width: 1px;
+  height: 46%;
+  background: var(--r2-separator-strong);
+}
+
+@media (forced-colors: active) {
+  .r2-stepper {
+    border: 1px solid ButtonBorder;
+  }
+
+  .r2-stepper-divider {
+    background: ButtonBorder;
+  }
+}

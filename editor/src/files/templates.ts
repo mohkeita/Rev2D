@@ -13,6 +13,7 @@ import minimalPng from '../assets/templates/minimal.png';
 import robotArmPng from '../assets/templates/robot-arm.png';
 import slimePng from '../assets/templates/slime.png';
 import texturedPng from '../assets/templates/textured.png';
+import { t, type MessageKey } from '../i18n/index.js';
 
 const THUMBNAILS: Record<string, string> = {
   blank: blankPng,
@@ -23,14 +24,24 @@ const THUMBNAILS: Record<string, string> = {
   textured: texturedPng,
 };
 
+/** The shipped examples keep their names in every language; the two generated starters are described. */
 const TITLES: Record<string, string> = {
-  blank: 'Blank rig',
-  empty: 'Empty canvas',
   hana: 'Hana',
   minimal: 'Minimal',
   'robot-arm': 'Robot arm',
   slime: 'Slime',
   textured: 'Textured',
+};
+
+/** One-line summaries of the templates this editor knows, in the interface language. */
+const SUMMARIES: Record<string, MessageKey> = {
+  blank: 'files.template.desc.blank',
+  empty: 'files.template.desc.empty',
+  hana: 'files.template.desc.hana',
+  minimal: 'files.template.desc.minimal',
+  'robot-arm': 'files.template.desc.robotArm',
+  slime: 'files.template.desc.slime',
+  textured: 'files.template.desc.textured',
 };
 
 /** Templates generated in code: the only ones whose canvas size can be chosen. */
@@ -44,7 +55,18 @@ export function templateThumbnail(name: string): string | null {
 }
 
 export function templateTitle(name: string): string {
+  if (name === 'blank') return t('files.template.blank');
+  if (name === 'empty') return t('files.template.empty');
   return TITLES[name] ?? name.replace(/[-_]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/**
+ * A short description for a template card: the editor's own summary of the templates it knows (in
+ * the interface language), else the first sentence of the server's description.
+ */
+export function templateSummary(name: string, description: string, max = 110): string {
+  const key = SUMMARIES[name];
+  return key ? t(key) : shortDescription(description, max);
 }
 
 /** First sentence of a description, for compact cards. */

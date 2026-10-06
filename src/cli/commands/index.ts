@@ -1,5 +1,6 @@
 /** Every command, in help order. */
 import type { Command } from '../command.js';
+import { AVATAR_COMMANDS, AVATAR_PARENT } from './avatar.js';
 import { create, ops, set } from './edit.js';
 import { exportLive2d, exportSpine, importLive2d, importSpine } from './interop.js';
 import { edit, editorCommand, editorScreenshot, editorState, mcp } from './live.js';
@@ -22,6 +23,7 @@ export const COMMANDS: Command[] = [
   create,
   ops,
   set,
+  ...AVATAR_COMMANDS,
   importSpine,
   importLive2d,
   exportSpine,
@@ -50,4 +52,5 @@ export const PARENTS: Record<string, { summary: string; subcommands: Command[] }
     summary: 'talk to a running editor (state, command, screenshot)',
     subcommands: [editorState, editorCommand, editorScreenshot],
   },
+  avatar: AVATAR_PARENT,
 };

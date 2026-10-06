@@ -96,8 +96,8 @@ export const WarpSchema = z
     rect: z
       .tuple([z.number(), z.number(), z.number().positive(), z.number().positive()])
       .describe('[x, y, width, height] of the rest lattice in setup space.'),
-    cols: z.number().int().min(1).max(32).default(2).describe('Lattice cells horizontally.'),
-    rows: z.number().int().min(1).max(32).default(2).describe('Lattice cells vertically.'),
+    cols: z.number().int().min(1).max(64).default(2).describe('Lattice cells horizontally (1 to 64).'),
+    rows: z.number().int().min(1).max(64).default(2).describe('Lattice cells vertically (1 to 64).'),
     description: z.string().optional(),
   })
   .describe(

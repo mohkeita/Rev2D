@@ -1,0 +1,34 @@
+/* Tooltip: a small label on a thick material. */
+
+.r2-tooltip {
+  display: flex;
+  align-items: baseline;
+  gap: var(--r2-space-2);
+  max-width: 280px;
+  padding: 5px 9px;
+  border-radius: var(--r2-radius-sm);
+  background: var(--r2-material-thick);
+  -webkit-backdrop-filter: var(--r2-material-filter-thick);
+  backdrop-filter: var(--r2-material-filter-thick);
+  box-shadow:
+    0 0 0 var(--r2-hairline) var(--r2-glass-hairline),
+    var(--r2-shadow-2);
+  color: var(--r2-label);
+  font: var(--r2-text-callout);
+  font-weight: var(--r2-weight-medium);
+  pointer-events: none;
+  animation: r2-fade-in var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.r2-tooltip-shortcut {
+  color: var(--r2-label-2);
+  font: var(--r2-text-mono-small);
+  white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+  .r2-tooltip {
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+}

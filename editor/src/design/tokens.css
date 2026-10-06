@@ -1,0 +1,476 @@
+/*
+ * Rev2D design tokens (iOS / iPadOS inspired). See docs/DESIGN-SYSTEM.md for the rationale.
+ *
+ * Naming: every token is `--r2-<group>[-<level|role>]`; every class of the system starts with `r2-`.
+ * Nothing here collides with the legacy editor variables (--bg-0, --accent, --radius, ...).
+ *
+ * Appearance: set `data-appearance="light" | "dark" | "auto"` on <html> (or on any subtree: scopes
+ * nest). Colours are written once with light-dark(); the attribute only switches `color-scheme`, so
+ * "auto" (and no attribute at all) follows prefers-color-scheme with no duplicated dark block.
+ *
+ * Accessibility switches, each mirrored by a root attribute so that the app (and tests) can force
+ * them:  prefers-reduced-transparency / data-transparency="reduce"   materials become solid
+ *        prefers-contrast: more       / data-contrast="more"         stronger labels and separators
+ *        prefers-reduced-motion       / data-motion="reduce"         no springs, near-instant fades
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* ------------------------------------------------------------------------------------ typography */
+  /* System UI fonts only (no font files are shipped): San Francisco on Apple platforms, Segoe UI
+     Variable on Windows, and native Korean / Japanese faces before the generic fallback. */
+  --r2-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI',
+    'Apple SD Gothic Neo', 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', 'Hiragino Sans', 'Yu Gothic UI',
+    sans-serif;
+  --r2-font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI Variable Display',
+    'Segoe UI', 'Apple SD Gothic Neo', 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', 'Hiragino Sans',
+    'Yu Gothic UI', sans-serif;
+  --r2-font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', 'JetBrains Mono', Menlo,
+    Consolas, 'D2Coding', 'Noto Sans Mono CJK KR', monospace;
+
+  --r2-weight-regular: 400;
+  --r2-weight-medium: 500;
+  --r2-weight-semibold: 600;
+  --r2-weight-bold: 700;
+
+  /* Text styles: `font: var(--r2-text-body)`. Sizes follow the macOS column of the HIG type table
+     (a dense pointer-driven tool), names follow the iOS text styles. iOS size at "Large" in brackets. */
+  --r2-text-large-title: var(--r2-weight-bold) 26px / 32px var(--r2-font-display); /* Large Title (34) */
+  --r2-text-title-1: var(--r2-weight-bold) 22px / 28px var(--r2-font-display); /* Title 1 (28) */
+  --r2-text-title-2: var(--r2-weight-semibold) 17px / 22px var(--r2-font-display); /* Title 2 (22) */
+  --r2-text-title-3: var(--r2-weight-semibold) 15px / 20px var(--r2-font); /* Title 3 (20) */
+  --r2-text-headline: var(--r2-weight-semibold) 13px / 18px var(--r2-font); /* Headline (17 semibold) */
+  --r2-text-body: var(--r2-weight-regular) 13px / 18px var(--r2-font); /* Body (17) */
+  --r2-text-callout: var(--r2-weight-regular) 12px / 16px var(--r2-font); /* Callout (16) */
+  --r2-text-subhead: var(--r2-weight-semibold) 12px / 16px var(--r2-font); /* Subhead (15), emphasized */
+  --r2-text-footnote: var(--r2-weight-regular) 11px / 14px var(--r2-font); /* Footnote (13) */
+  --r2-text-caption: var(--r2-weight-medium) 10px / 13px var(--r2-font); /* Caption 2 (11) */
+  --r2-text-mono: var(--r2-weight-regular) 12px / 16px var(--r2-font-mono); /* numbers, ids, code */
+  --r2-text-mono-small: var(--r2-weight-regular) 11px / 14px var(--r2-font-mono);
+
+  --r2-tracking-display: -0.018em; /* titles of 17 px and more */
+  --r2-tracking-body: 0;
+  --r2-tracking-caption: 0.01em;
+
+  /* --------------------------------------------------------------------------------------- spacing */
+  /* 4 pt grid. Half steps exist for optical corrections inside controls only. */
+  --r2-space-0: 0px;
+  --r2-space-0-5: 2px;
+  --r2-space-1: 4px;
+  --r2-space-1-5: 6px;
+  --r2-space-2: 8px;
+  --r2-space-3: 12px;
+  --r2-space-4: 16px;
+  --r2-space-5: 20px;
+  --r2-space-6: 24px;
+  --r2-space-8: 32px;
+  --r2-space-10: 40px;
+  --r2-space-12: 48px;
+  --r2-space-16: 64px;
+
+  /* ----------------------------------------------------------------------------------------- radii */
+  /* Three kinds of shape: fixed radii (below), capsules, and concentric shapes whose radius is the
+     parent's radius minus the padding between them (--r2-radius-concentric, set by containers). */
+  --r2-radius-2xs: 4px;
+  --r2-radius-xs: 6px;
+  --r2-radius-sm: 8px;
+  --r2-radius-md: 10px;
+  --r2-radius-lg: 14px;
+  --r2-radius-xl: 18px;
+  --r2-radius-2xl: 22px;
+  --r2-radius-3xl: 28px;
+  --r2-radius-capsule: 999px;
+
+  --r2-radius-control-sm: var(--r2-radius-xs);
+  --r2-radius-control: var(--r2-radius-sm);
+  --r2-radius-control-lg: var(--r2-radius-md);
+  --r2-radius-group: var(--r2-radius-lg); /* inset grouped lists, wells, cards */
+  --r2-radius-menu: var(--r2-radius-lg);
+  --r2-radius-popover: var(--r2-radius-xl);
+  --r2-radius-panel: var(--r2-radius-2xl); /* floating sidebar, inspector, timeline drawer */
+  --r2-radius-sheet: var(--r2-radius-3xl);
+
+  /* -------------------------------------------------------------------------- control sizes, hits */
+  --r2-control-sm: 24px;
+  --r2-control-md: 28px;
+  --r2-control-lg: 36px;
+  --r2-control-xl: 44px;
+  /* Smallest pointer target (HIG: 28 pt default on macOS, 44 pt on iPadOS). On coarse pointers every
+     control grows an invisible hit area to --r2-hit-touch (see base.css, .r2-hit). */
+  --r2-hit-min: 28px;
+  --r2-hit-touch: 44px;
+  --r2-row-height: 32px; /* list and inspector rows */
+  --r2-toolbar-height: 44px; /* floating glass groups */
+  --r2-panel-inset: 12px; /* gap between floating chrome and the window edge */
+  --r2-hairline: 1px;
+
+  /* ---------------------------------------------------------------------------------------- colour */
+  /* Labels: text and glyphs, four levels. -2 keeps 4.5:1 on the base backgrounds for 11-13 px text. */
+  --r2-label: light-dark(#000000, #ffffff);
+  --r2-label-2: light-dark(rgb(60 60 67 / 0.74), rgb(235 235 245 / 0.7));
+  --r2-label-3: light-dark(rgb(60 60 67 / 0.56), rgb(235 235 245 / 0.5));
+  --r2-label-4: light-dark(rgb(60 60 67 / 0.3), rgb(235 235 245 / 0.28));
+  --r2-placeholder: var(--r2-label-3);
+
+  /* Fills: translucent overlays for control backgrounds, on any surface including materials. */
+  --r2-fill: light-dark(rgb(120 120 128 / 0.2), rgb(120 120 128 / 0.36));
+  --r2-fill-2: light-dark(rgb(120 120 128 / 0.16), rgb(120 120 128 / 0.32));
+  --r2-fill-3: light-dark(rgb(118 118 128 / 0.12), rgb(118 118 128 / 0.24));
+  --r2-fill-4: light-dark(rgb(116 116 128 / 0.08), rgb(118 118 128 / 0.18));
+  /* A lighter plate for grouped content on a material (rows on a glass panel). */
+  --r2-fill-raised: light-dark(rgb(255 255 255 / 0.66), rgb(255 255 255 / 0.065));
+
+  --r2-separator: light-dark(rgb(60 60 67 / 0.16), rgb(235 235 245 / 0.14));
+  --r2-separator-strong: light-dark(rgb(60 60 67 / 0.3), rgb(235 235 245 / 0.26));
+  --r2-separator-opaque: light-dark(#d1d1d6, #38383a);
+
+  /* Backgrounds: plain and grouped sets, three levels each. */
+  --r2-bg: light-dark(#ffffff, #000000);
+  --r2-bg-2: light-dark(#f2f2f7, #1c1c1e);
+  --r2-bg-3: light-dark(#ffffff, #2c2c2e);
+  --r2-bg-grouped: light-dark(#f2f2f7, #000000);
+  --r2-bg-grouped-2: light-dark(#ffffff, #1c1c1e);
+  --r2-bg-grouped-3: light-dark(#f2f2f7, #2c2c2e);
+  --r2-bg-elevated: light-dark(#ffffff, #1c1c1e); /* opaque sheets, menus when materials are off */
+
+  /* The one tint: system blue, at the depth Apple uses on the web so that 13 px white labels on it
+     and 13 px tinted text on the base backgrounds both reach 4.5:1. */
+  --r2-tint: light-dark(#0068d6, #3d9bff);
+  --r2-tint-solid: light-dark(#0071e3, #0071e3);
+  --r2-tint-solid-hover: light-dark(#0077ed, #1481f0);
+  --r2-tint-solid-pressed: light-dark(#0062c4, #0062c4);
+  --r2-on-tint: #ffffff;
+  --r2-tint-fill: light-dark(rgb(0 113 227 / 0.12), rgb(41 151 255 / 0.2));
+  --r2-tint-fill-hover: light-dark(rgb(0 113 227 / 0.18), rgb(41 151 255 / 0.27));
+  --r2-tint-fill-pressed: light-dark(rgb(0 113 227 / 0.25), rgb(41 151 255 / 0.34));
+  --r2-selection: light-dark(rgb(0 113 227 / 0.14), rgb(41 151 255 / 0.24)); /* selected rows */
+  --r2-selection-text: light-dark(rgb(0 113 227 / 0.24), rgb(41 151 255 / 0.4)); /* ::selection */
+
+  /* System palette (the iOS 26 values of the HIG colour table). Vivid: for fills, glyphs and status
+     dots, not for small text on a light background (use the *-text roles below). */
+  --r2-red: light-dark(#ff383c, #ff4245);
+  --r2-orange: light-dark(#ff8d28, #ff9230);
+  --r2-yellow: light-dark(#ffcc00, #ffd600);
+  --r2-green: light-dark(#34c759, #30d158);
+  --r2-mint: light-dark(#00c8b3, #00dac3);
+  --r2-teal: light-dark(#00c3d0, #00d2e0);
+  --r2-cyan: light-dark(#00c0e8, #3cd3fe);
+  --r2-blue: light-dark(#0088ff, #0091ff);
+  --r2-indigo: light-dark(#6155f5, #6d7cff);
+  --r2-purple: light-dark(#cb30e0, #db34f2);
+  --r2-pink: light-dark(#ff2d55, #ff375f);
+  --r2-brown: light-dark(#ac7f5e, #b78a66);
+  --r2-gray: light-dark(#8e8e93, #8e8e93);
+  --r2-gray-2: light-dark(#aeaeb2, #636366);
+  --r2-gray-3: light-dark(#c7c7cc, #48484a);
+  --r2-gray-4: light-dark(#d1d1d6, #3a3a3c);
+  --r2-gray-5: light-dark(#e5e5ea, #2c2c2e);
+  --r2-gray-6: light-dark(#f2f2f7, #1c1c1e);
+
+  /* Semantic roles. `*-text` passes 4.5:1 as small text, `*-solid` carries a white label,
+     `*-fill` is the tinted plate behind badges and banners. */
+  --r2-success: var(--r2-green);
+  --r2-success-text: light-dark(#1d7a35, #3ddc68);
+  --r2-success-fill: light-dark(rgb(52 199 89 / 0.16), rgb(48 209 88 / 0.2));
+  --r2-warning: var(--r2-orange);
+  --r2-warning-text: light-dark(#a04a00, #ffb04d);
+  --r2-warning-fill: light-dark(rgb(255 141 40 / 0.17), rgb(255 146 48 / 0.22));
+  --r2-danger: var(--r2-red);
+  --r2-danger-text: light-dark(#d1101f, #ff6b6e);
+  --r2-danger-solid: light-dark(#d70015, #e0202f);
+  --r2-danger-solid-hover: light-dark(#e3081d, #ea3040);
+  --r2-danger-solid-pressed: light-dark(#bd0012, #c41826);
+  --r2-danger-fill: light-dark(rgb(255 56 60 / 0.13), rgb(255 66 69 / 0.22));
+  --r2-info: var(--r2-tint);
+  --r2-info-fill: var(--r2-tint-fill);
+
+  /* Rig item kinds (outliner glyphs, timeline lanes): one system colour each. */
+  --r2-kind-part: var(--r2-blue);
+  --r2-kind-bone: var(--r2-orange);
+  --r2-kind-warp: var(--r2-pink);
+  --r2-kind-parameter: var(--r2-indigo);
+  --r2-kind-animation: var(--r2-green);
+  --r2-kind-binding: var(--r2-gray);
+  --r2-kind-ik: var(--r2-yellow);
+  --r2-kind-physics: var(--r2-teal);
+  --r2-kind-texture: var(--r2-brown);
+
+  /* Canvas (the content layer the chrome defers to). */
+  --r2-canvas: light-dark(#e8e8ed, #111113);
+  --r2-canvas-glow: light-dark(#f7f7fa, #1b1b1f); /* centre of the soft vignette */
+  --r2-canvas-check-a: light-dark(#ffffff, #232326);
+  --r2-canvas-check-b: light-dark(#eeeef2, #1c1c1f);
+  --r2-canvas-grid: light-dark(rgb(60 60 67 / 0.1), rgb(235 235 245 / 0.08));
+  --r2-canvas-guide: var(--r2-tint);
+  --r2-scrim: light-dark(rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.48)); /* behind sheets and alerts */
+
+  /* ------------------------------------------------------------------------------------- materials */
+  /* Standard materials (content layer): a translucent plate + a backdrop filter. Use the classes
+     .r2-material-ultrathin | -thin | -regular | -thick; each falls back to its *-solid colour. */
+  --r2-material-ultrathin: light-dark(rgb(250 250 252 / 0.4), rgb(44 44 48 / 0.4));
+  --r2-material-thin: light-dark(rgb(250 250 252 / 0.56), rgb(40 40 44 / 0.55));
+  --r2-material-regular: light-dark(rgb(250 250 252 / 0.72), rgb(36 36 40 / 0.7));
+  --r2-material-thick: light-dark(rgb(250 250 252 / 0.86), rgb(32 32 36 / 0.84));
+  --r2-material-ultrathin-solid: light-dark(#f4f4f7, #2e2e32);
+  --r2-material-thin-solid: light-dark(#f5f5f8, #2a2a2e);
+  --r2-material-regular-solid: light-dark(#f7f7fa, #262629);
+  --r2-material-thick-solid: light-dark(#f9f9fb, #222225);
+  --r2-material-filter-ultrathin: blur(10px) saturate(160%);
+  --r2-material-filter-thin: blur(16px) saturate(170%);
+  --r2-material-filter-regular: blur(22px) saturate(180%);
+  --r2-material-filter-thick: blur(28px) saturate(180%);
+
+  /* Glass (the controls layer that floats above the canvas): plate + filter + rim highlight +
+     hairline + soft shadow. .r2-glass is the compact "controls" glass (toolbar groups, floating
+     buttons); .r2-glass-panel is thicker and more opaque for text-heavy surfaces (sidebars,
+     inspectors, menus, popovers, sheets). */
+  --r2-glass-plate: linear-gradient(
+    180deg,
+    light-dark(rgb(255 255 255 / 0.74), rgb(72 72 78 / 0.56)),
+    light-dark(rgb(255 255 255 / 0.56), rgb(44 44 48 / 0.6))
+  );
+  --r2-glass-solid: light-dark(#fbfbfd, #2c2c2f);
+  --r2-glass-filter: blur(18px) saturate(190%);
+  --r2-glass-panel-plate: linear-gradient(
+    180deg,
+    light-dark(rgb(252 252 254 / 0.86), rgb(46 46 50 / 0.8)),
+    light-dark(rgb(250 250 252 / 0.8), rgb(34 34 38 / 0.82))
+  );
+  --r2-glass-panel-solid: light-dark(#f8f8fa, #252528);
+  --r2-glass-panel-filter: blur(30px) saturate(190%);
+  --r2-glass-clear-plate: light-dark(rgb(255 255 255 / 0.22), rgb(30 30 34 / 0.3));
+  --r2-glass-clear-filter: blur(6px) saturate(160%);
+  /* Rim: a gradient stroke, brightest where the light comes from (top left) and again faintly at the
+     opposite corner, like the specular edge of a glass slab. */
+  --r2-glass-rim: linear-gradient(
+    145deg,
+    light-dark(rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.3)) 0%,
+    light-dark(rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.09)) 32%,
+    light-dark(rgb(255 255 255 / 0.3), rgb(255 255 255 / 0.04)) 62%,
+    light-dark(rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.16)) 100%
+  );
+  --r2-glass-hairline: light-dark(rgb(0 0 0 / 0.07), rgb(0 0 0 / 0.55));
+  --r2-glass-highlight: light-dark(rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.1)); /* inner top edge */
+  --r2-glass-shadow:
+    0 0 0 var(--r2-hairline) var(--r2-glass-hairline),
+    0 1px 2px light-dark(rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.3)),
+    0 8px 24px -6px light-dark(rgb(0 0 0 / 0.14), rgb(0 0 0 / 0.55));
+  --r2-glass-panel-shadow:
+    0 0 0 var(--r2-hairline) var(--r2-glass-hairline),
+    0 2px 6px light-dark(rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.3)),
+    0 18px 48px -12px light-dark(rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.7));
+
+  /* ------------------------------------------------------------------------------------- elevation */
+  --r2-shadow-1: 0 0.5px 1px light-dark(rgb(0 0 0 / 0.1), rgb(0 0 0 / 0.4)),
+    0 2px 5px light-dark(rgb(0 0 0 / 0.1), rgb(0 0 0 / 0.36)); /* knobs, segmented thumb */
+  --r2-shadow-2: 0 1px 2px light-dark(rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.3)),
+    0 4px 12px -2px light-dark(rgb(0 0 0 / 0.1), rgb(0 0 0 / 0.4)); /* cards, raised buttons */
+  --r2-shadow-3: 0 2px 6px light-dark(rgb(0 0 0 / 0.06), rgb(0 0 0 / 0.3)),
+    0 14px 36px -8px light-dark(rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.6)); /* menus, popovers, toasts */
+  --r2-shadow-4: 0 4px 14px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.4)),
+    0 32px 80px -16px light-dark(rgb(0 0 0 / 0.34), rgb(0 0 0 / 0.8)); /* sheets, alerts */
+
+  /* ---------------------------------------------------------------------------------------- motion */
+  --r2-duration-instant: 90ms; /* press feedback, hover */
+  --r2-duration-fast: 160ms; /* small state changes: switch, checkbox, tooltip */
+  --r2-duration-base: 260ms; /* menus, popovers, segmented thumb */
+  --r2-duration-slow: 420ms; /* sheets, panels, toasts */
+  --r2-duration-slower: 600ms; /* large layout changes */
+  --r2-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --r2-ease-in: cubic-bezier(0.5, 0, 0.9, 0.4);
+  --r2-ease-in-out: cubic-bezier(0.62, 0, 0.3, 1);
+  --r2-ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* Springs sampled by logic/spring.ts (damping 1 / 0.72 / 0.6); pair them with -base or -slow. */
+  --r2-spring-smooth: linear(0, 0.068, 0.208, 0.363, 0.505, 0.625, 0.721, 0.795, 0.852, 0.894, 0.924, 0.946, 0.962, 0.974, 0.982, 0.987, 0.991, 0.994, 0.996, 0.997, 1);
+  --r2-spring-snappy: linear(0, 0.042, 0.143, 0.275, 0.415, 0.55, 0.672, 0.775, 0.858, 0.922, 0.969, 1.001, 1.022, 1.033, 1.038, 1.038, 1.035, 1.03, 1.025, 1.02, 1.015, 1.01, 1.007, 1.004, 1);
+  --r2-spring-bouncy: linear(0, 0.042, 0.146, 0.285, 0.437, 0.586, 0.722, 0.838, 0.93, 1, 1.048, 1.078, 1.092, 1.095, 1.089, 1.078, 1.065, 1.05, 1.036, 1.024, 1.013, 1.005, 0.999, 0.995, 0.992, 0.991, 0.991, 0.992, 0.993, 0.994, 0.996, 0.997, 1);
+  /* How far entering surfaces travel / scale. Zero under reduced motion (they cross-fade instead). */
+  --r2-motion-distance: 8px;
+  --r2-motion-scale: 0.96;
+  --r2-press-scale: 0.97;
+
+  /* ----------------------------------------------------------------------------------------- focus */
+  --r2-focus-color: light-dark(#0071e3, #4aa3ff);
+  --r2-focus-width: 2px;
+  --r2-focus-offset: 2px;
+  --r2-focus-ring: 0 0 0 var(--r2-focus-offset) var(--r2-bg), 0 0 0 calc(var(--r2-focus-offset) + var(--r2-focus-width)) var(--r2-focus-color);
+
+  /* -------------------------------------------------------------------------------------- z layers */
+  --r2-z-base: 0;
+  --r2-z-raised: 10; /* sticky headers, split dividers */
+  --r2-z-chrome: 100; /* floating toolbars, panels, drawers */
+  --r2-z-overlay: 400; /* sheets, dialogs, popovers, menus: one level, later ones stack on top */
+  --r2-z-toast: 600;
+  --r2-z-tooltip: 700;
+}
+
+/* -------------------------------------------------------------------------------------- appearance */
+[data-appearance='light'] {
+  color-scheme: light;
+}
+
+[data-appearance='dark'] {
+  color-scheme: dark;
+}
+
+[data-appearance='auto'] {
+  color-scheme: light dark;
+}
+
+@media (min-resolution: 2dppx) {
+  :root {
+    --r2-hairline: 0.5px;
+  }
+}
+
+/* ------------------------------------------------------------------------------ reduced transparency */
+/* Solid materials: the user's setting, a browser without backdrop-filter, or the app's own switch
+   (data-materials="solid", e.g. while a heavy animation plays over a weak GPU). Keep the three
+   blocks identical. */
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-transparency='full']) {
+    --r2-material-ultrathin: var(--r2-material-ultrathin-solid);
+    --r2-material-thin: var(--r2-material-thin-solid);
+    --r2-material-regular: var(--r2-material-regular-solid);
+    --r2-material-thick: var(--r2-material-thick-solid);
+    --r2-material-filter-ultrathin: none;
+    --r2-material-filter-thin: none;
+    --r2-material-filter-regular: none;
+    --r2-material-filter-thick: none;
+    --r2-glass-plate: var(--r2-glass-solid);
+    --r2-glass-panel-plate: var(--r2-glass-panel-solid);
+    --r2-glass-clear-plate: var(--r2-glass-solid);
+    --r2-glass-filter: none;
+    --r2-glass-panel-filter: none;
+    --r2-glass-clear-filter: none;
+    --r2-fill-raised: light-dark(#ffffff, #323236);
+    --r2-glass-hairline: light-dark(rgb(0 0 0 / 0.16), rgb(255 255 255 / 0.16));
+  }
+}
+
+[data-transparency='reduce'],
+[data-materials='solid'] {
+  --r2-material-ultrathin: var(--r2-material-ultrathin-solid);
+  --r2-material-thin: var(--r2-material-thin-solid);
+  --r2-material-regular: var(--r2-material-regular-solid);
+  --r2-material-thick: var(--r2-material-thick-solid);
+  --r2-material-filter-ultrathin: none;
+  --r2-material-filter-thin: none;
+  --r2-material-filter-regular: none;
+  --r2-material-filter-thick: none;
+  --r2-glass-plate: var(--r2-glass-solid);
+  --r2-glass-panel-plate: var(--r2-glass-panel-solid);
+  --r2-glass-clear-plate: var(--r2-glass-solid);
+  --r2-glass-filter: none;
+  --r2-glass-panel-filter: none;
+  --r2-glass-clear-filter: none;
+  --r2-fill-raised: light-dark(#ffffff, #323236);
+  --r2-glass-hairline: light-dark(rgb(0 0 0 / 0.16), rgb(255 255 255 / 0.16));
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --r2-material-ultrathin: var(--r2-material-ultrathin-solid);
+    --r2-material-thin: var(--r2-material-thin-solid);
+    --r2-material-regular: var(--r2-material-regular-solid);
+    --r2-material-thick: var(--r2-material-thick-solid);
+    --r2-material-filter-ultrathin: none;
+    --r2-material-filter-thin: none;
+    --r2-material-filter-regular: none;
+    --r2-material-filter-thick: none;
+    --r2-glass-plate: var(--r2-glass-solid);
+    --r2-glass-panel-plate: var(--r2-glass-panel-solid);
+    --r2-glass-clear-plate: var(--r2-glass-solid);
+    --r2-glass-filter: none;
+    --r2-glass-panel-filter: none;
+    --r2-glass-clear-filter: none;
+    --r2-fill-raised: light-dark(#ffffff, #323236);
+    --r2-glass-hairline: light-dark(rgb(0 0 0 / 0.16), rgb(255 255 255 / 0.16));
+  }
+}
+
+/* ---------------------------------------------------------------------------------- increased contrast */
+/* Keep the two blocks identical. */
+@media (prefers-contrast: more) {
+  :root:not([data-contrast='standard']) {
+    --r2-label-2: light-dark(rgb(40 40 46 / 0.92), rgb(240 240 248 / 0.9));
+    --r2-label-3: light-dark(rgb(50 50 56 / 0.78), rgb(235 235 245 / 0.74));
+    --r2-label-4: light-dark(rgb(60 60 67 / 0.56), rgb(235 235 245 / 0.5));
+    --r2-separator: light-dark(rgb(40 40 46 / 0.44), rgb(235 235 245 / 0.42));
+    --r2-separator-strong: light-dark(rgb(30 30 36 / 0.66), rgb(240 240 248 / 0.62));
+    --r2-fill: light-dark(rgb(100 100 110 / 0.3), rgb(140 140 150 / 0.46));
+    --r2-fill-2: light-dark(rgb(100 100 110 / 0.25), rgb(140 140 150 / 0.4));
+    --r2-fill-3: light-dark(rgb(100 100 110 / 0.2), rgb(140 140 150 / 0.33));
+    --r2-fill-4: light-dark(rgb(100 100 110 / 0.14), rgb(140 140 150 / 0.26));
+    --r2-tint: light-dark(#004fb3, #6bb3ff);
+    --r2-tint-solid: light-dark(#0050b8, #0a6adb);
+    --r2-glass-hairline: light-dark(rgb(0 0 0 / 0.5), rgb(255 255 255 / 0.5));
+    --r2-glass-plate: var(--r2-glass-solid);
+    --r2-glass-panel-plate: var(--r2-glass-panel-solid);
+    --r2-focus-width: 3px;
+  }
+}
+
+[data-contrast='more'] {
+  --r2-label-2: light-dark(rgb(40 40 46 / 0.92), rgb(240 240 248 / 0.9));
+  --r2-label-3: light-dark(rgb(50 50 56 / 0.78), rgb(235 235 245 / 0.74));
+  --r2-label-4: light-dark(rgb(60 60 67 / 0.56), rgb(235 235 245 / 0.5));
+  --r2-separator: light-dark(rgb(40 40 46 / 0.44), rgb(235 235 245 / 0.42));
+  --r2-separator-strong: light-dark(rgb(30 30 36 / 0.66), rgb(240 240 248 / 0.62));
+  --r2-fill: light-dark(rgb(100 100 110 / 0.3), rgb(140 140 150 / 0.46));
+  --r2-fill-2: light-dark(rgb(100 100 110 / 0.25), rgb(140 140 150 / 0.4));
+  --r2-fill-3: light-dark(rgb(100 100 110 / 0.2), rgb(140 140 150 / 0.33));
+  --r2-fill-4: light-dark(rgb(100 100 110 / 0.14), rgb(140 140 150 / 0.26));
+  --r2-tint: light-dark(#004fb3, #6bb3ff);
+  --r2-tint-solid: light-dark(#0050b8, #0a6adb);
+  --r2-glass-hairline: light-dark(rgb(0 0 0 / 0.5), rgb(255 255 255 / 0.5));
+  --r2-glass-plate: var(--r2-glass-solid);
+  --r2-glass-panel-plate: var(--r2-glass-panel-solid);
+  --r2-focus-width: 3px;
+}
+
+/* -------------------------------------------------------------------------------------- reduced motion */
+/* Springs lose their bounce, travel and scale go to zero (surfaces cross-fade), durations shorten.
+   Keep the two blocks identical. */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) {
+    --r2-duration-instant: 1ms;
+    --r2-duration-fast: 80ms;
+    --r2-duration-base: 120ms;
+    --r2-duration-slow: 160ms;
+    --r2-duration-slower: 200ms;
+    --r2-spring-smooth: ease-out;
+    --r2-spring-snappy: ease-out;
+    --r2-spring-bouncy: ease-out;
+    --r2-motion-distance: 0px;
+    --r2-motion-scale: 1;
+    --r2-press-scale: 1;
+  }
+}
+
+[data-motion='reduce'] {
+  --r2-duration-instant: 1ms;
+  --r2-duration-fast: 80ms;
+  --r2-duration-base: 120ms;
+  --r2-duration-slow: 160ms;
+  --r2-duration-slower: 200ms;
+  --r2-spring-smooth: ease-out;
+  --r2-spring-snappy: ease-out;
+  --r2-spring-bouncy: ease-out;
+  --r2-motion-distance: 0px;
+  --r2-motion-scale: 1;
+  --r2-press-scale: 1;
+}
+
+/* ----------------------------------------------------------------------------------------- touch */
+@media (pointer: coarse) {
+  :root {
+    --r2-control-sm: 32px;
+    --r2-control-md: 36px;
+    --r2-control-lg: 44px;
+    --r2-control-xl: 50px;
+    --r2-row-height: 44px;
+    --r2-toolbar-height: 52px;
+  }
+}

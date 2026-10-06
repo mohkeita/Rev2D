@@ -1,0 +1,187 @@
+/* The composer of the AI panel: progress strip, problems, context chips, the field, options. Tokens only. */
+
+.ed-ai-composer {
+  display: grid;
+  gap: var(--r2-space-2);
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------------------------- progress */
+.ed-ai-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  min-width: 0;
+  padding: var(--r2-space-1) var(--r2-space-1) var(--r2-space-1) 10px;
+  border-radius: var(--r2-radius-md);
+  background: var(--r2-tint-fill);
+  color: var(--r2-tint);
+  animation: r2-rise-in var(--r2-duration-base) var(--r2-spring-snappy);
+}
+
+.ed-ai-progress[data-kind='stalled'] {
+  background: var(--r2-warning-fill);
+  color: var(--r2-warning-text);
+}
+
+.ed-ai-progress-text {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--r2-space-1-5);
+  min-width: 0;
+}
+
+.ed-ai-progress-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--r2-label);
+  font: var(--r2-text-callout);
+  font-weight: var(--r2-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-ai-progress-time {
+  flex: none;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+/* ------------------------------------------------------------------------------------- problems */
+.ed-ai-problem .ed-notice-text {
+  min-width: 0;
+}
+
+.ed-ai-problem-text,
+.ed-ai-problem-detail {
+  display: block;
+}
+
+.ed-ai-problem-detail {
+  margin-top: var(--r2-space-0-5);
+  color: var(--r2-label-3);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------------------------------ chips */
+.ed-ai-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  min-width: 0;
+}
+
+.ed-ai-where {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  height: 22px;
+  padding: 0 9px 0 7px;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-fill-4);
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+  font-weight: var(--r2-weight-medium);
+}
+
+.ed-ai-where-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-ai-task-chip {
+  height: 22px;
+  max-width: 100%;
+}
+
+/* ------------------------------------------------------------------------------------------ field */
+.ed-ai-field {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--r2-space-1-5);
+  min-width: 0;
+  padding: 5px 5px 5px var(--r2-space-3);
+  border-radius: var(--r2-radius-xl);
+  background: var(--r2-plate);
+  box-shadow: 0 0 0 var(--r2-hairline) var(--r2-separator-strong);
+  transition: box-shadow var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.ed-ai-field:focus-within {
+  box-shadow: 0 0 0 var(--r2-focus-width) var(--r2-focus-color);
+}
+
+.ed-ai-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 24px;
+  max-height: 168px;
+  margin: 0;
+  padding: 3px 0;
+  border: 0;
+  background: none;
+  color: var(--r2-label);
+  font: var(--r2-text-body);
+  overflow-y: auto;
+  resize: none;
+}
+
+.ed-ai-field .ed-ai-input:focus-visible {
+  outline: none;
+}
+
+.ed-ai-input::placeholder {
+  color: var(--r2-placeholder);
+  opacity: 1;
+}
+
+.ed-ai-send {
+  flex: none;
+}
+
+/* ---------------------------------------------------------------------------------------- options */
+/* The sandbox in plain words, next to the folder chip. */
+.ed-ai-sandbox-words {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--r2-label-3);
+  font: var(--r2-text-footnote);
+  white-space: nowrap;
+}
+
+/* "Allow image generation": a quiet settings line (glyph, label, switch at the trailing edge). */
+.ed-ai-image {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  min-height: 24px;
+  padding: 0 var(--r2-space-0-5) 0 var(--r2-space-1-5);
+}
+
+.ed-ai-image-icon {
+  color: var(--r2-label-3);
+}
+
+.ed-ai-image .r2-switch-field {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+.ed-ai-footnote {
+  margin: 0;
+  padding: 0 var(--r2-space-1);
+  color: var(--r2-label-3);
+  font: var(--r2-text-footnote);
+}

@@ -1,0 +1,77 @@
+/* EmptyState and Checkerboard. */
+
+.r2-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--r2-space-1-5);
+  max-width: 340px;
+  margin: auto;
+  padding: var(--r2-space-6);
+  color: var(--r2-label);
+  text-align: center;
+}
+
+.r2-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--r2-space-2);
+  border-radius: 50%;
+  background: var(--r2-fill-4);
+  color: var(--r2-label-2);
+}
+
+.r2-empty-title {
+  font: var(--r2-text-title-2);
+  letter-spacing: var(--r2-tracking-display);
+}
+
+.r2-empty-description {
+  color: var(--r2-label-2);
+  font: var(--r2-text-body);
+  text-wrap: balance;
+}
+
+.r2-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--r2-space-2);
+  margin-top: var(--r2-space-3);
+}
+
+.r2-empty[data-size='sm'] {
+  padding: var(--r2-space-4);
+}
+
+.r2-empty[data-size='sm'] .r2-empty-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.r2-empty[data-size='sm'] .r2-empty-title {
+  font: var(--r2-text-headline);
+  letter-spacing: 0;
+}
+
+.r2-empty[data-size='sm'] .r2-empty-description {
+  font: var(--r2-text-callout);
+}
+
+/* Two-tone squares; the size is --r2-check-size. */
+.r2-checkerboard {
+  --r2-check-size: 8px;
+  background-color: var(--r2-canvas-check-a);
+  background-image: conic-gradient(var(--r2-canvas-check-b) 25%, transparent 0 50%, var(--r2-canvas-check-b) 0 75%, transparent 0);
+  background-size: calc(var(--r2-check-size) * 2) calc(var(--r2-check-size) * 2);
+}
+
+@media (forced-colors: active) {
+  .r2-checkerboard {
+    background: Canvas;
+    border: 1px solid CanvasText;
+  }
+}

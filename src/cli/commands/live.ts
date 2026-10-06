@@ -6,6 +6,7 @@ import type { Diagnostic, Model } from '../../core/types.js';
 import { suggest } from '../../core/address.js';
 import { parseJsonc, parseModelText } from '../../core/validate.js';
 import { loadModelFile } from '../../node/load.js';
+import { AVATAR_SPEC_FILE, avatarProjectDir, isAvatarProject, loadAvatarProject } from '../../node/avatar.js';
 import { editorHasFile, findEditor, listEditors, type EditorCommand, type EditorEntry, type EditorLayer, type EditorState, type WorkspaceInfo } from '../../node/editor-registry.js';
 import { formatLayerSpec, parseLayerSpec, parseLayerSyntax, splitLayerList } from '../../api/layers.js';
 import { UsageError, type FlagSpec } from '../args.js';
@@ -54,34 +55,59 @@ export const edit: Command = {
   name: 'edit',
   group: 'live',
   summary: 'start the live-reloading web editor (a model, or a workspace to open / create models in)',
-  usage: 'edit [model | dir] [--root dir] [--port n] [--host h] [--allow-host name]... [--no-open] [--json]',
+  usage: 'edit [model | dir] [--root dir] [--port n] [--host h] [--allow-host name]... [--allow-agent] [--agent-codex-sandbox config|unelevated] [--no-open] [--json]',
   args: ['[model]'],
   flags: [
     { name: 'root', type: 'string', arg: 'dir', description: "workspace root: the editor opens, creates, saves and imports files only inside it (default: the model's directory, else the current directory)" },
     { name: 'port', type: 'int', min: 0, max: 65535, arg: 'n', description: `port (default ${DEFAULT_PORT}; 0 picks a free port)` },
     { name: 'host', type: 'string', arg: 'address', description: 'interface to bind (default 127.0.0.1; anything else exposes file writes to the network)' },
     { name: 'allow-host', type: 'string', repeat: true, arg: 'name', description: 'also answer requests addressed to this host name (e.g. my-pc.local with --host 0.0.0.0); other names are rejected as a DNS-rebinding guard' },
+    {
+      name: 'allow-agent',
+      type: 'boolean',
+      description: 'keep the in-app agent endpoints (/api/agent/*: they start Codex / Claude Code with YOUR login inside the workspace) although --host is not a loopback address; without it they only exist on 127.0.0.1 / localhost / ::1',
+    },
+    {
+      name: 'agent-codex-sandbox',
+      type: 'string',
+      arg: 'config|unelevated',
+      description:
+        'Windows only: which sandbox implementation in-app Codex runs use. config (default) leaves your Codex configuration alone; unelevated adds -c windows.sandbox="unelevated", the implementation that needs no administrator setup (the fix when Codex cannot start commands). Beats the saved setting in ~/.rev2d/settings.json',
+    },
     { name: 'open', type: 'boolean', description: 'open the editor in the default browser (default; --no-open disables)' },
   ],
   json: true,
   description: [
     'Serves the editor UI and the editor protocol (/api/model, /api/events, /api/state, /api/command, /api/screenshot and the workspace endpoints /api/workspace, /api/files, /api/open, /api/new, /api/save-as, /api/close, /api/import, /api/download, /api/templates). External changes to the file reload the editor; edits in the editor are written back to the file.',
     'File management: the File menu opens, creates (from a template), saves as, closes, imports (from your computer) and downloads models. Every file lives inside the workspace root (--root; default: the model\'s directory, else the current directory); paths outside it, also through symbolic links, are refused. Without a model (or with a directory) the editor starts on its start screen. Recently opened files are kept in ~/.rev2d/recent.json.',
-    'Registers itself so "rev2d editor ..." and the MCP server can find it (by the file it has open now). Runs until Ctrl+C. With --json prints NDJSON lines {"event":"listening","url","file","root","ui":{"mode","detail"}} (file is null without a model) and {"event":"stopped"}.',
+    'Avatar projects: a project folder or its avatar.json opens in Avatar mode (the landmarks on the illustration, a live preview; also before the first build, when there is no model yet); the workspace root defaults to the folder that holds the project. In Avatar mode Save, Undo and Redo work on avatar.json.',
+    'In-app agents: the editor can start the Codex CLI or Claude Code for a request and show its progress in its AI panel (/api/session, /api/agent/*; see docs/AGENT-BRIDGE.md). A run uses your login of that CLI and works inside the workspace root, so these endpoints need a per-server token and exist only while the editor is bound to a loopback address; with another --host they are off unless --allow-agent is given (a warning is printed).',
+    'Registers itself so "rev2d editor ..." and the MCP server can find it (by the file it has open now). Runs until Ctrl+C. With --json prints NDJSON lines {"event":"listening","url","file","root","ui":{"mode","detail"},"agent":{"enabled","reason"?}} (file is null without a model) and {"event":"stopped"}.',
   ],
-  examples: ['rev2d edit hero.r2d.json', 'rev2d edit', 'rev2d edit models/hero.r2d.json --root .', 'rev2d edit hero.r2d.json --port 0 --no-open'],
+  examples: ['rev2d edit hero.r2d.json', 'rev2d edit', 'rev2d edit models/hero.r2d.json --root .', 'rev2d edit avatars/hana/avatar.json', 'rev2d edit hero.r2d.json --port 0 --no-open'],
   async run(ctx) {
     const file = ctx.args.positionals[0];
     const rootArg = ctx.args.str('root');
     let abs: string | null = file !== undefined ? ctx.resolve(file) : null;
     let root: string | null = rootArg !== undefined ? ctx.resolve(rootArg) : null;
+    // An avatar project (its folder or its avatar.json) opens in avatar mode; its default workspace is
+    // the folder that holds the project, so the editor can also create sibling avatars there.
+    let avatarProject: string | null = null;
     if (abs && statSync(abs, { throwIfNoEntry: false })?.isDirectory()) {
-      // "rev2d edit models/": that directory is the workspace, with no model open yet.
-      if (root) throw new UsageError(`${ctx.display(file!)} is a directory`, 'give a model file together with --root, or the directory alone ("rev2d edit <dir>" makes it the workspace root)');
-      root = abs;
-      abs = null;
+      if (isAvatarProject(abs)) {
+        avatarProject = abs;
+        abs = path.join(abs, AVATAR_SPEC_FILE);
+      } else {
+        // "rev2d edit models/": that directory is the workspace, with no model open yet.
+        if (root) throw new UsageError(`${ctx.display(file!)} is a directory`, 'give a model file together with --root, or the directory alone ("rev2d edit <dir>" makes it the workspace root)');
+        root = abs;
+        abs = null;
+      }
+    } else if (abs && path.basename(abs).toLowerCase() === AVATAR_SPEC_FILE && existsSync(abs)) {
+      avatarProject = avatarProjectDir(abs);
     }
     if (abs && !existsSync(abs)) throw new CliError(`${ctx.display(file!)} does not exist`, { hint: `create it first: rev2d new ${ctx.display(file!)} (or start without a model: rev2d edit, then File > New)` });
+    if (avatarProject && !root) root = path.dirname(avatarProject);
     if (root) {
       const st = statSync(root, { throwIfNoEntry: false });
       if (!st) throw new CliError(`workspace root ${ctx.display(rootArg!)} does not exist`, { hint: 'create the directory first, or choose another --root' });
@@ -98,17 +124,38 @@ export const edit: Command = {
     // The server answers requests addressed to loopback names and its bind address(es) only
     // (DNS-rebinding guard); --allow-host adds host names.
     const allowedHosts = ctx.args.csv('allow-host');
+    const allowAgent = ctx.args.bool('allow-agent') === true;
+    const codexSandbox = ctx.args.str('agent-codex-sandbox');
+    if (codexSandbox !== undefined && codexSandbox !== 'config' && codexSandbox !== 'unelevated') {
+      throw new UsageError(`--agent-codex-sandbox must be config or unelevated, got "${codexSandbox}"`, 'config = leave the Codex configuration alone (default); unelevated = the Codex Windows sandbox that needs no setup');
+    }
+    if (codexSandbox === 'unelevated' && process.platform !== 'win32') ctx.err('note: --agent-codex-sandbox only has an effect on Windows');
     if (!isLoopback(host)) {
       const names = allowedHosts.length ? '' : ' by IP address (add --allow-host <name> to also accept a host name)';
       ctx.err(`note: --host ${host} makes the editor (which can write files in ${displayDir(ctx, root)}) reachable from other machines${names}`);
+      // The agent endpoints start local programs with the person's credentials: off unless asked for.
+      if (allowAgent) {
+        ctx.err(
+          `warning: --allow-agent with --host ${host}: every machine that can reach this port can start Codex / Claude Code runs with YOUR login (they read and write files in ${displayDir(ctx, root)}). Only do this on a network you trust.`,
+        );
+      } else {
+        ctx.err('note: the in-app agent (Codex / Claude Code runs started from the editor) is disabled on a non-loopback --host; --allow-agent enables it anyway');
+      }
     }
     if (abs) {
       const running = listEditors(abs);
       if (running.length) {
         ctx.err(`note: ${ctx.display(file!)} is already open in an editor at ${running.map((e) => e.url).join(', ')}; "rev2d editor ..." talks to the newest one`);
       }
-      const errors = (await loadModelFile(abs)).diagnostics.filter((d) => d.severity === 'error').length;
-      if (errors) ctx.err(`note: ${ctx.display(file!)} has ${errors} error${errors === 1 ? '' : 's'}; the editor lists them under Problems ("rev2d validate ${ctx.display(file!)}" prints them)`);
+      if (avatarProject) {
+        // avatar.json is an avatar spec, not a model: check it with the avatar validator.
+        const project = await loadAvatarProject(avatarProject);
+        const errors = project.diagnostics.filter((d) => d.severity === 'error').length;
+        if (errors) ctx.err(`note: the avatar spec has ${errors} error${errors === 1 ? '' : 's'}; the editor lists them in avatar mode ("rev2d avatar validate ${displayDir(ctx, avatarProject)}" prints them)`);
+      } else {
+        const errors = (await loadModelFile(abs)).diagnostics.filter((d) => d.severity === 'error').length;
+        if (errors) ctx.err(`note: ${ctx.display(file!)} has ${errors} error${errors === 1 ? '' : 's'}; the editor lists them under Problems ("rev2d validate ${ctx.display(file!)}" prints them)`);
+      }
     }
     const stop = stopSignal(ctx.io);
     try {
@@ -116,7 +163,17 @@ export const edit: Command = {
       try {
         // Loaded on demand: the server pulls in the editor build/dev tooling, which other commands never need.
         const { startEditorServer } = await import('../../server/index.js');
-        server = await startEditorServer({ ...(abs ? { file: abs } : {}), root, port, host, allowedHosts, log: (m) => ctx.err(`editor: ${m}`) });
+        server = await startEditorServer({
+          ...(abs ? { file: abs } : {}),
+          root,
+          port,
+          host,
+          allowedHosts,
+          allowAgent,
+          // The flag beats the saved user setting; GET /api/agent/settings names it as the source.
+          ...(codexSandbox !== undefined ? { agent: { codexWindowsSandbox: codexSandbox, settingsSource: 'flag' as const } } : {}),
+          log: (m) => ctx.err(`editor: ${m}`),
+        });
       } catch (e) {
         const err = e as NodeJS.ErrnoException & { cause?: NodeJS.ErrnoException };
         const inUse = err.code === 'EADDRINUSE' || err.cause?.code === 'EADDRINUSE';
@@ -125,7 +182,7 @@ export const edit: Command = {
         });
       }
       if (ctx.json) {
-        ctx.io.stdout.write(JSON.stringify({ event: 'listening', url: server.url, file: abs, root: server.root, ui: server.ui }) + '\n');
+        ctx.io.stdout.write(JSON.stringify({ event: 'listening', url: server.url, file: abs, root: server.root, ui: server.ui, agent: server.agent }) + '\n');
       } else {
         ctx.out(abs ? `editing ${ctx.display(file!)}` : 'editor started with no model open', `  ${server.url}`, `workspace root: ${displayDir(ctx, server.root)}`, 'press Ctrl+C to stop');
         if (!abs) ctx.notes(['open or create a model in the browser (File menu), or with "rev2d editor command --open <model>"']);
@@ -269,9 +326,10 @@ export const editorState: Command = {
   flags: TARGET_FLAGS,
   json: true,
   description: [
-    'Names the model the editor has open and its workspace root. With no model open (start screen) it says so and exits 0.',
+    'Names the model the editor has open and its workspace root. With no model open (start screen) it says so and exits 0; so it does for an avatar project that has no built model yet (Avatar mode), naming the project.',
+    'In avatar mode it also shows the avatar part selected in the editor (EditorState.avatar.part).',
     '--model finds the editor that has the file open, else the one whose workspace root contains it (e.g. an editor on its start screen); a note then says the file is not open. A directory selects the editor of that workspace.',
-    '--json prints {editor: {url, file, root, pid}, state: EditorState}; file and state are null when no model is open.',
+    '--json prints {editor: {url, file, root, pid, avatar?}, state: EditorState}; file and state are null when no model is open; avatar (AvatarRef) names the open avatar project.',
   ],
   examples: ['rev2d editor state', 'rev2d editor state --model hero.r2d.json --json'],
   async run(ctx) {
@@ -284,9 +342,16 @@ export const editorState: Command = {
     if (located.notOpen !== null) {
       ctx.notes([`${notOpenText(ctx, located)} (it was chosen because ${rootText(ctx, entry)}); open it with "rev2d editor command --open ${ctx.display(located.notOpen)}"`]);
     }
+    const avatar = workspace?.avatar;
     if (workspace && !current) {
       if (ctx.json) {
-        ctx.printJson({ editor: { url: entry.url, file: null, root, pid: entry.pid }, state: null });
+        ctx.printJson({ editor: { url: entry.url, file: null, root, pid: entry.pid, ...(avatar ? { avatar } : {}) }, state: null });
+        return 0;
+      }
+      if (avatar) {
+        // An avatar project without a built model: Avatar mode shows it (no model, no view state yet).
+        ctx.out(`editor ${entry.url}  avatar project ${displayDir(ctx, avatar.project)} (no built model yet)`, `workspace root: ${displayDir(ctx, workspace.root)}`);
+        if (located.notOpen === null) ctx.notes([`the human places the landmarks in Avatar mode; build it there or with "rev2d avatar build ${displayDir(ctx, avatar.project)}"`]);
         return 0;
       }
       ctx.out(`editor ${entry.url}  no model open (start screen)`, `workspace root: ${displayDir(ctx, workspace.root)}`);
@@ -303,7 +368,7 @@ export const editorState: Command = {
     if (!res.ok) throw await editorError(res, `the editor at ${entry.url} did not return its state`);
     const state = (await res.json()) as EditorState;
     if (ctx.json) {
-      ctx.printJson({ editor: { url: entry.url, file: current ?? state.file, root, pid: entry.pid }, state });
+      ctx.printJson({ editor: { url: entry.url, file: current ?? state.file, root, pid: entry.pid, ...(avatar ? { avatar } : {}) }, state });
       return 0;
     }
     // Layer strings, so they can be passed back to --anims / --anim.
@@ -314,6 +379,8 @@ export const editorState: Command = {
       ...(root ? [`workspace root: ${displayDir(ctx, root)}`] : []),
       `time ${num(state.time)}s (${state.playing ? 'playing' : 'paused'})  animations: ${anims.join(', ') || '-'}`,
       `selection: ${state.selection.join(', ') || '-'}`,
+      // Avatar mode: the avatar part selected in the editor (an id of "rev2d avatar overlay --part").
+      ...(state.avatar ? [`avatar part: ${state.avatar.part ?? '-'}${avatar ? `  (project ${displayDir(ctx, avatar.project)})` : ''}`] : []),
       `overlay: ${state.overlay.join(', ') || '-'}`,
       `viewBox: ${rect(state.viewBox)}`,
       `updated: ${state.updatedAt}`,

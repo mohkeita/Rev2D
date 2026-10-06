@@ -1,0 +1,123 @@
+/* The AI panel shell: provider bar, panel states, settings popover. Design tokens only. */
+
+.ed-ai .r2-panel-header {
+  padding-bottom: var(--r2-space-2);
+}
+
+.ed-ai .r2-panel-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.ed-ai .r2-panel-footer {
+  display: block;
+  padding: var(--r2-space-2) var(--r2-space-3) var(--r2-space-3);
+}
+
+/* ---------------------------------------------------------------------------------- provider bar */
+.ed-ai-providers {
+  display: grid;
+  gap: var(--r2-space-1);
+  min-width: 0;
+}
+
+.ed-ai-provider-dot {
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-inline-end: 2px;
+  border-radius: 50%;
+  background: var(--r2-warning);
+}
+
+.ed-ai-provider-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--r2-space-2);
+  min-height: var(--r2-control-sm);
+  padding: 0 0 0 var(--r2-space-1);
+  color: var(--r2-label-3);
+  font: var(--r2-text-footnote);
+}
+
+.ed-ai-provider-version {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-ai-effort {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--r2-space-0-5);
+}
+
+.ed-ai-effort .r2-select {
+  font: var(--r2-text-footnote);
+  font-weight: var(--r2-weight-medium);
+}
+
+.ed-ai-provider-hint {
+  margin-top: var(--r2-space-1);
+}
+
+/* ---------------------------------------------------------------------------------- panel states */
+.ed-ai-state {
+  flex: 1 1 auto;
+}
+
+.ed-ai-state-detail {
+  display: block;
+  margin-top: var(--r2-space-2);
+  color: var(--r2-label-3);
+  font: var(--r2-text-footnote);
+  overflow-wrap: anywhere;
+}
+
+.ed-ai-loading {
+  display: grid;
+  flex: 1 1 auto;
+  place-items: center;
+  color: var(--r2-label-3);
+}
+
+.ed-ai-offline {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--r2-space-1-5);
+  margin: 0 var(--r2-space-3) var(--r2-space-1);
+  padding: var(--r2-space-1) var(--r2-space-2);
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-warning-fill);
+  color: var(--r2-warning-text);
+  font: var(--r2-text-footnote);
+}
+
+/* ---------------------------------------------------------------------------------- settings */
+.ed-ai-settings {
+  gap: var(--r2-space-4);
+}
+
+.ed-ai-settings .r2-list-footer {
+  line-height: 1.4;
+}
+
+.ed-ai-settings-source {
+  display: block;
+  margin-top: var(--r2-space-1);
+  color: var(--r2-label-3);
+}
+
+.ed-ai-settings-field {
+  padding: var(--r2-space-2) var(--r2-space-3);
+}
+
+.ed-ai-settings-field + .ed-ai-settings-field {
+  border-top: var(--r2-hairline) solid var(--r2-separator);
+}

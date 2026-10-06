@@ -2,7 +2,8 @@
  * Unsaved-changes guard as a pure state machine.
  *
  * Before an action replaces the open document (New, Open, Open Recent, Import, Close, Reload from
- * disk) the Session asks the guard. A saved document proceeds at once; an unsaved one shows
+ * disk, Save As out of an avatar project, a new avatar) the Session asks the guard, once per unsaved
+ * document it replaces: a workspace mode's own document (avatar.json) first, then the model. A saved document proceeds at once; an unsaved one shows
  * "Save changes to X?" with [Save] [Don't save] [Cancel]. Save that fails keeps the prompt open with
  * the reason; when the model was rejected for validation errors, "Save anyway" (forced write) is
  * offered as well.
@@ -17,6 +18,7 @@
  *   saving --saved failed--> asking (error, canForce = rejected as invalid)
  *   busy (asking/saving) --request--> unchanged, effect: abort (one prompt at a time)
  */
+import { t } from '../i18n/index.js';
 
 export type GuardChoice = 'save' | 'saveAnyway' | 'discard' | 'cancel';
 
@@ -65,7 +67,7 @@ export function guardStep(state: GuardState, event: GuardEvent): { state: GuardS
           phase: 'asking',
           file: state.file,
           action: state.action,
-          error: event.error ?? 'The file could not be saved.',
+          error: event.error ?? t('files.unsaved.saveFailed'),
           // A forced write can only help when the server refused the model for its errors.
           canForce: event.invalid === true && !state.force,
         },

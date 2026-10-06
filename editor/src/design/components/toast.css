@@ -1,0 +1,131 @@
+/* Toast: a glass capsule with an optional status glyph and one action. */
+
+.r2-toast-region {
+  position: fixed;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--r2-space-2);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.r2-toast-region[data-placement='bottom'] {
+  flex-direction: column-reverse;
+}
+
+.r2-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--r2-control-xl);
+  max-width: min(480px, 100%);
+  padding: 8px 10px 8px 16px;
+  border-radius: var(--r2-radius-2xl);
+  color: var(--r2-label);
+  font: var(--r2-text-body);
+  pointer-events: auto;
+  animation: r2-toast-in var(--r2-duration-slow) var(--r2-spring-bouncy);
+}
+
+.r2-toast:not(:has(.r2-toast-action, .r2-toast-close)) {
+  padding-inline-end: 18px;
+}
+
+.r2-toast:not(:has(.r2-toast-description)) {
+  border-radius: var(--r2-radius-capsule);
+}
+
+@keyframes r2-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--r2-motion-distance) * 2)) scale(var(--r2-motion-scale));
+  }
+}
+
+.r2-toast-region[data-placement='top'] .r2-toast {
+  animation-name: r2-toast-in-top;
+}
+
+@keyframes r2-toast-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--r2-motion-distance) * -2)) scale(var(--r2-motion-scale));
+  }
+}
+
+.r2-toast-icon {
+  color: var(--r2-label-2);
+}
+
+.r2-toast[data-tone='success'] .r2-toast-icon {
+  color: var(--r2-success);
+}
+
+.r2-toast[data-tone='warning'] .r2-toast-icon {
+  color: var(--r2-warning);
+}
+
+.r2-toast[data-tone='danger'] .r2-toast-icon {
+  color: var(--r2-danger);
+}
+
+.r2-toast[data-tone='info'] .r2-toast-icon {
+  color: var(--r2-tint);
+}
+
+.r2-toast-text {
+  display: grid;
+  min-width: 0;
+}
+
+.r2-toast-title {
+  font-weight: var(--r2-weight-semibold);
+}
+
+.r2-toast-description {
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+}
+
+.r2-toast-action {
+  flex: none;
+  height: var(--r2-control-md);
+  margin: 0 0 0 var(--r2-space-1);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-tint-fill);
+  color: var(--r2-tint);
+  font: var(--r2-text-body);
+  font-weight: var(--r2-weight-semibold);
+  cursor: default;
+}
+
+.r2-toast-action:hover {
+  background: var(--r2-tint-fill-hover);
+}
+
+.r2-toast-close {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--r2-fill-3);
+  color: var(--r2-label-2);
+  cursor: default;
+}
+
+.r2-toast-close:hover {
+  background: var(--r2-fill);
+  color: var(--r2-label);
+}

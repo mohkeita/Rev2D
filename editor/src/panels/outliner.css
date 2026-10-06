@@ -1,0 +1,76 @@
+/* Outliner: sidebar rows of the design system with a meta column and row accessories. */
+
+.ed-outline {
+  min-height: 100%;
+  padding: 0 0 var(--r2-space-2);
+}
+
+.ed-outline-empty {
+  margin: 0;
+  padding: var(--r2-space-6) var(--r2-space-4);
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* Secondary text at the trailing end of a row: ranges, grid sizes, targets. */
+.ed-row-meta {
+  max-width: 96px;
+  overflow: hidden;
+  color: var(--r2-label-3);
+  font: var(--r2-text-footnote);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-outline .r2-row-trailing {
+  gap: var(--r2-space-1);
+  padding-inline-end: var(--r2-space-1);
+}
+
+.ed-outline .r2-row-trailing > .ed-row-meta:last-child,
+.ed-outline .r2-row-trailing > .r2-badge:last-child {
+  margin-inline-end: var(--r2-space-1);
+}
+
+/* The row under the pointer in the viewport. */
+.ed-outline .r2-row[data-hovered] {
+  background: var(--r2-fill-4);
+}
+
+.ed-outline .r2-row[data-dim] .r2-row-title,
+.ed-outline .r2-row[data-dim] .r2-row-leading {
+  opacity: 0.45;
+}
+
+.ed-row-group .r2-row-title {
+  color: var(--r2-label-2);
+}
+
+/* Row buttons: 22 px so they sit inside a 26 px row. */
+.ed-outline .r2-row .r2-icon-button {
+  --_h: 22px;
+  color: var(--r2-label-3);
+}
+
+.ed-outline .r2-row .r2-icon-button:hover,
+.ed-outline .r2-row .r2-icon-button[aria-pressed='true'] {
+  color: var(--r2-label);
+}
+
+/* The eye shows on hover, selection and keyboard focus, and stays while the part is hidden. */
+.ed-row-eye {
+  opacity: 0;
+}
+
+.ed-outline .r2-row:is(:hover, :focus-within, [data-selected]) .ed-row-eye,
+.ed-row-eye[data-off] {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .ed-row-eye {
+    opacity: 1;
+  }
+}

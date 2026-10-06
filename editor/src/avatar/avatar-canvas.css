@@ -1,0 +1,39 @@
+/* Avatar mode: the illustration canvas (full-bleed under the chrome) and its hover tooltip. */
+
+.ed-avcanvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--r2-canvas);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.is-space-held .ed-avcanvas {
+  cursor: grab !important;
+}
+
+.ed-avcanvas-2d {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ed-avcanvas-tip {
+  position: absolute;
+  z-index: 1;
+  max-width: 340px;
+  padding: 3px var(--r2-space-2);
+  border-radius: var(--r2-radius-sm);
+  background: var(--r2-material-thick-solid);
+  box-shadow: var(--r2-shadow-2);
+  color: var(--r2-label);
+  font: var(--r2-text-footnote);
+  white-space: nowrap;
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

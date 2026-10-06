@@ -170,10 +170,12 @@ ${RECIPES.map(renderRecipe).join('\n\n')}
 - Writes by rev2d_apply_ops reformat the file (comments are not preserved).
 
 ## Tools
-rev2d_guide (this) | rev2d_schema {name?} JSON Schema | rev2d_docs {topic} spec, ops, cli, mcp, recipes, interop, architecture, examples, agents
+rev2d_guide (this) | rev2d_schema {name?} JSON Schema | rev2d_docs {topic} spec, ops, cli, mcp, recipes, interop, avatar, architecture, examples, agents
 rev2d_create_model | rev2d_validate | rev2d_info | rev2d_render | rev2d_sheet | rev2d_inspect | rev2d_analyze | rev2d_hit_test
 rev2d_apply_ops (edits; the tool description lists every op) | rev2d_diff_images (before/after pixels)
 rev2d_import {format: "spine" | "live2d"} | rev2d_export {format, out_dir} (Spine JSON + atlas, Live2D motion3 / physics3 JSON)
 rev2d_editor_state | rev2d_editor_command | rev2d_editor_screenshot (live editor bridge)
+An animated avatar from ONE illustration: the CLI's "rev2d avatar ..." commands (run them from a shell);
+the working guide is rev2d_docs {topic: "avatar"}.
 All paths are relative to the MCP server working directory unless absolute.
 `;

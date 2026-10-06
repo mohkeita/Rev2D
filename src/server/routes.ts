@@ -2,7 +2,8 @@
  * /api/* endpoints of the editor protocol. Each handler either writes a response or throws an
  * HttpError / ApiError that the server turns into a JSON error body. The workspace endpoints (file
  * management) live in workspace-routes.ts, the interop endpoints (Live2D import, Spine / Live2D export)
- * in interop-routes.ts.
+ * in interop-routes.ts, the agent bridge (/api/session, /api/agent/*) in agent-routes.ts, avatar mode
+ * (/api/avatar, /api/avatar/build | file | new | variants | variants/import | variants/request) in avatar-routes.ts.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
@@ -11,9 +12,11 @@ import { buildRenderList } from '../core/rig.js';
 import { formatModelJson } from '../core/format.js';
 import { parseModelText } from '../core/validate.js';
 import { hasErrors } from '../node/load.js';
-import type { EditorLayer, EditorState } from '../node/editor-registry.js';
+import type { AvatarRef, EditorLayer, EditorState } from '../node/editor-registry.js';
 import { OVERLAY_LAYERS, modelInfo, resolveViewBox, toPoseOptions, type PoseInput } from '../api/index.js';
 import { drawOverlay, encodePNG, renderImage, type OverlayLayer } from '../render/index.js';
+import { AGENT_ENDPOINTS, AGENT_PREFIX, getSession, handleAgentApi, type AgentBridge } from './agent-routes.js';
+import { getAvatar, getAvatarBuild, getAvatarFile, getAvatarVariants, postAvatarBuild, postAvatarNew, postAvatarVariantRequests, postAvatarVariantsImport, putAvatar, type AvatarBridge } from './avatar-routes.js';
 import { HttpError, readJson, sendJson } from './http.js';
 import { postExport, postLive2dImport } from './interop-routes.js';
 import type { ModelStore } from './model-store.js';
@@ -50,14 +53,27 @@ export interface ApiContext {
   maxImportBytes: number;
   /** Latest view state published by the editor UI for the open model (reset when it is switched). */
   state: EditorState | null;
+  /** The in-app agent bridge: session token, agent jobs (agent-routes.ts). */
+  agent: AgentBridge;
+  /** Avatar mode: the open avatar project, its watcher and build job (avatar-routes.ts). */
+  avatar: AvatarBridge;
   /** Broadcast a model-changed event for `store` (ignored once another model is open) and refresh the watched file set. */
   modelChanged(store: ModelStore, origin: ChangeOrigin, mtimeMs: number, files: string[]): void;
+  /**
+   * Compare the open model and its textures with what was last seen and broadcast "model-changed"
+   * with `origin` when they differ (after the server itself rewrote them: an avatar build or save).
+   */
+  syncModel(origin: ChangeOrigin): Promise<void>;
   /**
    * Make `store` the open model (null: close it): resets the view state, retargets the watcher and
    * the registry entry, records the file as recently opened and broadcasts "file-changed". Returns
    * how many event streams received it. Only call inside `exclusive`.
+   *
+   * `avatar` is the avatar project that is open with it. Left out, a model whose folder holds an
+   * avatar.json attaches that project, and closing the model closes the project; given with a null
+   * `store`, the project is open without a model (it has none built yet).
    */
-  switchTo(store: ModelStore | null, origin: FileOrigin): Promise<number>;
+  switchTo(store: ModelStore | null, origin: FileOrigin, avatar?: AvatarRef | null): Promise<number>;
   /** Run a workspace operation (open, new, save as, import, close) after every earlier one finished. */
   exclusive<T>(fn: () => Promise<T>): Promise<T>;
 }
@@ -82,6 +98,14 @@ const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
   '/api/templates': { GET: getTemplates },
   '/api/live2d-import': { POST: postLive2dImport },
   '/api/export': { POST: postExport },
+  '/api/session': { GET: getSession },
+  '/api/avatar': { GET: getAvatar, PUT: putAvatar },
+  '/api/avatar/build': { GET: getAvatarBuild, POST: postAvatarBuild },
+  '/api/avatar/file': { GET: getAvatarFile },
+  '/api/avatar/new': { POST: postAvatarNew },
+  '/api/avatar/variants': { GET: getAvatarVariants },
+  '/api/avatar/variants/import': { POST: postAvatarVariantsImport },
+  '/api/avatar/variants/request': { POST: postAvatarVariantRequests },
 };
 
 const TEXTURE_PREFIX = '/api/texture/';
@@ -89,6 +113,7 @@ const TEXTURE_PREFIX = '/api/texture/';
 const ENDPOINTS = [
   ...Object.entries(ROUTES).flatMap(([p, methods]) => Object.keys(methods).map((m) => `${m} ${p}`)),
   `GET ${TEXTURE_PREFIX}:id`,
+  ...AGENT_ENDPOINTS.filter((e) => e.includes(`${AGENT_PREFIX}/`)),
 ].join(', ');
 
 export async function handleApi(ctx: ApiContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
@@ -99,6 +124,8 @@ export async function handleApi(ctx: ApiContext, req: IncomingMessage, res: Serv
     if (method !== 'GET') throw new HttpError(405, `${method} ${TEXTURE_PREFIX}:id is not supported`, 'use GET', {}, { Allow: 'GET' });
     return texture(ctx, res, pathname.slice(TEXTURE_PREFIX.length));
   }
+  // The agent bridge has its own guards (loopback bind, session token) and routes with job ids.
+  if (pathname === AGENT_PREFIX || pathname.startsWith(`${AGENT_PREFIX}/`)) return handleAgentApi(ctx, req, res, url, pathname);
   const methods = ROUTES[pathname];
   if (!methods) throw new HttpError(404, `unknown endpoint ${method} ${pathname}`, `endpoints: ${ENDPOINTS}`);
   const handler = Object.hasOwn(methods, method) ? methods[method] : undefined;
@@ -200,7 +227,8 @@ async function texture(ctx: ApiContext, res: ServerResponse, rawId: string): Pro
 async function events(ctx: ApiContext, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const store = ctx.store;
   const { mtimeMs } = store ? await store.read().catch(() => ({ mtimeMs: 0 })) : { mtimeMs: 0 };
-  ctx.sse.open(req, res, { event: 'hello', data: { file: store?.file ?? null, mtimeMs, root: ctx.root.dir } });
+  const avatar = ctx.avatar.ref();
+  ctx.sse.open(req, res, { event: 'hello', data: { file: store?.file ?? null, mtimeMs, root: ctx.root.dir, ...(avatar ? { avatar } : {}) } });
 }
 
 function getState(ctx: ApiContext, _req: IncomingMessage, res: ServerResponse): void {
@@ -227,7 +255,7 @@ async function postCommand(ctx: ApiContext, req: IncomingMessage, res: ServerRes
   if (command.type === 'open') {
     // Handled here: the server switches the model and every tab follows the "file-changed" event.
     const { result, delivered } = await openCommand(ctx, command.file);
-    sendJson(res, 200, { delivered, file: result.file, mtimeMs: result.mtimeMs, notes: result.notes });
+    sendJson(res, 200, { delivered, file: result.file, mtimeMs: result.mtimeMs, notes: result.notes, ...(result.avatar ? { avatar: result.avatar } : {}) });
     return;
   }
   if (command.type !== 'message') requireStore(ctx);

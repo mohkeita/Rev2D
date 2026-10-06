@@ -877,6 +877,427 @@ rev2d set hero.r2d.json bone:head.rotation=15
 rev2d set hero.r2d.json part:eye.fill=#223344 part:eye.shape.ry=12 --render out/eye.png --viewbox fit
 ```
 
+### Avatar from one illustration
+
+`rev2d avatar <subcommand>` works on an **avatar project**: a folder with `avatar.json` (the avatar
+spec: landmarks placed on one illustration) and `source.png` (the illustration, never modified).
+Coordinates in the spec are pixels of the source image: origin top-left, +x right, +y down;
+`imageLeft` / `imageRight` mean the left / right side of the image as you look at it. The picture
+stays on this machine: nothing is uploaded. `<project>` is the folder or its `avatar.json`.
+
+The loop for an agent: `avatar new` → look at `avatar grid` (whole image, then `--region` zooms) and
+write the landmarks into `avatar.json` → `avatar validate` (what is missing or wrong, with hints) →
+`avatar overlay` (see the landmarks on the picture) → fix → repeat. `avatar vision-check` tells an
+agent beforehand whether it reads coordinates off images accurately enough. Then `avatar build`
+(layer images and the model `<name>.r2d.json`) → `avatar poses` (review sheets: look at every one) →
+adjust `avatar.json` → build again. The step-by-step guide (where each landmark goes, what to look
+for in the review sheets, common problems) is [AVATAR.md](AVATAR.md) (`rev2d docs avatar`).
+
+### rev2d avatar new
+
+```
+rev2d avatar new <image.png> <dir> [--name id] [--force] [--json]
+```
+
+Copies the PNG (ideally a front-facing bust with a transparent background) byte for byte to
+`<dir>/source.png` and writes the draft `<dir>/avatar.json`: the image size filled in, every
+landmark still `null`. Other image formats are refused with the way to convert them; an existing
+project is not overwritten without `--force` (exit 1).
+
+| Flag | Meaning |
+| --- | --- |
+| `--name <id>` | name of the avatar and of its built model `<name>.r2d.json` (default: the folder name made a valid id) |
+| `--force` | replace an existing `avatar.json` / `source.png` in the folder (its landmarks are lost) |
+
+```
+created avatar project projects/miko: "miko", 1254x1254
+  projects/miko/source.png   the illustration (a copy; never modified)
+  projects/miko/avatar.json  draft spec: 20 landmarks to place
+next steps:
+  rev2d avatar grid projects/miko -o projects/miko/work/grid.png
+  ...
+```
+
+`--json`: `{ok, dir, specFile, sourceFile, name, width, height, landmarksToPlace, notes, next}`.
+
+### rev2d avatar import-mas
+
+```
+rev2d avatar import-mas <mas-project-dir> <dir> [--name id] [--image file.png] [--force] [--json]
+```
+
+Imports a Mesh Avatar Studio project (its `rig.json` version 1 and `source.png`; `<mas-project-dir>`
+may also be the `rig.json` itself) as an avatar project: `<dir>/avatar.json`, a copy of the
+illustration, and the drawn variants whose names Rev2D knows (`variants/eyes_closed.png`,
+`mouth_a.png`, ...). Radians become degrees; `eyes[0]` / `eyes[1]` become `imageLeft` /
+`imageRight` (`roi` → `region`); the mouth line (centre, angle, half length, bow) becomes two
+corners; strands (`sigma` → `width` = 2 × sigma, `k` → `stiffness`, `max` → `swing`), buns (jiggle
+attachments), accessories (pendulum attachments with their box as outline) and the hand (a cut-out
+with its contact point) are carried over. Mesh Avatar Studio has no face oval and no chin point: both
+are estimated from its face ellipses. Everything estimated, approximated or not imported is printed
+as a `note:`; the imported spec is validated against the image (exit 1 when it has errors).
+
+| Flag | Meaning |
+| --- | --- |
+| `--name <id>` | name of the avatar (default: the folder name) |
+| `--image <file.png>` | the illustration the rig was made for (default: `source.png` in the Mesh Avatar Studio folder, else the only PNG there) |
+| `--force` | replace an existing project in `<dir>` |
+
+`--json`: `{ok, dir, specFile, sourceFile, name, width, height, sources: {rig, image}, variants, errors, warnings, diagnostics, notes, next}`.
+
+### rev2d avatar validate
+
+```
+rev2d avatar validate <project> [--strict] [--json]
+```
+
+Checks the spec against its illustration. Diagnostics have the shape of `rev2d validate`: severity,
+stable code, JSON pointer into `avatar.json`, message and a hint with the fix.
+
+- **Structural** (`schema-*`, `json-syntax`): unknown keys with a did-you-mean, wrong types, unknown
+  attachment kinds.
+- **`avatar-missing-landmark`**: one per landmark that is still `null`, absent or an empty list,
+  with the way to place it. A draft validates to one list of what is left to do.
+- **Geometry** of everything already placed, so a half-finished draft gets feedback too:
+
+| Code | Severity | Meaning |
+| --- | --- | --- |
+| `avatar-image-size-mismatch` | error | `image.width` / `height` differ from the real size of the illustration |
+| `avatar-image-size` | warning | a very small (< 256 px) or very large (> 4096 px) image |
+| `avatar-points-odd` | error | a point list with an odd number of values |
+| `avatar-too-few-points` | error | a polygon with fewer than 3 points, a polyline (strand, brow) with fewer than 2 |
+| `avatar-polygon-self-intersects` | warning | edges of a polygon cross (the message names the edges and the place) |
+| `avatar-outside-image` | warning | coordinates outside the image (the body pivot may lie below it) |
+| `avatar-polygon-outside-image` | error | a shape that cuts layers lies entirely outside the image |
+| `avatar-eye-opening-outside-region` | error | an eye opening that is not inside its region (also: the two polygons swapped) |
+| `avatar-eye-opening-exceeds-region` | warning | a few opening points stick out of the region by more than 1 px |
+| `avatar-eyes-swapped` | error | `imageLeft` is not left of `imageRight` (by centroid) |
+| `avatar-eyes-overlap` | error | the two openings overlap |
+| `avatar-eye-region-contains-other` | error | a region reaches into the other eye |
+| `avatar-outside-head` | error | an eye, the nose, a mouth corner or the chin outside the head ellipse |
+| `avatar-face-outside-head` | warning | the face oval sticks out of the head ellipse |
+| `avatar-band-order` | error | `head.neck` / `body.fade` with yStart >= yEnd |
+| `avatar-neck-above-chin` | warning | the neck band starts so far above the chin that the chin keeps less than 90% of the head motion |
+| `avatar-mouth-corners-swapped` | error | `mouth.imageLeft` is not left of `mouth.imageRight` |
+| `avatar-mouth-area` | error | the mouth area does not contain a mouth corner |
+| `avatar-duplicate-id` | error | two strands, or two attachments, share an id |
+| `avatar-reserved-id` | error | an attachment id that names a generated layer (`base`, `hair`, `mouth`, ...) |
+| `avatar-strand-root-outside-head` | info | a strand starts outside the head ellipse (reversed, or the ellipse is too small) |
+| `avatar-pendulum-degenerate` | error | a pendulum whose pivot and tip coincide |
+| `avatar-implausible-value` | warning | turn / tilt / sway / breath / swing far from usable values (often radians instead of degrees) |
+| `avatar-post-op` | error | a `post` entry without an `"op"`, or with an unknown op |
+
+File problems are diagnostics too: `avatar-source-missing`, `avatar-source-load` (not a PNG),
+`avatar-source-outside-project` (`image.file` leaves the folder), `avatar-layers-load` (warning).
+
+| Flag | Meaning |
+| --- | --- |
+| `--strict` | also fail (exit 1) on warnings |
+
+```
+FAIL  projects/miko/avatar.json
+  error   /head/center  avatar-missing-landmark  Head ellipse: centre is not placed yet  → set "center" to [x, y] in source-image pixels: horizontally on the face centre, vertically slightly above the eyes
+  ...
+  20 errors, 0 warnings
+20 landmarks to place: read coordinates with "rev2d avatar grid projects/miko" (add --region x0,y0,x1,y1 to zoom in), then look at them with "rev2d avatar overlay"
+```
+
+`--json`: `{file, ok, errors, warnings, landmarksToPlace, diagnostics, image: {file, width, height} | null, layers}`
+where `layers` is `"not built"`, `"current"`, `"stale"` (the spec changed what the layer images are
+cut from) or `"unknown"`. Exit 1 on errors (with `--strict` also on warnings).
+
+### rev2d avatar grid
+
+```
+rev2d avatar grid <project | image.png> [--region x0,y0,x1,y1] [--step n] [--scale n] [-o out.png] [--json]
+```
+
+Draws a coordinate grid over the illustration: how coordinates are read off a picture. Labels are
+**source pixel coordinates** on all four sides at any magnification, so the numbers read are the
+numbers `avatar.json` wants. Every line is a dark and a light pixel side by side with the coordinate
+exactly between them (readable on any artwork); lines on round coordinates are stronger; transparent
+pixels show a checkerboard; the footer states region, magnification and spacing.
+
+Without `--region` the whole image is shown (a 1254 px image: a line every 50 px, a label every
+100 px). With `--region` the rectangle is enlarged by a whole number so its long side is about
+1000-1600 px, pixels stay crisp squares, and an eye-sized region gets a line every 5 or 10 px:
+coordinates can be read to about 2 px.
+
+| Flag | Meaning |
+| --- | --- |
+| `--region <x0,y0,x1,y1>` | magnify this rectangle (two corners in source pixels; clipped to the image) |
+| `--step <px>` | source pixels between grid lines (default: chosen from the magnification) |
+| `--scale <n>` | output pixels per source pixel, a whole number 1..40 (default: chosen so the long side is about 1000-1600 px) |
+| `-o, --out <out.png>` | the PNG to write (default for a project: `<project>/work/grid.png`, or `grid-x0-y0-x1-y1.png` for a region; required for an image file) |
+
+`--json`: `{file, width, height, source, region: [x0, y0, x1, y1], scale, step, labelStep, origin: [x, y]}`;
+the source point `(x, y)` is at output pixel `origin + (x - x0, y - y0) * scale`.
+
+```sh
+rev2d avatar grid projects/miko -o projects/miko/work/grid.png
+rev2d avatar grid projects/miko --region 420,410,580,530 -o projects/miko/work/eye.png
+```
+
+### rev2d avatar overlay
+
+```
+rev2d avatar overlay <project> [--part group|item] [--zoom] [--grid] [--scale n] [-o out.png] [--json]
+```
+
+Draws the landmarks of `avatar.json` over the illustration in their group colours (fixed and
+colour-blind friendly; legend in the footer), with rulers in source pixels. Ellipses get a cross at
+their centre; polygons are closed; polylines (strands, brows) start with a ring at their root; points
+are a ring around a dot; a band is a solid line at yStart and a dashed line at yEnd; a segment (mouth
+corners, pendulum pivot → tip) runs from a ring to a dot. Works on an unfinished draft: what is not
+placed is skipped and reported.
+
+| Flag | Meaning |
+| --- | --- |
+| `--part <group\|item>` | one group (`head`, `eyes`, `mouth`, `face`, `cheeks`, `strands`, `attachments`, `body`) or the items whose id starts with the text (`eyes.imageLeft`, `strand.bang1`, `attachment.tassel`); every item is labelled with its id |
+| `--zoom` | crop to what is drawn plus a margin, magnified; polygon and polyline vertices are numbered from 0 (their index in the point list) |
+| `--grid` | also draw the grid lines of `avatar grid` over the picture |
+| `--scale <n>` | output pixels per source pixel, a whole number 1..40 |
+| `-o, --out <out.png>` | the PNG to write (default: `<project>/work/overlay.png`, with the part and `zoom` in the name) |
+
+`--json`: `{file, width, height, region, scale, origin, drawn: [item ids], missing: [required item ids not placed], notes}`.
+
+```sh
+rev2d avatar overlay projects/miko -o projects/miko/work/overlay.png
+rev2d avatar overlay projects/miko --part eyes.imageLeft --zoom -o projects/miko/work/eye.png
+```
+
+### rev2d avatar build
+
+```
+rev2d avatar build <project> [--json]
+```
+
+Builds the project: `avatar.json` + `source.png` → `textures/*.png` (the base layer and the layers cut
+from the illustration), `textures/layers.json` (what the model compiler needs besides the spec) and
+`<name>.r2d.json`, an ordinary Rev2D model: `render`, `sheet`, `inspect`, `analyze`, `edit` and the
+exporters work on it. The model is **regenerated by every build**: change `avatar.json`, or add edit
+ops ([OPS.md](OPS.md)) to its `"post"` list (they are applied after every build), never the model
+file. Files whose content did not change are not rewritten; layer images of an earlier build that are
+no longer produced are deleted.
+
+The generated model: one warp `avatarWarp` over the whole image (a lattice with cells of about 2% of
+the long side; `build.cell.body` in the spec overrides it) with the base image as its child, and
+bindings for `AngleX` × `AngleY` (head turn, a 3 × 3 keyform grid), `AngleZ` (tilt), `BodyAngleX`
+(sway) and `Breath`; the features built from the other landmarks (eyes, mouth, hair, attachments,
+animations) add their layers, nested warps and parameters. Coordinates of the model are pixels of the
+illustration.
+
+The spec must have no errors (`avatar validate`). The built model is validated (0 errors, or the
+build fails) and **checked for folds**: with every parameter at each end of its range, and at every
+corner of `AngleX` × `AngleY` × `AngleZ` × `BodyAngleX`, no lattice cell and no mesh triangle may flip
+or collapse.
+
+| Report | Meaning |
+| --- | --- |
+| build issue `avatar-mesh-fold` (warning) | a warp lattice or a part mesh flips or collapses in a pose: the message names the parameters, the place (source pixels) and the remaining area; the hint says what to lower or widen |
+| build issue `avatar-chin-weight` (warning) | the chin gets less than 90% of the head tilt: `head.pivot` sits too high |
+| build issue `avatar-pivot-below-neck` (warning) | `head.pivot` lies below the end of `head.neck`: the tilt shears the neck instead of bending it |
+| build issue `avatar-cell-clamped` (info) | `build.cell.body` would need more than 64 lattice cells per side and was raised |
+| `model validation` | warnings and info of the model validator on the built model (same codes as `rev2d validate`) |
+
+Warnings do not fail the build. Exit 1 when the spec has errors, a `"post"` op fails or the model
+does not validate (nothing of the model is written then).
+
+`--json`: `{ok, dir, name, modelFile, modelBytes, layersFile, layers: [project-relative PNG paths],
+removed, postOps, warnings, issues: [{severity, code, message, path?, hint?}], stats: {layers,
+parameters, textures, warps, latticePoints, latticeCols, latticeRows, parts, bindings, physics,
+animations, turnPoints, tiltPoints, swayPoints, breathPoints, foldPoses, ...}, diagnostics, timings:
+{loadMs, layersMs, compileMs, validateMs, foldsMs, writeMs, totalMs}, next}`.
+
+```text
+$ rev2d avatar build projects/hana
+built projects/hana: "hana", 478 KB model, 1 layer image, 0 warnings
+  projects/hana/hana.r2d.json  5 parameters, 1 warp (2091 lattice points; root 40 x 50 cells), 1 part, 4 bindings
+  projects/hana/textures       base.png + layers.json
+  time                         451 ms (layers 4 ms, compile 31 ms, validate 51 ms, fold check 109 ms, write 158 ms)
+next steps:
+  rev2d avatar poses projects/hana
+```
+
+### rev2d avatar poses
+
+```
+rev2d avatar poses <project> [--scale n] [--json]
+```
+
+Renders the review sheets of a **built** project into `<project>/review/`. Look at every one of them:
+
+| File | Content |
+| --- | --- |
+| `review/poses.png` | one captioned contact sheet of the review poses: rest, eyes half / closed, mouth open, turn left / right, look up / down, tilt both ways, body sway both ways, plus the poses of the built features |
+| `review/turn.png` | the 3 × 3 grid `AngleX` × `AngleY` (columns −30, 0, 30; the top row looks up) |
+| `review/eyes.png` | the eye poses, cropped to both eyes and magnified |
+| `review/mouth.png` | the mouth poses, cropped to the mouth and magnified |
+| `review/summary.json` | the sheets (file, size, cells, scale, view box, captions), every pose with the parameter values used and its `moves` (how far each landmark of the spec travels in that pose, `[dx, dy]` in source pixels: `faceCenter`, `nose`, `chin`, `eyeImageLeft`, `earImageRight`, `neckPivot`, `shoulderImageLeft`, `chest`, ...), notes and timings |
+
+Cells are small (about 400 px) on a mid-grey background with room around the canvas, because a
+tilting or swaying head leaves the image: halos, a torn or folded mesh, a cut chin or a double edge
+show, and a review takes a few seconds. Poses whose parameters the model does not have (a feature
+that is not built) are skipped and named in a note. Check what you see against the numbers: the
+`moves` in `summary.json` say, for example, that the nose travels 49 px and the ears 10 px at
+`AngleX = 30`, and `rev2d diff` compares two renders pixel by pixel (cells of one sheet that look
+alike or different at a glance are easy to misjudge). For one pose at full size use
+`rev2d render <project>/<name>.r2d.json --param AngleX=30 -o out.png` (add `--overlay warps` for the
+lattice), for motion `rev2d sheet` / `rev2d gif` on the built model.
+
+| Flag | Meaning |
+| --- | --- |
+| `--scale <n>` | multiply the size of every cell (default 1; 2 shows more detail and takes about four times as long) |
+
+Exit 1 when the project is not built yet (`avatar build` first) or its spec has errors.
+
+`--json`: `{ok, dir, modelFile, sheets: [{kind, file, name, width, height, cells, columns, scale,
+viewBox, captions, ms}], poses: [{id, label, params, moves?, skipped?}], summaryFile, notes, timings:
+{loadMs, renderMs, writeMs, totalMs}}`.
+
+```sh
+rev2d avatar poses projects/hana
+rev2d avatar poses projects/hana --scale 2 --json
+```
+
+### rev2d avatar variants
+
+```
+rev2d avatar variants <request|import|status> <project> [ids...] [--all] [--json]
+```
+
+Drawn eye and mouth variants. Closed eyes and an open mouth look far better **drawn** than deformed:
+an image generator redraws the eyes or the mouth of a full-size copy of the illustration, and Rev2D
+cuts the redrawn area out as a **sprite** that replaces the mesh deformation (the mesh stays the
+fallback of every variant without a drawing). `[ids...]` may also be comma-separated.
+
+| Variant | Shown |
+| --- | --- |
+| `eyes_closed` (recommended) | per eye, fully up to `EyeLOpen` / `EyeROpen` 0.12, gone at 0.2 |
+| `eyes_half` | per eye, fully from `EyeOpen` 0.3 to 0.6, gone at 0.2 and 0.7 (under a closed sprite down to 0) |
+| `eyes_smile` | per eye, by `EyeLSmile` / `EyeRSmile` (declared only with this variant), on top |
+| `mouth_a` (recommended), `mouth_a_half`, `mouth_i`, `mouth_u`, `mouth_e`, `mouth_o` | at their point of the `MouthOpen` × `MouthForm` viseme table: a (1, 0), a_half (0.5, 0), i (0.35, 1), u (0.35, −1), e (0.6, 0.5), o (0.75, −1); above `MouthOpen` 0.15 the nearest drawn shape shows (it stands in for a missing one), at 0.15 and below the closed mouth; with drawn mouths the mesh mouth keeps `MouthForm` only |
+
+While sprites cover an eye completely, its open-eye layers are hidden; every change between a sprite
+and the mesh eye, or between two sprites, is one picture fading over another fully drawn one.
+
+**`request <project> [ids...]`** writes, per variant, into `<project>/variant-requests/`:
+
+| File | Content |
+| --- | --- |
+| `<id>.mask.png` | the edit mask at the source size: OPAQUE black = must stay identical, TRANSPARENT (white) = may change, soft in between. Eye variants share both eye regions slightly grown; mouth variants the mouth area ellipse |
+| `<id>.prompt.txt` | the prompt for the image generator: what to draw, where (coordinates), and the hard constraints: the exact size and framing, every pixel outside the mask unchanged (the transparent background too), nothing added, the same style |
+| `README.md` | the flow, the files, the mask convention and the rules of the check |
+| `preview.png` | the illustration around the edit areas with them tinted (eyes yellow, mouth orange) |
+
+Without ids it requests `eyes_closed` and `mouth_a`; `--all` requests every variant. Requests written
+before are written again (the landmarks may have moved). The drawing of a variant goes to
+`<project>/variants/<id>.png`, full size.
+
+**`import <project> [ids...]`** checks every `variants/<id>.png` (or the named ones) and cuts the
+accepted ones into sprites. A drawing is accepted when:
+
+- its size is exactly the size of the source;
+- outside the mask, the mean difference is at most `build.variantTolerance` of avatar.json (default
+  2 of 255: recompression noise passes), at most 0.5% of the pixels changed by more than 40 levels,
+  and the ring just around the edit area (where the sprite blends in) differs by at most 2.5 × the
+  tolerance. Pixels of the source's transparent background do not count (a filled-in background is
+  only noted);
+- the picture is not shifted or zoomed: when the outside does not match, the check looks for the
+  global shift (up to 8 px) or zoom (up to 8%) that explains it and names it ("shifted by 3 px to the
+  right"); a shift of 2 px or more is rejected even when the rest is within the tolerance;
+- inside the mask at least 2% of the editable area changed, for **each** eye of an eye variant.
+
+Accepted drawings become feathered sprite layers `textures/sprite_<id>_<area>.png` (one per eye,
+`imageLeft` / `imageRight`, or `mouth`). Where layers drawn above the sprites cover the area (hair
+over the eyes, brows), the sprite holds what lies under them, so the composite at the sprite's pose is
+the drawing itself. They are recorded in `textures/layers.json` (`variants` and `sprites`, with
+fingerprints of the drawing, of the eye regions / mouth area and of the layers), and the model is
+rebuilt from the existing layers. A **rejected** drawing is reported with the reason and a hint that
+says what to ask the image generator next; an earlier accepted sprite of that variant stays. Deleting
+`variants/<id>.png` and importing again removes its sprite. Other files in `variants/` are listed as
+ignored (with a did-you-mean). `rev2d avatar build` keeps the sprites (a sprite image deleted by hand:
+`avatar-variant-sprite-missing`; sprites cut for other eye regions, mouth area or layers:
+`avatar-variant-stale`, import again). Review them with `rev2d avatar poses` (`review/eyes.png`,
+`review/mouth.png`).
+
+**`status <project>`** lists every variant with one state: `missing`, `requested` (mask and prompt
+written), `drawn` (a drawing not imported yet), `accepted`, `rejected` (the last import refused the
+current drawing; the reason is shown) or `stale` (the drawing, the eye regions / mouth area or the
+layers changed since the sprite was cut: import again).
+
+| Flag | Meaning |
+| --- | --- |
+| `--all` | `request`: every variant instead of the recommended ones |
+
+Exit 1 when the project is missing, its spec has errors, `import` finds nothing to import (or the
+avatar is not built yet), or a drawing is **rejected** (the accepted ones are imported all the same);
+exit 2 for an unknown action or variant id.
+
+`--json`:
+- `request` → `{ok, dir, size: [w, h], transparent, requests: [{id, group, label, recommended, file,
+  maskFile, promptFile, prompt, areas: [{key, bounds, grow, feather}]}], readme, preview, files, notes,
+  next}`;
+- `import` → `{ok, dir, accepted, rejected, kept, removed, variants, checks: [{id, ok, reason?, hint?,
+  outsideDiff, insideChanged, group, tolerance, badShare, badBounds, nearDiff, nearLimit, areas: [{key,
+  changed}], size, shift, scale, backgroundFilled, drawingHash, notes}], unreadable: [{id, file, reason,
+  hint?}], ignored: [{file, reason, hint?}], sprites, deleted, layersFile, modelFile, modelBytes,
+  warnings, issues, diagnostics, notes, timings: {loadMs, checkMs, compileMs, writeMs, totalMs}, next}`
+  (`ok` is false when a drawing was rejected);
+- `status` → `{ok, dir, name, built, variants: [{id, group, label, recommended, state, requested,
+  drawn, sprite, stale: [reasons], rejection: {reason, hint?, ...} | null, check, file, maskFile,
+  promptFile, unreadable?}], counts, ignored, notes}`.
+
+```text
+$ rev2d avatar variants import projects/hana
+imported 2 drawings of projects/hana: 1 accepted, 1 rejected
+  eyes_closed  accepted  outside 0 (limit 2), changed inside 42.8% (image left 42.8%, image right 42.8%)
+  mouth_a      REJECTED  the whole drawing is shifted by 3 px to the right against source.png: edges outside the editable area differ by 49.5 on average, 0 with the shift undone
+                         hint: Ask the image generator again with source.png and the mask variant-requests/mouth_a.mask.png (...) and add: "Keep exactly the same framing as the input image: no shift, crop, zoom or padding; only the transparent area of the mask changes." Or move the drawing back by 3 px to the left in an image editor and import it again.
+model: projects/hana/hana.r2d.json (895 KB), sprites: eyes_closed
+```
+
+```sh
+rev2d avatar variants request projects/hana
+rev2d avatar variants request projects/hana eyes_closed eyes_half mouth_a --json
+rev2d avatar variants import projects/hana
+rev2d avatar variants status projects/hana --json
+```
+
+### rev2d avatar vision-check
+
+```
+rev2d avatar vision-check <make|score> <dir> [answer.json] [--seed n] [--size px] [--json]
+```
+
+A self-test for agents: can you read pixel coordinates off an image? `make <dir>` writes
+`<dir>/vision-check.png`, a busy illustration-like picture with 12 numbered crosshair markers, and
+`<dir>/vision-check.key.json`, the answer key (encoded; do not decode it). Find the point each
+crosshair's four arms point at (a whole number in both axes) the way landmarks are read (`avatar
+grid` on the PNG, then `--region` zooms) and write `{"1": [x, y], ..., "12": [x, y]}` to a JSON
+file. `score <dir> <answer.json>` prints the error per marker, the mean and the largest error, and
+advice (a constant shift, a scale factor from measuring in a resized copy, swapped axes). It passes
+(exit 0) when the mean error is at most 4 px and the largest at most 10 px on a 1024 px image (the
+limits scale with `--size`); otherwise exit 1.
+
+| Flag | Meaning |
+| --- | --- |
+| `--seed <n>` | `make`: which image to generate (default 1); the same seed gives the same image |
+| `--size <px>` | `make`: width and height, 256..4096 (default 1024) |
+
+`--json`: `make` → `{ok, image, key, seed, size, markers, answerFormat, next}`; `score` →
+`{ok, pass, mean, max, answered, total, limits: {mean, max}, markers: [{id, expected, answer, error}], bias, advice}`.
+
+### rev2d avatar schema
+
+```
+rev2d avatar schema [-o schema.json] [--json]
+```
+
+Prints the JSON Schema of `avatar.json` (every field with its description; fields marked "CUTS
+LAYERS" are the ones whose change requires rebuilding the layer images). With `-o` it is written to
+a file (`--json` then prints `{"file": <absolute path>}`).
+
 ### Import & export (Spine, Live2D)
 
 Convert between Rev2D and the public JSON formats of Spine and Live2D Cubism. Every conversion prints
@@ -1135,12 +1556,15 @@ Text output: `[12:01:02] hero.r2d.json: ok (0 errors, 1 warning)` followed by th
 ### rev2d edit
 
 ```
-rev2d edit [model | dir] [--root dir] [--port n] [--host h] [--allow-host name]... [--no-open] [--json]
+rev2d edit [model | dir] [--root dir] [--port n] [--host h] [--allow-host name]... [--allow-agent] [--agent-codex-sandbox config|unelevated] [--no-open] [--json]
 ```
 
 Starts the editor server (default `http://127.0.0.1:4777`) and opens it in the default browser.
 With a model it opens that model; without one (or with a directory, which becomes the workspace
-root) the editor starts on its **start screen** (new from template, open, recent files, import). The
+root) the editor starts on its **start screen** (new from template, open, recent files, import). An
+**avatar project** (a folder with an `avatar.json`, or that `avatar.json` itself) opens in avatar
+mode with the folder that holds the project as the default workspace root, so the editor can create
+sibling avatars there; its spec is checked with the avatar validator, not as a model. The
 editor live-reloads on external file changes and writes edits back to the file. The server registers
 itself as `~/.rev2d/editors/<pid>-<port>.json` (`{pid, url, file, startedAt}`; `file` is the model
 the editor has open **now**, `""` on the start screen; one process may run several servers, stale
@@ -1177,6 +1601,47 @@ write is refused with **409** `{mtimeMs}` and nothing is written, instead of sil
 the other change; the editor reloads and the change can be re-applied. Without `baseMtimeMs` the
 write is unconditional.
 
+**Avatar mode.** An avatar project (`rev2d avatar new`, File > New Avatar from Illustration…, or
+the start screen's "Avatar from an Illustration" card, which creates one from a single PNG) opens
+in Avatar mode: the parts of `avatar.json` on the leading side, the illustration with a handle for
+every landmark in the middle (drag to move, click a part to select it), and the live preview with
+Pose, Lip sync and Selected on the trailing side. Before its first build the project has no model
+yet: Avatar mode shows it all the same, and the trailing side lists the landmarks still to place
+with Build Avatar once they are all there. After the build the mode switcher in the toolbar also
+offers the Rig mode for the generated model; a newly opened avatar project starts in Avatar mode.
+
+- In Avatar mode the toolbar's Save, Undo and Redo, Ctrl+S, Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y, the
+  unsaved dot of the File button and the status line work on `avatar.json`; in the Rig mode on the
+  model. Saving recompiles the model from the existing layer images; when an outline that cuts the
+  layers moved, a banner offers Save and Rebuild Layers.
+- Before New, Open, Import, Close, or a new avatar replaces a project with unsaved `avatar.json`
+  edits, the editor asks "Save changes to `<project>/avatar.json`?" (opening the project's own
+  model keeps them). An agent's `open` command cannot wait for an answer: the edits are reported
+  as discarded.
+- The first build opens the generated model in the same window and mode; changes an agent makes to
+  `avatar.json`, the illustration or the layers show up at once.
+- An agent opens a project in the human's editor with `rev2d editor command --open <project>/avatar.json`
+  (or the folder); `rev2d editor state` names the project and the avatar part the human has selected.
+- **Drawn Variants** (trailing side, under the preview pages) lists the drawn closed eyes and mouth
+  shapes (`rev2d avatar variants`): a thumbnail of the area, the state (In Use, Out of Date, Rejected
+  with the reason, Not Imported, Requested, Not Drawn) and, in a row's menu, Show in Preview and Remove
+  Drawing. **Draw with AI…** starts an `avatar-variants` job of the AI panel with an agent that has an
+  image generator (Codex); its sheet picks the variants and says that the illustration and the edit
+  masks are sent to that provider's image generator. When no AI can draw, the reason shows with
+  **Copy the Request** (the same flow as text for an agent in a terminal). **Import Drawings** imports
+  drawings placed in `variants/` by hand as a job (its banner shows, like a build); the section's menu
+  writes the masks and prompts and opens the instructions.
+
+**AI panel.** The sparkles button in the toolbar opens the AI panel in the trailing sidebar: a
+conversation with the **Codex CLI** or **Claude Code**, started by the editor in the workspace with
+your login of that CLI (see In-app agents below and [AGENT-BRIDGE.md](AGENT-BRIDGE.md)). The panel
+shows the agent's messages, commands, file changes and to-dos while it works; the model or avatar it
+writes reloads at once. It needs at least one of the two CLIs installed and signed in, and the editor
+bound to a loopback address (the default; otherwise `--allow-agent`); without that the panel says
+what is missing. Avatar mode uses it for "Let AI Place Them" when a project is created (the agent
+places the landmarks, builds and reviews), for "Ask AI to Fix This Part" in a part's menu and for
+"Draw with AI…" in Drawn Variants (the `avatar-variants` task: Codex draws with its own image generator).
+
 The model may have errors (the editor shows them under Problems); a note on stderr says how many.
 Another note names editors that already have the same model open (a second editor still starts;
 `rev2d editor ...` talks to the newest one).
@@ -1187,6 +1652,8 @@ Another note names editors that already have the same model open (a second edito
 | `--port <n>` | port, 0..65535 (default 4777; `0` picks a free port) |
 | `--host <address>` | interface to bind (default `127.0.0.1`; other values print a warning, the editor can write files in the workspace) |
 | `--allow-host <name>` | also answer requests addressed to this host name (repeatable or comma list) |
+| `--allow-agent` | keep the in-app agent endpoints (`/api/agent/*`) although `--host` is not a loopback address (prints a warning) |
+| `--agent-codex-sandbox <config\|unelevated>` | Windows only: the sandbox implementation in-app Codex runs use. `config` (default) leaves your Codex configuration alone; `unelevated` adds `-c windows.sandbox="unelevated"`, the one that needs no administrator setup. Beats the setting saved in `~/.rev2d/settings.json` |
 | `--open` / `--no-open` | open a browser (default) or not |
 
 As a DNS-rebinding guard the editor only answers requests whose `Host` is a loopback name or the
@@ -1194,14 +1661,27 @@ address it is bound to (with `--host 0.0.0.0`: any of the machine's IP addresses
 through a host name, e.g. `http://my-pc.local:4777` from another machine, add
 `--allow-host my-pc.local`.
 
-`--json` prints NDJSON: `{"event":"listening","url":"http://127.0.0.1:4777","file":"/abs/hero.r2d.json","root":"/abs","ui":{"mode":"static","detail":"..."}}`
+**In-app agents.** The editor can start the Codex CLI or Claude Code for a request and show its
+progress (`GET /api/session`, `/api/agent/*`; protocol, security model and troubleshooting:
+[AGENT-BRIDGE.md](AGENT-BRIDGE.md)). A run uses your login of that CLI and works inside the workspace
+root, so these endpoints need a per-server token and exist only while the editor is bound to a
+loopback address (`127.0.0.1`, `localhost`, `::1`). With any other `--host` they answer 404 unless
+`--allow-agent` is given, which prints a warning: every machine that can reach the port could then
+start agent runs with your login. On Windows, when Codex cannot start commands (its "elevated"
+sandbox is not set up), `--agent-codex-sandbox unelevated` makes its runs use the sandbox that needs
+no setup; the same setting can be saved for every editor with `PUT /api/agent/settings`
+([AGENT-BRIDGE.md](AGENT-BRIDGE.md#8-troubleshooting)).
+
+`--json` prints NDJSON: `{"event":"listening","url":"http://127.0.0.1:4777","file":"/abs/hero.r2d.json","root":"/abs","ui":{"mode":"static","detail":"..."},"agent":{"enabled":true}}`
 (`file` is `null` without a model) then `{"event":"stopped"}`. `ui.mode` is `static` (built UI),
-`vite` (development sources) or `none` (API only; `detail` says why).
+`vite` (development sources) or `none` (API only; `detail` says why). `agent.enabled` says whether
+the agent endpoints exist (`false` comes with a `reason`).
 
 ```sh
 rev2d edit hero.r2d.json                     # edit one model (workspace: its directory)
 rev2d edit                                   # start screen, workspace: the current directory
 rev2d edit models/hero.r2d.json --root .     # the whole project is the workspace
+rev2d edit avatars/hana/avatar.json          # an avatar project in Avatar mode (workspace: avatars/)
 rev2d edit hero.r2d.json --port 0 --no-open  # any free port, no browser
 ```
 
@@ -1213,11 +1693,14 @@ rev2d editor state [--model f] [--url u] [--json]
 
 What the human currently sees in a running editor: the model it has open and its workspace root,
 parameter values (physics outputs included), time, playing animations, selection, overlays, the
-visible region, the physics toggle and the parts hidden in the preview. The editor is found through
-the registry: the most recently started one, or the one that has `--model` open now; `--url` skips
-discovery. With no model open (start screen) it prints `no model open (start screen)`, the
-workspace root and the recent files, and exits 0. Exit 1 when no editor is running, it is
-unreachable, or no browser has published its state yet.
+visible region, the physics toggle and the parts hidden in the preview. In avatar mode it adds the
+avatar part the human has selected (`avatar part: eyes.imageLeft.opening`, an id of `rev2d avatar
+overlay --part`). The editor is found through the registry: the most recently started one, or the
+one that has `--model` open now; `--url` skips discovery. With no model open (start screen) it
+prints `no model open (start screen)`, the workspace root and the recent files, and exits 0; with an
+avatar project that has no built model yet it prints `avatar project <dir> (no built model yet)`
+and exits 0. Exit 1 when no editor is running, it is unreachable, or no browser has published its
+state yet.
 
 | Flag | Meaning |
 | --- | --- |
@@ -1226,7 +1709,9 @@ unreachable, or no browser has published its state yet.
 
 `--json`: `{ "editor": { "url": "...", "file": "/abs/hero.r2d.json", "root": "/abs", "pid": 1234 }, "state": <EditorState> }`
 (see [Editor protocol types](#editor-protocol-types)); `file` and `state` are `null` when no model is
-open.
+open. While an avatar project is open `editor` adds `avatar` (`AvatarRef`) and `state.avatar.part`
+is the selected avatar part (`null` when none is; the state is published once the project has a
+built model).
 
 ### rev2d editor command
 
@@ -1329,7 +1814,9 @@ rev2d docs [topic] [--json]
 Prints bundled documentation verbatim (Markdown). Topics: `spec` (docs/SPEC.md), `ops`
 (docs/OPS.md), `cli` (this file), `mcp` (docs/MCP.md), `agents` (docs/AGENTS.md or AGENTS.md),
 `recipes` (docs/RECIPES.md: one ops batch per technique, each with the commands that verify it),
-`interop` (docs/INTEROP.md: Spine and Live2D import / export), `architecture` (docs/ARCHITECTURE.md: modules, evaluation pipeline, renderer, editor, MCP),
+`interop` (docs/INTEROP.md: Spine and Live2D import / export), `avatar` (docs/AVATAR.md: an
+animated avatar from one illustration, the working guide for the `rev2d avatar` commands),
+`architecture` (docs/ARCHITECTURE.md: modules, evaluation pipeline, renderer, editor, MCP),
 `examples` (examples/README.md). Without a topic, lists them and whether each is installed; the
 `recipes` description names every recipe, read from the numbered `## N. Name: ...` headings of the
 installed docs/RECIPES.md, so it never drifts from the file (`22 recipes: starter model, head turn,
@@ -1374,6 +1861,7 @@ interface EditorState {
   viewBox: [number, number, number, number] | null; // visible region in model space
   physics?: boolean;                              // the editor's physics toggle (its results are already in params)
   hidden?: string[];                              // parts hidden in the editor preview (not in the model)
+  avatar?: { part?: string | null };              // avatar mode: the selected avatar part ("eyes.imageLeft.opening", ...)
   updatedAt: string;                              // ISO time of the last update
 }
 
@@ -1391,14 +1879,48 @@ type EditorCommand =
   | { type: 'message'; text: string };
 
 // File management (the editor's workspace)
-interface WorkspaceInfo { root: string; current: string | null; recent: string[] }
+interface WorkspaceInfo { root: string; current: string | null; recent: string[]; avatar?: AvatarRef }
 interface FileListing {
   dir: string;                                    // relative to the root, '' = the root
   parent: string | null;
-  entries: Array<{ name: string; path: string; type: 'dir' | 'model' | 'image' | 'other'; size: number; mtimeMs: number }>;
+  entries: Array<{ name: string; path: string; type: 'dir' | 'model' | 'image' | 'other'; size: number; mtimeMs: number;
+    avatar?: { spec: string; name: string | null; model: string | null } }>;   // an avatar project folder, or its avatar.json
 }
-interface OpenResult { file: string; text: string; mtimeMs: number; notes: string[] }
+interface OpenResult { file: string; text: string; mtimeMs: number; notes: string[]; avatar?: AvatarRef }
 interface TemplateInfo { name: string; description: string }
+
+// Avatar mode (src/server/avatar-routes.ts; full field comments in src/node/editor-registry.ts)
+interface AvatarRef { project: string; projectPath: string; specFile: string }   // projectPath: relative to the root
+interface AvatarOpenResult { file: null; text: null; mtimeMs: 0; notes: string[]; avatar: AvatarRef }
+interface AvatarInfo extends AvatarRef {
+  name: string | null; specText: string | null; mtimeMs: number;
+  image: { file: string; width: number; height: number } | null;
+  built: { model: string | null; modelMtimeMs: number | null; meta: LayersMeta | null; stale: boolean; variants: string[] };
+  files: Array<{ path: string; size: number; mtimeMs: number }>;
+  diagnostics: Diagnostic[]; job: AvatarJobEvent | null;
+}
+interface AvatarSaveRequest { text?: string; doc?: object; baseMtimeMs?: number; compile?: boolean }
+interface AvatarSaveResult {
+  ok: boolean; written: boolean; diagnostics: Diagnostic[]; stale: boolean; mtimeMs: number;
+  compiled: boolean; model: { file: string; mtimeMs: number; changed: boolean } | null; notes: string[];
+  error?: { message: string; hint?: string; diagnostics?: Diagnostic[] }; hint?: string;
+}
+interface AvatarJobEvent {
+  job: string; state: 'running' | 'done' | 'failed'; project: string; layers: boolean;
+  step?: 'start' | 'build' | 'compile' | 'reload'; message?: string; hint?: string; diagnostics?: Diagnostic[]; log?: string;
+  report?: AvatarBuildReport; stale?: boolean; startedAt: string; endedAt?: string; elapsedMs: number;
+}
+interface AvatarBuildReport {
+  layers: boolean; name: string; modelFile: string; modelBytes: number; layerFiles: string[]; removed: string[];
+  postOps: number; warnings: number; issues: AvatarIssue[]; stats: Record<string, number>;
+  diagnostics: Diagnostic[]; timings: Record<string, number>;
+}
+interface AvatarNewRequest { image: { name: string; base64: string }; name?: string; dir?: string; unique?: boolean }
+interface AvatarNewResult extends AvatarRef {
+  specPath: string; name: string; mtimeMs: number; landmarksToPlace: number; notes: string[];
+  image: { file: string; path: string; width: number; height: number; bytes: number };
+}
+interface AvatarChangedEvent { origin: 'editor' | 'external'; project: string; files: string[]; mtimeMs: number }
 
 // Interop (src/node/interop.ts)
 interface Live2dImportRequest {
@@ -1466,3 +1988,31 @@ stream (`GET /api/events`) starts with `hello {file | null, mtimeMs, root}` and 
 `file-changed {file | null, origin: "editor" | "ai"}` whenever the open model changes (open, new,
 save as, import, close; `ai` = an `open` command); `POST /api/command {"type":"open","file"}`
 answers `{delivered, file, mtimeMs, notes}` (`delivered` = tabs that received `file-changed`).
+
+**Avatar mode.** An avatar project is a folder with `avatar.json` and the illustration (`rev2d avatar
+new`). The editor is in avatar mode while the open model has a sibling `avatar.json`, or after
+`POST /api/open` (or the `open` command) named an `avatar.json` or a project folder: that opens the
+built model, or, while there is none, the project **without a model** (`AvatarOpenResult`;
+`/api/model` answers 409 until the first build). `hello`, `file-changed`, `GET /api/workspace` and
+the open answers then carry `avatar` (`AvatarRef`), and `GET /api/files` marks project folders and
+their `avatar.json` with `avatar`. `rev2d edit <project>/avatar.json` starts the editor on a project.
+
+| Endpoint | Body | Answer |
+| --- | --- | --- |
+| `GET /api/avatar` | | `AvatarInfo`: the spec text and its `mtimeMs`, the illustration's size, the build state (`stale`: the layer images are older than the spec), the watched files, diagnostics, the last build job; 404 when no avatar project is open |
+| `PUT /api/avatar` | `AvatarSaveRequest` | `AvatarSaveResult`: writes `avatar.json` (the previous content stays as `avatar.json.bak`; a draft with errors is saved too) and, when the spec is valid, the layers exist and `compile` is not false, recompiles the model from the existing layers and rewrites it (`model-changed`, origin `editor`); **409** `{error, hint, mtimeMs}` when `avatar.json` changed on disk since `baseMtimeMs` |
+| `POST /api/avatar/build` | `{layers?}` or nothing | **202** `AvatarJobEvent` (state `running`, step `start`); `layers: false` only recompiles the model. One job at a time: **409** `{error, hint, job}` while one runs. The build runs `rev2d avatar build` as a child process; progress and the result arrive as SSE `avatar-job` events, the last one `done` (with `report`) or `failed` (with `hint`, `diagnostics`, `log`). On `done` the textures, `layers.json` and the model were rewritten and the model is open |
+| `GET /api/avatar/build` | | `{job: AvatarJobEvent \| null}`: the latest event of the last job |
+| `GET /api/avatar/file?path=<rel>` | | a file of the project folder (`source.png`, `textures/*`, `variants/*`, `variant-requests/*`, `review/*`, ...: PNG, JPEG, WebP, GIF, JSON, text) with its content type and an `ETag`; **403** outside the folder (also through a link) or a hidden file, **415** other types, 404 missing |
+| `POST /api/avatar/new` | `AvatarNewRequest` | `AvatarNewResult`: creates `<dir or name>/` with `source.png` (the PNG byte for byte) and a draft `avatar.json`, and opens the project; **422** not a PNG (the hint says how to convert it) or more than 8192 px per side, **413** larger than 20 MB, **409** when the folder exists and is not empty (`unique: true` picks `<dir>-2`, ...) |
+| `GET /api/avatar/variants` | | `AvatarVariantsInfo`: every drawn variant (`rev2d avatar variants status`) with its state (`missing`, `requested`, `drawn`, `accepted`, `rejected` with the reason, its stable `code` and `values`, `stale` with why), the check numbers, the edit areas in source pixels (`areas.eyes`, `areas.mouth`, for thumbnails) and the request files |
+| `POST /api/avatar/variants/request` | `{ids?}` or nothing | `AvatarVariantRequestsResult`: writes the masks, prompts, `README.md` and `preview.png` of `rev2d avatar variants request` (no ids: the recommended ones and every earlier request); **400** unknown ids |
+| `POST /api/avatar/variants/import` | `{ids?, remove?}` or nothing | **202** `AvatarJobEvent` with `kind: "variants"`: a job like a build (one job at a time, **409** while one runs) that deletes the `remove` drawings, runs `rev2d avatar variants import` and recompiles the model; the `done` event carries `variants` (`AvatarVariantsImport`: accepted, rejected with reason / hint / code, kept, removed, the variants in use, ignored files) |
+
+SSE `avatar-changed` (`AvatarChangedEvent`) reports changes of `avatar.json`, the illustration and the
+files in `textures/`, `variants/`, `variant-requests/` and `review/` (debounced): origin `editor`
+for the server's own writes (a save, a build), `external` for every other program (an agent). The
+in-app agent bridge has two avatar task templates: `avatar-create` (`context: {project}`: place the
+landmarks, build, review, hand over) and `avatar-variants` (`context: {project, variants?}`, needs
+`allowImageGeneration`: draw eye / mouth variants with the agent's own image generator); see
+[AGENT-BRIDGE.md](AGENT-BRIDGE.md#5-the-preamble-and-task-templates).

@@ -18,8 +18,13 @@
  * - Files: the server works in a workspace root with at most one open model. New / Open / Save As /
  *   Import / Close go through the workspace endpoints; switching files resets the document, the undo
  *   history and the view state (Save As keeps the view). Actions that replace an unsaved document
- *   ask first (files/guard.ts). "file-changed" events (another tab or an AI switched files) are
- *   followed; with no model open the UI shows its start screen (status 'empty').
+ *   ask first (files/guard.ts): the model, and the documents of the workspace modes they would
+ *   replace (avatar.json of the avatar project they leave; shell/registry.ts ModeDocument). Toolbar
+ *   Save / Undo / Redo and their shortcuts act on the document on screen (saveDocument, ...).
+ *   "file-changed" events (another tab or an AI switched files) are followed; with no model open
+ *   the status is 'empty': the start screen, or an avatar project without a built model
+ *   (`workspace.avatar`, shown by Avatar mode). A switch within the avatar project shown (its first
+ *   build opening the model) continues the same document and is not announced.
  * - Interop: Import from computer also takes a Spine export (the server converts it; its conversion
  *   report is offered from the toast). Live2D files are converted by the server into the document
  *   shown and written as one undoable edit; exports to Spine / Live2D go into a workspace folder.
@@ -41,6 +46,9 @@ import {
 import { formatModelJson } from '../../../src/core/format.js';
 import * as api from '../api.js';
 import type {
+  AvatarNewRequest,
+  AvatarNewResult,
+  AvatarRef,
   EditorCommand,
   EditorState,
   ExportRequest,
@@ -58,15 +66,21 @@ import { live2dFormatFromName } from '../../../src/interop/detect.js';
 import { GUARD_IDLE, guardStep, type GuardChoice, type GuardEffect, type GuardEvent, type GuardState } from '../files/guard.js';
 import { modelTextProblem, planImport, readImportFiles } from '../files/importing.js';
 import { summarizeNotes } from '../files/notes.js';
+import { t } from '../i18n/index.js';
 import { baseName, relativeToRoot, samePath } from '../files/paths.js';
-import { fitRect, roundRect, unionRects, visibleRect, zoomAt, type Camera, type Rect, type ViewportSize } from '../view/camera.js';
+import { activeDocument, modeDocuments, type ModeDocument, type ModeDocumentState } from '../shell/registry.js';
+import { fitRect, freeCenter, freeSize, roundRect, unionRects, visibleFreeRect, zoomAt, NO_INSETS, type Camera, type Rect, type ViewInsets, type ViewportSize } from '../view/camera.js';
 import {
+  documentKey,
+  documentKind,
   errorCount,
   initialState,
+  MODE_PANEL,
   OVERLAY_LAYERS,
+  panelOpen,
   type AppState,
   type BackgroundMode,
-  type BottomTab,
+  type InspectorTab,
   type LayerState,
   type OverlayLayer,
   type PanelName,
@@ -124,6 +138,23 @@ export interface EditResult {
 /** Outcome of a file operation (dialogs show `error` inline; `exists` asks to replace the target). */
 export type FileOpResult = { ok: true } | { ok: false; error?: string; hint?: string; exists?: boolean; cancelled?: boolean };
 
+/** Outcome of creating an avatar project from one picture (the project is open afterwards). */
+export type NewAvatarOutcome = { ok: true; result: AvatarNewResult } | { ok: false; error: string; hint?: string; cancelled?: boolean };
+
+/** What an action that asks about unsaved edits replaces (Session.confirmUnsaved). */
+export interface ReplaceTarget {
+  /**
+   * The file the action opens (absolute, or relative to the workspace root): documents it keeps
+   * open (ModeDocument.keptBy) are not asked about. null: nothing is open afterwards; left out:
+   * everything is replaced.
+   */
+  next?: string | null;
+  /** Only the model is replaced (Reload from disk): the documents of the modes stay. */
+  modelOnly?: boolean;
+  /** Only the documents of the modes can be lost (Save As: the model goes along to `next`). */
+  modesOnly?: boolean;
+}
+
 /** Outcome of a Live2D import: the server's conversion (report, op results) and whether it was written. */
 export type Live2dImportOutcome =
   | { ok: true; response: Live2dImportResponse; written: boolean }
@@ -147,6 +178,16 @@ const MAX_PENDING_COMMANDS = 64;
 
 function isPlainObject(v: unknown): v is RawDoc {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** An absolute path (POSIX, Windows drive or UNC). */
+function isAbsolutePath(p: string): boolean {
+  return /^([a-zA-Z]:[\\/]|[\\/])/.test(p);
+}
+
+/** Only the fields of an AvatarRef (results such as AvatarNewResult carry more). */
+function avatarRef(r: AvatarRef): AvatarRef {
+  return { project: r.project, projectPath: r.projectPath, specFile: r.specFile };
 }
 
 function messageOf(e: unknown): string {
@@ -245,6 +286,13 @@ export class Session {
   private textureFetch = 0;
   private lastTick = 0;
   private pendingFocus: FocusTarget | null = 'canvas';
+  /**
+   * The framing the view keeps while the free area changes (panes resized, collapsed, the window
+   * resized): the last `focus` target, until the user pans or zooms.
+   */
+  private followFocus: FocusTarget | null = 'canvas';
+  /** CSS px of the viewport covered by floating chrome on each side (the shell reports them). */
+  private insets: ViewInsets = NO_INSETS;
   private requestFrame: () => void = () => {};
   private publishTimer: ReturnType<typeof setTimeout> | null = null;
   private lastPublished = '';
@@ -258,6 +306,10 @@ export class Session {
   private guardResolve: ((proceed: boolean) => void) | null = null;
   /** The unsaved document the user already chose to discard (a retried action does not ask again). */
   private discardedDoc: RawDoc | null = null;
+  /** The mode document the prompt on screen is about (null: the model). */
+  private guardDoc: ModeDocument | null = null;
+  /** States of mode documents the user chose not to save (unchanged since: not asked again). */
+  private readonly discardedStates = new WeakSet<ModeDocumentState>();
   /** Own file operations in flight: "file-changed" events meanwhile wait until they end. */
   private fileOps = 0;
   /** The last "file-changed" event received during an own operation (its echo, or a switch by someone else). */
@@ -355,7 +407,7 @@ export class Session {
       if (isNoModel(e)) this.showStartScreen();
       else if (isMissingFile(e) && this.get().status === 'ready') this.markMissing();
       else if (this.get().status !== 'ready') this.store.set({ status: 'failed', loadError: messageOf(e) });
-      else this.toast('error', `Reload failed: ${messageOf(e)}`);
+      else this.toast('error', t('session.reloadFailed', { message: messageOf(e) }));
       return false;
     }
   }
@@ -367,13 +419,13 @@ export class Session {
    */
   private markMissing(): void {
     const s = this.get();
-    const name = baseName(s.file) || 'The model file';
+    const name = baseName(s.file) || t('session.theModelFile');
     if (!s.doc) {
-      this.toast('warning', `${name} was deleted or moved on disk.`);
+      this.toast('warning', t('session.missing', { name }));
       return;
     }
     this.store.set({ unsaved: true, conflict: null });
-    this.toast('warning', `${name} was deleted or moved on disk. It is still open here: Save (Ctrl+S) writes it back, Save As… stores it elsewhere.`);
+    this.toast('warning', t('session.missingKept', { name }));
   }
 
   private async onModelChanged(e: ModelChangedEvent): Promise<void> {
@@ -395,7 +447,7 @@ export class Session {
     const replacesEdit = s.unsaved && e.origin === 'external';
     // (A deleted file keeps the edit: reload reports that instead.)
     if ((await this.reload('external', e.origin === 'external')) && replacesEdit) {
-      this.toast('warning', 'The file changed on disk; your unsaved edit was replaced by the new version.');
+      this.toast('warning', t('session.replacedByDisk'));
     }
   }
 
@@ -454,7 +506,7 @@ export class Session {
     if (!rig || !textures) {
       if (textures) this.releaseUnused(textures);
       this.store.set({ ...common, stale: this.rig !== null });
-      if (this.get().bottomTab !== 'problems' && errorCount(diagnostics) > 0 && !this.rig) this.showDock('problems');
+      if (errorCount(diagnostics) > 0 && !this.rig) this.showProblems();
       this.requestFrame();
       return;
     }
@@ -497,7 +549,7 @@ export class Session {
   private recordHistory(doc: RawDoc, mode: HistoryMode): void {
     if (mode === 'reset' || !this.history.current) this.history.reset(doc);
     else if (mode === 'external' && JSON.stringify(this.history.current.doc) !== JSON.stringify(doc)) {
-      this.history.push(doc, 'External change');
+      this.history.push(doc, t('session.history.external'));
     }
   }
 
@@ -597,7 +649,10 @@ export class Session {
           drawOrder: [],
           search: '',
         };
-    if (!opts.keepView) this.pendingFocus = 'canvas';
+    if (!opts.keepView) {
+      this.pendingFocus = 'canvas';
+      this.followFocus = 'canvas';
+    }
     this.store.set({
       file: '',
       mtimeMs: 0,
@@ -671,7 +726,7 @@ export class Session {
       }));
     } catch (e) {
       this.frameKey = key;
-      this.store.set({ evalError: `Evaluation failed: ${messageOf(e)}` });
+      this.store.set({ evalError: t('session.evalFailed', { message: messageOf(e) }) });
     }
     return this.frame;
   }
@@ -835,16 +890,26 @@ export class Session {
 
   select(keys: string[], mode: 'replace' | 'toggle' = 'replace'): void {
     const s = this.get();
-    if (mode === 'replace') {
-      this.store.set({ selection: shallowEqual(s.selection, keys) ? s.selection : keys });
-      return;
+    let selection: string[];
+    if (mode === 'replace') selection = shallowEqual(s.selection, keys) ? s.selection : keys;
+    else {
+      const set = new Set(s.selection);
+      for (const k of keys) {
+        if (set.has(k)) set.delete(k);
+        else set.add(k);
+      }
+      selection = [...set];
     }
-    const set = new Set(s.selection);
-    for (const k of keys) {
-      if (set.has(k)) set.delete(k);
-      else set.add(k);
-    }
-    this.store.set({ selection: [...set] });
+    // Picking something while the problems are listed shows what was picked; the parameter sliders
+    // stay (posing and selecting go together).
+    const reveal = selection.length > 0 && selection !== s.selection && s.inspectorTab === 'problems';
+    this.store.set({ selection, ...(reveal ? { inspectorTab: 'selection' as const } : {}) });
+  }
+
+  /** Select and show it: the trailing sidebar opens on the selection inspector. */
+  inspect(keys: string[]): void {
+    this.select(keys);
+    if (keys.length) this.showInspector('selection');
   }
 
   setHover(key: string | null): void {
@@ -878,8 +943,10 @@ export class Session {
     this.store.set({ hidden: [] });
   }
 
+  /** Navigation by the user (pan, wheel zoom): the view no longer follows the last framing. */
   setCamera(camera: Camera): void {
     this.pendingFocus = null;
+    this.followFocus = null;
     this.store.set({ camera });
   }
 
@@ -887,13 +954,38 @@ export class Session {
     const s = this.get();
     if (s.viewport.width === viewport.width && s.viewport.height === viewport.height) return;
     this.store.set({ viewport });
-    if (this.pendingFocus && viewport.width > 0 && viewport.height > 0) this.focus(this.pendingFocus);
+    this.refocus();
   }
 
-  /** Zoom to an absolute level around the viewport center. */
+  /**
+   * The part of the viewport that floating chrome covers on each side (CSS px). The canvas runs
+   * under the chrome: framing, zooming and the published view box use the free area in between.
+   */
+  setInsets(insets: ViewInsets): void {
+    const i = this.insets;
+    if (i.top === insets.top && i.right === insets.right && i.bottom === insets.bottom && i.left === insets.left) return;
+    this.insets = { ...insets };
+    this.refocus();
+    this.schedulePublish();
+    this.requestFrame();
+  }
+
+  getInsets(): ViewInsets {
+    return this.insets;
+  }
+
+  /** Re-apply the framing in effect after the free area changed. */
+  private refocus(): void {
+    const target = this.pendingFocus ?? this.followFocus;
+    const vp = this.get().viewport;
+    if (target && vp.width > 0 && vp.height > 0) this.focus(target);
+  }
+
+  /** Zoom to an absolute level around the centre of the free area. */
   zoomTo(zoom: number): void {
     const s = this.get();
-    this.setCamera(zoomAt(s.camera, s.viewport, s.viewport.width / 2, s.viewport.height / 2, zoom / s.camera.zoom));
+    const [cx, cy] = freeCenter(s.viewport, this.insets);
+    this.setCamera(zoomAt(s.camera, s.viewport, cx, cy, zoom / s.camera.zoom));
   }
 
   /** Frame a model-space rect, the visible parts ('fit'), the canvas or the selection. */
@@ -919,7 +1011,12 @@ export class Session {
       rect ??= canvas;
     }
     this.pendingFocus = null;
-    this.store.set({ camera: fitRect(rect, s.viewport, padding) });
+    this.followFocus = target;
+    // Fit into the free area, then move the camera so the rect sits at the centre of that area.
+    const fit = fitRect(rect, freeSize(s.viewport, this.insets), padding);
+    const [fx, fy] = freeCenter(s.viewport, this.insets);
+    const camera = { zoom: fit.zoom, cx: fit.cx - (fx - s.viewport.width / 2) / fit.zoom, cy: fit.cy - (fy - s.viewport.height / 2) / fit.zoom };
+    this.store.set({ camera });
   }
 
   private partsBounds(frame: Frame): Rect | null {
@@ -952,17 +1049,68 @@ export class Session {
 
   // ------------------------------------------------------------------------------ ui helpers
 
+  /**
+   * Show or hide a pane. On a narrow window (`compact`) the sidebars are transient: opening one
+   * closes the other, and the remembered wide layout is left alone.
+   */
   setPanel(panel: PanelName, open: boolean): void {
-    this.store.set((s) => (s.panels[panel] === open ? {} : { panels: { ...s.panels, [panel]: open } }));
+    this.store.set((s) => {
+      if (panelOpen(s, panel) === open) return {};
+      if (s.compact && panel !== 'dock') {
+        const other = panel === 'outliner' ? 'inspector' : 'outliner';
+        return { compactPanels: { ...s.compactPanels, [panel]: open, ...(open ? { [other]: false } : {}) } };
+      }
+      return { panels: { ...s.panels, [panel]: open } };
+    });
   }
 
   togglePanel(panel: PanelName): void {
-    this.setPanel(panel, !this.get().panels[panel]);
+    this.setPanel(panel, !panelOpen(this.get(), panel));
   }
 
-  /** Show a tab of the bottom dock, expanding the dock when it is collapsed. */
-  showDock(tab: BottomTab): void {
-    this.store.set((s) => ({ bottomTab: tab, ...(s.panels.dock ? {} : { panels: { ...s.panels, dock: true } }) }));
+  /** The shell reports whether the window is narrow (the sidebars then start closed). */
+  setCompact(compact: boolean): void {
+    if (this.get().compact !== compact) this.store.set({ compact, compactPanels: { outliner: false, inspector: false } });
+  }
+
+  /** Switch the workspace mode (shell/registry.ts): kept for the open document. */
+  setMode(mode: string): void {
+    this.store.set((s) => ({ mode, modeFor: documentKey(s) }));
+  }
+
+  /** Avatar mode reports the selected avatar part (published as EditorState.avatar.part). */
+  setAvatarPart(part: string | null): void {
+    this.store.set({ avatarPart: part });
+  }
+
+  /**
+   * Show a trailing panel: MODE_PANEL (the mode's own inspector) or a registered panel. Asking for
+   * the panel that is already shown closes the sidebar (a toolbar toggle).
+   */
+  toggleTrailingPanel(id: string): void {
+    const s = this.get();
+    if (panelOpen(s, 'inspector') && s.trailingPanel === id) this.setPanel('inspector', false);
+    else this.showTrailingPanel(id);
+  }
+
+  showTrailingPanel(id: string): void {
+    this.store.set({ trailingPanel: id });
+    this.setPanel('inspector', true);
+  }
+
+  setInspectorTab(tab: InspectorTab): void {
+    this.store.set({ inspectorTab: tab });
+  }
+
+  /** Open the trailing sidebar on a page of the built-in inspector. */
+  showInspector(tab: InspectorTab): void {
+    this.store.set({ inspectorTab: tab, trailingPanel: MODE_PANEL });
+    this.setPanel('inspector', true);
+  }
+
+  /** Show the validation problems. */
+  showProblems(): void {
+    this.showInspector('problems');
   }
 
   toast(kind: Toast['kind'], text: string, extra: Pick<Toast, 'source' | 'action' | 'details'> = {}): void {
@@ -992,14 +1140,14 @@ export class Session {
     // Build on the document of the previous write, not on the version it is replacing.
     if (this.writing) await this.writing.catch(() => false);
     const s = this.get();
-    if (!s.doc) return { ok: false, diagnostics: [], message: 'The file on disk is not valid JSON; fix it in your text editor first.' };
+    if (!s.doc) return { ok: false, diagnostics: [], message: t('session.edit.notJson') };
     const index = findEntityIndex(s.doc, ref);
-    if (index < 0) return { ok: false, diagnostics: [], message: `${refKey(ref)} no longer exists in the file.` };
+    if (index < 0) return { ok: false, diagnostics: [], message: t('session.edit.gone', { target: refKey(ref) }) };
     const doc = replaceEntity(s.doc, ref, value);
     const check = validateModel(doc);
     if (errorCount(check.diagnostics) > 0 && !force) return { ok: false, blocked: true, diagnostics: check.diagnostics };
     const next = refAfterEdit(ref, value, index);
-    this.history.push(doc, `Edit ${refKey(ref)}`);
+    this.history.push(doc, t('session.history.edit', { target: refKey(ref) }));
     if (refKey(next) !== refKey(ref)) {
       this.store.set({ selection: s.selection.map((k) => (k === refKey(ref) ? refKey(next) : k)) });
     }
@@ -1017,15 +1165,15 @@ export class Session {
     const s = this.get();
     if (s.status !== 'ready') return false;
     if (!s.doc) {
-      this.toast('error', 'Nothing to save: the file is not valid JSON.');
+      this.toast('error', t('session.save.notJson'));
       return false;
     }
     if (!s.unsaved && !force) {
-      this.toast('info', 'No unsaved changes: the file on disk is up to date.');
+      this.toast('info', t('session.save.upToDate'));
       return true;
     }
     const ok = await this.writeDoc(s.doc, force, s.mtimeMs);
-    if (ok) this.toast('success', 'Saved');
+    if (ok) this.toast('success', t('session.saved'));
     return ok;
   }
 
@@ -1043,7 +1191,7 @@ export class Session {
       return;
     }
     if (!s.doc) return;
-    if (await this.writeDoc(s.doc, conflict.force, conflict.mtimeMs)) this.toast('success', 'Saved: your version replaced the change on disk.');
+    if (await this.writeDoc(s.doc, conflict.force, conflict.mtimeMs)) this.toast('success', t('session.savedOver'));
   }
 
   async undo(): Promise<void> {
@@ -1051,7 +1199,7 @@ export class Session {
     if (!step) return;
     this.store.set(this.historyFlags());
     await this.writeDoc(step.entry.doc, true);
-    this.toast('info', `Undo: ${step.undone}`);
+    this.toast('info', t('session.undo', { label: step.undone }));
   }
 
   async redo(): Promise<void> {
@@ -1059,7 +1207,49 @@ export class Session {
     if (!entry) return;
     this.store.set(this.historyFlags());
     await this.writeDoc(entry.doc, true);
-    this.toast('info', `Redo: ${entry.label}`);
+    this.toast('info', t('session.redo', { label: entry.label }));
+  }
+
+  // ------------------------------------------------------------------------------ the document on screen
+
+  /**
+   * Save the document on screen (toolbar Save, Ctrl+S): the active mode's own document when it has
+   * one (avatar.json in Avatar mode), else the model.
+   */
+  async saveDocument(): Promise<boolean> {
+    const doc = activeDocument(this.get());
+    if (doc) return doc.getState() ? doc.save() : false;
+    return this.get().status === 'ready' ? this.save() : false;
+  }
+
+  /** Undo in the document on screen (toolbar Undo, Ctrl+Z). */
+  async undoDocument(): Promise<void> {
+    const doc = activeDocument(this.get());
+    if (doc) {
+      if (doc.getState()?.canUndo) doc.undo();
+      return;
+    }
+    await this.undo();
+  }
+
+  /** Redo in the document on screen (toolbar Redo, Ctrl+Shift+Z, Ctrl+Y). */
+  async redoDocument(): Promise<void> {
+    const doc = activeDocument(this.get());
+    if (doc) {
+      if (doc.getState()?.canRedo) doc.redo();
+      return;
+    }
+    await this.redo();
+  }
+
+  /** Something is not on disk (or still being written): the model or a mode's document. Leaving the page asks first. */
+  hasUnsavedWork(): boolean {
+    const s = this.get();
+    if (s.unsaved || s.saving) return true;
+    return modeDocuments(s).some((d) => {
+      const st = d.getState();
+      return !!st && (st.dirty || st.saving);
+    });
   }
 
   /**
@@ -1104,22 +1294,23 @@ export class Session {
         if (this.ownWrites.length > OWN_WRITES_KEPT) this.ownWrites.splice(0, this.ownWrites.length - OWN_WRITES_KEPT);
       } else {
         const n = errorCount(res.diagnostics);
-        const message = `Not saved: the server rejected the model (${n} error${n === 1 ? '' : 's'}).`;
+        const message = t('session.write.rejected', { n });
         this.lastWrite = { ok: false, message, invalid: true };
-        if (!quiet) this.toast('error', message, { action: { label: 'Save anyway', run: () => void this.save(true) } });
+        if (!quiet) this.toast('error', message, { action: { label: t('session.saveAnyway'), run: () => void this.save(true) } });
       }
     } catch (e) {
       if (e instanceof api.ConflictError) {
         conflict = { mtimeMs: e.mtimeMs, force };
-        this.lastWrite = { ok: false, message: 'Not saved: the file changed on disk since it was loaded.' };
+        this.lastWrite = { ok: false, message: t('session.write.conflict') };
       } else if ((e as { file?: unknown }).file !== undefined && (e as { status?: unknown }).status === 409) {
         // FileSwitchedError: another tab or an AI opened another model; follow it (file-changed may be late).
-        this.lastWrite = { ok: false, message: `Not saved: ${baseName(String((e as { file: unknown }).file))} was opened meanwhile.` };
-        if (!quiet) this.toast('error', `Not saved: another model (${baseName(String((e as { file: unknown }).file))}) was opened meanwhile.`);
+        const other = baseName(String((e as { file: unknown }).file));
+        this.lastWrite = { ok: false, message: t('session.write.switched', { name: other }) };
+        if (!quiet) this.toast('error', t('session.write.switchedToast', { name: other }));
         void this.syncWithServer();
       } else {
-        this.lastWrite = { ok: false, message: `Save failed: ${messageOf(e)}` };
-        if (!quiet) this.toast('error', `Save failed: ${messageOf(e)}`, { action: { label: 'Retry', run: () => void this.save(force) } });
+        this.lastWrite = { ok: false, message: t('session.write.failed', { message: messageOf(e) }) };
+        if (!quiet) this.toast('error', t('session.write.failed', { message: messageOf(e) }), { action: { label: t('common.retry'), run: () => void this.save(force) } });
       }
     }
     // Another file was opened meanwhile: this write's outcome no longer describes what is shown.
@@ -1200,16 +1391,35 @@ export class Session {
   }
 
   /**
-   * Ask before an action replaces an unsaved document: resolves true to go on (saved, or the user
-   * chose "Don't save"), false when the user cancelled or the prompt is already up for another action.
+   * Ask before an action replaces unsaved documents: first each mode document it replaces (e.g.
+   * avatar.json of an avatar project the action leaves; see ReplaceTarget), then the model. Resolves
+   * true to go on (saved, or the user chose "Don't save"), false when the user cancelled or the
+   * prompt is already up for another action.
    */
-  async confirmUnsaved(action: string): Promise<boolean> {
+  async confirmUnsaved(action: string, target: ReplaceTarget = {}): Promise<boolean> {
     if (this.writing) await this.writing.catch(() => false);
+    if (!target.modelOnly) {
+      const next = target.next === undefined || target.next === null ? target.next : this.absolutePath(target.next);
+      for (const doc of modeDocuments(this.get())) {
+        if (next !== undefined && doc.keptBy?.(next)) continue;
+        const st = doc.getState();
+        if (!st?.dirty || this.discardedStates.has(st)) continue;
+        if (!(await this.ask(action, st.path, doc))) return false;
+      }
+    }
+    if (target.modesOnly) return true;
     const s = this.get();
     const dirty = s.status === 'ready' && s.unsaved && !(s.doc !== null && s.doc === this.discardedDoc);
-    const effect = this.stepGuard({ type: 'request', dirty, file: baseName(s.file) || 'the model', action });
-    if (effect === 'proceed') return true;
-    if (effect === 'abort') return false;
+    return this.ask(action, baseName(s.file) || t('session.theModel'), null, dirty);
+  }
+
+  /** One unsaved-changes prompt: about the mode document `doc`, or (null) the model. */
+  private ask(action: string, file: string, doc: ModeDocument | null, dirty = true): Promise<boolean> {
+    const effect = this.stepGuard({ type: 'request', dirty, file, action });
+    if (effect === 'proceed') return Promise.resolve(true);
+    if (effect === 'abort') return Promise.resolve(false);
+    // The prompt is up now, about this document.
+    this.guardDoc = doc;
     return new Promise<boolean>((resolve) => {
       this.guardResolve = resolve;
     });
@@ -1217,7 +1427,12 @@ export class Session {
 
   /** The user's answer to the unsaved-changes prompt. */
   resolveUnsaved(choice: GuardChoice): void {
-    if (choice === 'discard' && this.guard.phase === 'asking') this.discardedDoc = this.get().doc;
+    if (choice === 'discard' && this.guard.phase === 'asking') {
+      const st = this.guardDoc?.getState();
+      if (this.guardDoc) {
+        if (st) this.discardedStates.add(st);
+      } else this.discardedDoc = this.get().doc;
+    }
     void this.runGuard(this.stepGuard({ type: 'choose', choice }));
   }
 
@@ -1232,15 +1447,23 @@ export class Session {
     if (effect === 'proceed' || effect === 'abort') {
       const resolve = this.guardResolve;
       this.guardResolve = null;
+      this.guardDoc = null;
       resolve?.(effect === 'proceed');
       return;
     }
     if (effect !== 'save' && effect !== 'saveAnyway') return;
+    const doc = this.guardDoc;
+    if (doc) {
+      // A mode document reports its own failures (toasts, a conflict banner); the prompt stays up.
+      const ok = await doc.save();
+      await this.runGuard(this.stepGuard({ type: 'saved', ok, error: ok ? undefined : t('files.unsaved.saveFailed') }));
+      return;
+    }
     const s = this.get();
     let ok = false;
-    if (!s.doc) this.lastWrite = { ok: false, message: 'The file is not valid JSON, so it cannot be saved from here.' };
+    if (!s.doc) this.lastWrite = { ok: false, message: t('session.guard.notJson') };
     else ok = await this.writeDoc(s.doc, effect === 'saveAnyway', s.mtimeMs, true);
-    if (ok) this.toast('success', 'Saved');
+    if (ok) this.toast('success', t('session.saved'));
     await this.runGuard(this.stepGuard({ type: 'saved', ok, error: this.lastWrite.message, invalid: this.lastWrite.invalid }));
   }
 
@@ -1248,10 +1471,29 @@ export class Session {
   private cancelGuard(): void {
     if (this.guard.phase === 'idle') return;
     this.guard = GUARD_IDLE;
+    this.guardDoc = null;
     this.store.set({ unsavedPrompt: null });
     const resolve = this.guardResolve;
     this.guardResolve = null;
     resolve?.(false);
+  }
+
+  /** `file` made absolute against the workspace root (absolute paths stay). */
+  private absolutePath(file: string): string {
+    const root = this.get().workspace?.root;
+    return isAbsolutePath(file) || !root ? file : `${root.replace(/[\\/]+$/, '')}/${file}`;
+  }
+
+  /**
+   * The avatar project that is open now (from an open answer or a file-changed event), recorded at
+   * once so the mode shown and the avatar store follow together with the model; the workspace is
+   * re-read afterwards.
+   */
+  private setOpenProject(avatar: AvatarRef | null | undefined, current: string | null): void {
+    const ws = this.get().workspace;
+    if (!ws) return;
+    const { avatar: _previous, ...rest } = ws;
+    this.store.set({ workspace: { ...rest, current, ...(avatar ? { avatar: avatarRef(avatar) } : {}) } });
   }
 
   /**
@@ -1292,6 +1534,7 @@ export class Session {
   /** Show a model the server just opened (open / new / save-as / import). */
   private async adopt(result: OpenResult, message: string, opts: { keepView?: boolean; action?: ToastAction } = {}): Promise<void> {
     this.resetDocument(opts);
+    this.setOpenProject(result.avatar, result.file);
     this.store.set({ status: 'loading', dialog: null });
     await this.ingest(result.text, { file: result.file, mtimeMs: result.mtimeMs, history: 'reset', seq: this.seq });
     const { text, details } = summarizeNotes(message, result.notes);
@@ -1299,21 +1542,47 @@ export class Session {
     await this.refreshWorkspace();
   }
 
-  /** Open a model of the workspace (absolute or root-relative path). */
+  /**
+   * Show an avatar project the server just opened WITHOUT a model (it has no built model yet):
+   * status 'empty' with `workspace.avatar`, which Avatar mode shows. `message` null: no toast.
+   */
+  private async adoptProject(ref: AvatarRef, message: string | null, notes: string[] = []): Promise<void> {
+    this.resetDocument();
+    this.setOpenProject(ref, null);
+    this.store.set({ status: 'empty', loadError: null, dialog: null });
+    if (message !== null) {
+      const { text, details } = summarizeNotes(message, notes);
+      this.toast('success', text, details.length ? { details } : {});
+    }
+    await this.refreshWorkspace();
+  }
+
+  /** Whether `target` (absolute) is what is open already: the model, or the avatar project shown. */
+  private isOpen(target: string): boolean {
+    const s = this.get();
+    const project = s.workspace?.avatar;
+    const isProject = !!project && (samePath(target, project.specFile) || samePath(target, project.project));
+    if (s.status === 'ready') return samePath(target, s.file) || isProject;
+    return s.status === 'empty' && isProject;
+  }
+
+  /**
+   * Open a model of the workspace (absolute or root-relative path), or an avatar project (its
+   * avatar.json or folder): its built model, or the project alone while it has none.
+   */
   async openFile(file: string): Promise<FileOpResult> {
     // Already open: nothing to do (Reload from disk re-reads it).
-    const s = this.get();
-    const root = s.workspace?.root;
-    const target = /^([a-zA-Z]:[\\/]|[\\/])/.test(file) || !root ? file : `${root}/${file}`;
-    if (s.status === 'ready' && samePath(target, s.file)) {
+    const target = this.absolutePath(file);
+    if (this.isOpen(target)) {
       this.closeDialog();
       return { ok: true };
     }
-    if (!(await this.confirmUnsaved(`open ${baseName(file)}`))) return { ok: false, cancelled: true };
-    return this.fileOp(`Opening ${baseName(file)}…`, async () => {
+    if (!(await this.confirmUnsaved(t('session.action.open', { name: baseName(file) }), { next: target }))) return { ok: false, cancelled: true };
+    return this.fileOp(t('session.busy.opening', { name: baseName(file) }), async () => {
       try {
         const result = await api.openModel(file);
-        await this.adopt(result, `Opened ${this.displayPath(result.file)}`);
+        if (result.file === null) await this.adoptProject(result.avatar, t('session.opened', { path: this.displayPath(result.avatar.specFile) }), result.notes);
+        else await this.adopt(result, t('session.opened', { path: this.displayPath(result.file) }));
         return { ok: true };
       } catch (e) {
         return failure(e);
@@ -1324,16 +1593,16 @@ export class Session {
   /** Open Recent / start screen: like openFile, errors as toasts. */
   async openRecent(file: string): Promise<void> {
     const r = await this.openFile(file);
-    if (!r.ok && !r.cancelled) this.toast('error', `Could not open ${baseName(file)}: ${r.error}${r.hint ? ` (${r.hint})` : ''}`);
+    if (!r.ok && !r.cancelled) this.toast('error', t('session.openFailed', { name: baseName(file), error: `${r.error}${r.hint ? ` (${r.hint})` : ''}` }));
   }
 
   /** Create a model from a template and open it. */
   async createModel(req: NewRequest): Promise<FileOpResult> {
-    if (!(await this.confirmUnsaved('create a new model'))) return { ok: false, cancelled: true };
-    return this.fileOp(`Creating ${baseName(req.file)}…`, async () => {
+    if (!(await this.confirmUnsaved(t('session.action.new'), { next: req.file }))) return { ok: false, cancelled: true };
+    return this.fileOp(t('session.busy.creating', { name: baseName(req.file) }), async () => {
       try {
         const result = await api.newModel(req);
-        await this.adopt(result, `Created ${this.displayPath(result.file)}`);
+        await this.adopt(result, t('session.created', { path: this.displayPath(result.file) }));
         return { ok: true };
       } catch (e) {
         return failure(e);
@@ -1344,12 +1613,14 @@ export class Session {
   /** Write the current document to another file of the workspace and continue editing that one. */
   async saveAs(file: string, overwrite = false): Promise<FileOpResult> {
     if (this.writing) await this.writing.catch(() => false);
+    if (this.get().status !== 'ready') return { ok: false, error: t('session.noModel') };
+    // Saved outside its avatar project, the model leaves the project (and avatar.json's unsaved edits).
+    if (!(await this.confirmUnsaved(t('session.action.saveAs', { name: baseName(file) }), { next: file, modesOnly: true }))) return { ok: false, cancelled: true };
     const s = this.get();
-    if (s.status !== 'ready') return { ok: false, error: 'No model is open.' };
-    return this.fileOp(`Saving ${baseName(file)}…`, async () => {
+    return this.fileOp(t('session.busy.saving', { name: baseName(file) }), async () => {
       try {
         const result = await api.saveAs(s.doc ? { file, doc: s.doc, overwrite } : { file, text: s.text, overwrite });
-        await this.adopt(result, `Saved as ${this.displayPath(result.file)}`, { keepView: true });
+        await this.adopt(result, t('session.savedAs', { path: this.displayPath(result.file) }), { keepView: true });
         return { ok: true };
       } catch (e) {
         return failure(e);
@@ -1365,18 +1636,22 @@ export class Session {
     try {
       payload = await readImportFiles(files, plan);
     } catch (e) {
-      return { ok: false, error: `Could not read the picked files: ${messageOf(e)}` };
+      return { ok: false, error: t('session.readFailed', { message: messageOf(e) }) };
     }
     const model = payload.find((f) => f.name === plan.model);
-    const problem = model?.text !== undefined ? modelTextProblem(model.text) : 'The model file could not be read.';
+    const problem = model?.text !== undefined ? modelTextProblem(model.text) : t('session.modelUnreadable');
     if (problem) return { ok: false, error: problem };
-    if (!(await this.confirmUnsaved(`import ${plan.model}`))) return { ok: false, cancelled: true };
-    return this.fileOp(`Importing ${plan.model}…`, async () => {
+    if (!(await this.confirmUnsaved(t('session.action.import', { name: plan.model ?? '' })))) return { ok: false, cancelled: true };
+    return this.fileOp(t('session.busy.importing', { name: plan.model ?? '' }), async () => {
       try {
         const result = await api.importFiles({ dir, files: payload, overwrite });
         const report = result.report;
         const shown = this.displayPath(result.file);
-        await this.adopt(result, `Imported ${shown}`, report ? { action: { label: 'Report', run: () => this.showReport(`Spine import report`, report, `${plan.model} → ${shown}`) } } : {});
+        await this.adopt(
+          result,
+          t('session.imported', { path: shown }),
+          report ? { action: { label: t('session.report'), run: () => this.showReport(t('session.spineReport'), report, `${plan.model} → ${shown}`) } } : {},
+        );
         return { ok: true };
       } catch (e) {
         return failure(e);
@@ -1390,16 +1665,16 @@ export class Session {
    */
   async importLive2d(files: readonly File[], opts: Omit<Live2dImportRequest, 'files' | 'doc'>): Promise<Live2dImportOutcome> {
     if (this.writing) await this.writing.catch(() => false);
-    if (this.get().status !== 'ready') return { ok: false, error: 'No model is open.' };
-    if (!this.get().doc) return { ok: false, error: 'The model file is not valid JSON; fix it before importing into it.' };
+    if (this.get().status !== 'ready') return { ok: false, error: t('session.noModel') };
+    if (!this.get().doc) return { ok: false, error: t('session.live2d.notJson') };
     let payload: Live2dImportRequest['files'];
     try {
       payload = await Promise.all(files.filter((f) => /\.jsonc?$/i.test(f.name)).map(async (f) => ({ name: f.name, text: await f.text() })));
     } catch (e) {
-      return { ok: false, error: `Could not read the picked files: ${messageOf(e)}` };
+      return { ok: false, error: t('session.readFailed', { message: messageOf(e) }) };
     }
-    const label = files.length === 1 ? files[0].name : `${files.length} Live2D files`;
-    return this.fileOp(`Importing ${label}…`, async (): Promise<Live2dImportOutcome> => {
+    const label = files.length === 1 ? files[0].name : t('session.live2d.files', { n: files.length });
+    return this.fileOp(t('session.busy.importing', { name: label }), async (): Promise<Live2dImportOutcome> => {
       const s = this.get();
       let response: Live2dImportResponse;
       try {
@@ -1414,13 +1689,13 @@ export class Session {
         return {
           ok: false,
           response,
-          error: op ? `The import failed: op #${op.index} (${op.op}): ${op.message}` : `The imported model would have ${errors} validation error${errors === 1 ? '' : 's'}; nothing was changed.`,
+          error: op ? t('session.live2d.opFailed', { index: op.index, op: op.op, message: op.message }) : t('session.live2d.invalid', { n: errors }),
           hint: op?.hint,
         };
       }
       if (!response.changed || this.get().file !== s.file) return { ok: true, response, written: false };
       const doc = response.doc as RawDoc;
-      this.history.push(doc, `Import ${label}`);
+      this.history.push(doc, t('session.history.import', { label }));
       const written = await this.writeDoc(doc, false, s.mtimeMs);
       return { ok: true, response, written };
     });
@@ -1430,8 +1705,8 @@ export class Session {
   async exportModel(req: Omit<ExportRequest, 'doc'>): Promise<ExportOutcome> {
     if (this.writing) await this.writing.catch(() => false);
     const s = this.get();
-    if (s.status !== 'ready') return { ok: false, error: 'No model is open.' };
-    return this.fileOp(`Exporting to ${req.format === 'spine' ? 'Spine' : 'Live2D'}…`, async (): Promise<ExportOutcome> => {
+    if (s.status !== 'ready') return { ok: false, error: t('session.noModel') };
+    return this.fileOp(t('session.busy.exporting', { format: req.format === 'spine' ? 'Spine' : 'Live2D' }), async (): Promise<ExportOutcome> => {
       try {
         return { ok: true, response: await api.exportModel({ ...req, ...(s.doc ? { doc: s.doc } : {}) }) };
       } catch (e) {
@@ -1440,29 +1715,49 @@ export class Session {
     });
   }
 
-  /** Close the model: the server keeps running, the UI shows its start screen. */
+  /** Close the model (and its avatar project, or the project open without a model): the start screen. */
   async closeModel(): Promise<FileOpResult> {
-    if (this.get().status !== 'ready' && this.get().status !== 'failed') return { ok: true };
-    if (!(await this.confirmUnsaved('close it'))) return { ok: false, cancelled: true };
-    const r = await this.fileOp<FileOpResult>('Closing…', async () => {
+    const status = this.get().status;
+    if (status !== 'ready' && status !== 'failed' && documentKind(this.get()) !== 'avatar-project') return { ok: true };
+    if (!(await this.confirmUnsaved(t('session.action.close'), { next: null }))) return { ok: false, cancelled: true };
+    const r = await this.fileOp<FileOpResult>(t('session.busy.closing'), async () => {
       try {
         await api.closeModel();
         this.showStartScreen();
+        this.setOpenProject(null, null);
         await this.refreshWorkspace();
         return { ok: true };
       } catch (e) {
         return failure(e);
       }
     });
-    if (!r.ok && !r.cancelled) this.toast('error', `Could not close the model: ${r.error}`);
+    if (!r.ok && !r.cancelled) this.toast('error', t('session.closeFailed', { error: r.error ?? '' }));
     return r;
   }
 
   /** Re-read the file from disk, dropping an unsaved edit (after asking). */
   async reloadFromDisk(): Promise<void> {
     if (this.get().status !== 'ready') return;
-    if (!(await this.confirmUnsaved('reload it from disk'))) return;
-    if (await this.reload('external', true)) this.toast('info', `Reloaded ${baseName(this.get().file)} from disk`);
+    if (!(await this.confirmUnsaved(t('session.action.reload'), { modelOnly: true }))) return;
+    if (await this.reload('external', true)) this.toast('info', t('session.reloaded', { name: baseName(this.get().file) }));
+  }
+
+  /**
+   * Create an avatar project from one picture (POST /api/avatar/new) and show it: the server opens
+   * the project without a model. Asks first about unsaved edits it replaces.
+   */
+  async newAvatarProject(req: AvatarNewRequest): Promise<NewAvatarOutcome> {
+    if (!(await this.confirmUnsaved(t('session.action.newAvatar')))) return { ok: false, error: '', cancelled: true };
+    return this.fileOp(t('session.busy.creating', { name: req.name ?? req.dir ?? req.image.name }), async (): Promise<NewAvatarOutcome> => {
+      try {
+        const result = await api.newAvatar(req);
+        await this.adoptProject(result, null);
+        return { ok: true, result };
+      } catch (e) {
+        const f = failure(e);
+        return { ok: false, error: f.ok ? '' : (f.error ?? ''), ...(!f.ok && f.hint ? { hint: f.hint } : {}) };
+      }
+    });
   }
 
   /**
@@ -1476,7 +1771,7 @@ export class Session {
       const url = URL.createObjectURL(new Blob([formatModelJson(s.doc)], { type: 'application/json' }));
       triggerDownload(url, baseName(s.file));
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      this.toast('info', 'Downloaded the version shown in the editor (it is not saved to disk yet).');
+      this.toast('info', t('session.downloadedUnsaved'));
       return;
     }
     triggerDownload(api.DOWNLOAD_URL, baseName(s.file));
@@ -1493,13 +1788,17 @@ export class Session {
       const url = URL.createObjectURL(blob);
       triggerDownload(url, name);
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      this.toast('success', `Exported ${name}`);
+      this.toast('success', t('session.exported', { name }));
     } catch (e) {
-      this.toast('error', `Export failed: ${detailOf(e)}`);
+      this.toast('error', t('session.exportFailed', { message: detailOf(e) }));
     }
   }
 
-  /** Another tab or an AI switched files (or closed the model): follow it. */
+  /**
+   * Another tab or an AI switched files (or closed the model): follow it. A switch within the avatar
+   * project shown (its first build, or a renamed avatar, opening its model) continues the same
+   * document: followed without an announcement, avatar.json edits stay.
+   */
   private async onFileChanged(e: FileChangedEvent): Promise<void> {
     // During an own operation: handled when it ends (fileOp).
     if (this.fileOps > 0) {
@@ -1507,27 +1806,44 @@ export class Session {
       return;
     }
     const s = this.get();
+    const shown = s.workspace?.avatar ?? null;
+    const next = e.avatar ?? null;
+    const sameProject = shown !== null && next !== null && samePath(shown.project, next.project);
+    // What is shown already (the echo of an own operation, or a repeat).
     if (e.file !== null && s.status === 'ready' && samePath(e.file, s.file)) return void this.refreshWorkspace();
-    if (e.file === null && s.status === 'empty') return void this.refreshWorkspace();
-    const lost = s.status === 'ready' && s.unsaved ? baseName(s.file) : null;
-    const previous = baseName(s.file);
+    if (e.file === null && s.status === 'empty' && (sameProject || (shown === null && next === null))) return void this.refreshWorkspace();
+    const lost: string[] = s.status === 'ready' && s.unsaved ? [baseName(s.file)] : [];
+    // The documents of the modes are kept by a switch within their project, lost by any other.
+    if (!sameProject) {
+      for (const doc of modeDocuments(s)) {
+        const st = doc.getState();
+        if (st?.dirty && !doc.keptBy?.(e.file ?? next?.specFile ?? null)) lost.push(st.path);
+      }
+    }
+    const previous = shown && s.status !== 'ready' ? this.displayPath(shown.specFile) : baseName(s.file);
     // Prompts and dialogs about the old document no longer apply, nor do commands held back for a
     // model that is replaced before it was even shown.
     this.cancelGuard();
     this.pendingCommands = [];
     if (s.dialog?.kind === 'saveAs') this.store.set({ dialog: null });
     const from = e.origin === 'ai' ? { source: 'AI' } : {};
+    const announce = (opened: string | null): void => {
+      if (sameProject) return;
+      if (opened !== null) this.toast('info', e.origin === 'ai' ? t('session.ai.opened', { name: opened }) : t('session.openedElsewhere', { name: opened }), from);
+      else this.toast('info', e.origin === 'ai' ? t('session.ai.closed', { name: previous || t('session.theModel') }) : t('session.closedElsewhere', { name: previous || t('session.theModelCap') }), from);
+    };
     if (e.file === null) {
       this.showStartScreen();
-      this.toast('info', e.origin === 'ai' ? `closed ${previous || 'the model'}` : `${previous || 'The model'} was closed in another tab`, from);
+      this.setOpenProject(next, null);
+      announce(next ? this.displayPath(next.specFile) : null);
     } else {
       this.resetDocument();
+      this.setOpenProject(next, e.file);
       this.store.set({ status: 'loading' });
       await this.reload('reset', true);
-      const name = this.displayPath(e.file);
-      this.toast('info', e.origin === 'ai' ? `opened ${name}` : `${name} was opened in another tab`, from);
+      announce(this.displayPath(e.file));
     }
-    if (lost) this.toast('warning', `Your unsaved edit to ${lost} was discarded.`);
+    for (const name of lost) this.toast('warning', t('session.editDiscarded', { name }));
     void this.refreshWorkspace();
   }
 
@@ -1555,7 +1871,7 @@ export class Session {
       case 'setParams': {
         const unknown = Object.keys(c.params ?? {}).filter((id) => !model?.parameters.some((p) => p.id === id));
         if (unknown.length) {
-          this.toast('warning', `AI setParams: unknown parameter${unknown.length > 1 ? 's' : ''} ${unknown.join(', ')}`, { source: 'AI' });
+          this.toast('warning', t('session.ai.unknownParams', { n: unknown.length, list: unknown.join(', ') }), { source: 'AI' });
         }
         const overrides: Record<string, number> = c.reset ? {} : { ...s.overrides };
         let pause = false;
@@ -1573,7 +1889,7 @@ export class Session {
       case 'play': {
         if (c.animation !== undefined) {
           if (!model?.animations.some((a) => a.id === c.animation)) {
-            this.toast('error', `AI play: unknown animation "${c.animation}"`, { source: 'AI' });
+            this.toast('error', t('session.ai.unknownAnimation', { id: c.animation }), { source: 'AI' });
             return;
           }
           this.setAnimation(c.animation);
@@ -1591,10 +1907,10 @@ export class Session {
         note(`seek ${c.time}`);
         return;
       case 'setAnimations': {
-        const warn = (text: string): void => this.toast('warning', `AI setAnimations: ${text}`, { source: 'AI' });
+        const warn = (text: string): void => this.toast('warning', t('session.ai.setAnimations', { text }), { source: 'AI' });
         const requested = c.animations ?? [];
         const missing = requested.filter((a) => !model?.animations.some((m) => m.id === a.id)).map((a) => a.id);
-        if (missing.length) warn(`unknown animation ${missing.join(', ')}`);
+        if (missing.length) warn(t('session.ai.animations.unknown', { list: missing.join(', ') }));
         // Exactly the requested layers, in the requested order (later layers win for param tracks),
         // with their options (mode, start, hold).
         const list: LayerState[] = [];
@@ -1619,9 +1935,9 @@ export class Session {
           else if (a.hold !== undefined) badOptions.push(`${a.id}: hold ${JSON.stringify(a.hold)}`);
           list.push({ id: a.id, weight, enabled: true, ...explicitOptions(options) });
         }
-        if (clamped.length) warn(`weights are limited to 0..1 in the editor (${clamped.join(', ')})`);
-        if (repeated.length) warn(`each animation plays once in the editor; ignored repeated ${repeated.join(', ')}`);
-        if (badOptions.length) warn(`ignored bad layer options (${badOptions.join(', ')}); mode is "override" or "add", start a number of seconds, hold true or false`);
+        if (clamped.length) warn(t('session.ai.animations.clamped', { list: clamped.join(', ') }));
+        if (repeated.length) warn(t('session.ai.animations.repeated', { list: repeated.join(', ') }));
+        if (badOptions.length) warn(t('session.ai.animations.badOptions', { list: badOptions.join(', ') }));
         const [first, ...rest] = list;
         // Other extra layers keep their remembered settings, disabled, after the requested ones.
         const layers = [...rest, ...s.layers.filter((l) => !list.some((x) => x.id === l.id)).map((l) => ({ ...l, enabled: false }))];
@@ -1647,8 +1963,10 @@ export class Session {
           if (ref) keys.push(refKey(ref));
           else missing.push(id);
         }
-        if (missing.length) this.toast('warning', `AI select: not found: ${missing.join(', ')}`, { source: 'AI' });
+        if (missing.length) this.toast('warning', t('session.ai.selectMissing', { list: missing.join(', ') }), { source: 'AI' });
         this.select(keys);
+        // The AI asks the person to look at these: an open trailing sidebar shows them.
+        if (keys.length) this.store.set({ inspectorTab: 'selection', trailingPanel: MODE_PANEL });
         note(`select ${keys.join(', ') || '(none)'}`);
         return;
       }
@@ -1658,7 +1976,7 @@ export class Session {
         const requested = names.includes('all') ? [...OVERLAY_LAYERS] : names.filter((l) => l !== 'none');
         const valid = requested.filter((l): l is OverlayLayer => (OVERLAY_LAYERS as readonly string[]).includes(l));
         const bad = requested.filter((l) => !valid.includes(l as OverlayLayer));
-        if (bad.length) this.toast('warning', `AI setOverlay: unknown layer ${bad.join(', ')} (valid: ${OVERLAY_LAYERS.join(', ')})`, { source: 'AI' });
+        if (bad.length) this.toast('warning', t('session.ai.unknownOverlay', { list: bad.join(', '), valid: OVERLAY_LAYERS.join(', ') }), { source: 'AI' });
         this.setOverlays(valid);
         note(`overlay ${valid.join(', ') || '(none)'}`);
         return;
@@ -1668,7 +1986,7 @@ export class Session {
         if (vb === 'fit') this.focus('fit');
         else if (Array.isArray(vb) && vb.length === 4 && vb.every(Number.isFinite) && vb[2] > 0 && vb[3] > 0) this.focus([vb[0], vb[1], vb[2], vb[3]]);
         else {
-          this.toast('warning', `AI focus: bad viewBox ${JSON.stringify(vb)} (need "fit" or [x, y, w, h] with w, h > 0)`, { source: 'AI' });
+          this.toast('warning', t('session.ai.badViewBox', { value: JSON.stringify(vb) }), { source: 'AI' });
           return;
         }
         note(`focus ${JSON.stringify(vb)}`);
@@ -1702,10 +2020,13 @@ export class Session {
       playing: s.playing,
       selection: s.selection,
       overlay: s.overlays,
-      viewBox: vp.width > 0 && vp.height > 0 ? roundRect(visibleRect(s.camera, vp)) : null,
+      // What the person sees unobstructed: the part of the canvas that floating chrome leaves free.
+      viewBox: vp.width > 0 && vp.height > 0 ? roundRect(visibleFreeRect(s.camera, vp, this.insets)) : null,
       physics: s.physics,
       hidden: s.hidden,
       pinned: Object.keys(s.overrides),
+      // Avatar mode: the part the person works on (`rev2d editor state` shows it).
+      ...(s.workspace?.avatar ? { avatar: { part: s.avatarPart } } : {}),
     };
   }
 

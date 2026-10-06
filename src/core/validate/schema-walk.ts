@@ -132,6 +132,14 @@ const FIELD_EXAMPLES = new Map<Schema, Record<string, unknown>>([
   [IkSchema, { target: '<boneId>' }],
 ]);
 
+/**
+ * Curated examples for the fields of one object schema of another document type (the avatar spec):
+ * they are shown in "missing required field" hints instead of generic values.
+ */
+export function registerFieldExamples(owner: Schema, examples: Record<string, unknown>): void {
+  FIELD_EXAMPLES.set(owner, examples);
+}
+
 /** Example leaf values by field name. */
 const NUMBER_EXAMPLES: Record<string, number> = {
   max: 1,

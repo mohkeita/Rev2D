@@ -8,6 +8,10 @@
 import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { Diagnostic } from '../core/types.js';
+import type { AvatarIssue, LayersMeta, VariantId } from '../avatar/types.js';
+import type { VariantStatusEntry } from './avatar-variants.js';
+import type { AgentEffort, AgentEvent, AgentJobEvents, AgentJobInfo, AgentJobState, AgentProviderId, AgentSandbox, CodexWindowsSandbox } from './agent/types.js';
 
 export interface EditorEntry {
   pid: number;
@@ -71,6 +75,12 @@ export interface EditorState {
    * pinned): their `params` value beats animation and physics until the human releases it.
    */
   pinned?: string[];
+  /**
+   * Avatar mode only (the open model belongs to an avatar project): what the person works on in the
+   * avatar panel. `part` is the selected item of describeAvatarParts (src/avatar/parts.ts), e.g.
+   * "eyes.imageLeft.opening" or "strand.bang1"; null or absent when nothing is selected.
+   */
+  avatar?: { part?: string | null };
   updatedAt: string;
 }
 
@@ -88,7 +98,9 @@ export type EditorCommand =
   /**
    * Open another model of the workspace (absolute, or relative to the workspace root). Handled by the
    * server, not forwarded: POST /api/command answers {delivered, file, mtimeMs, notes} (delivered = tabs
-   * that received "file-changed", origin "ai"), or the errors of POST /api/open.
+   * that received "file-changed", origin "ai"), or the errors of POST /api/open. `file` may also name
+   * an avatar project (its avatar.json or its folder): the answer then carries `avatar` (AvatarRef), and
+   * `file` is null while the project has no built model yet.
    */
   | { type: 'open'; file: string }
   | { type: 'message'; text: string };
@@ -284,8 +296,11 @@ export interface WorkspaceInfo {
   /**
    * Recently opened model files (absolute, newest first, at most 10; only those that still exist and
    * lie inside this root). Stored in ~/.rev2d/recent.json ({"files": [...]}, shared by editors).
+   * The avatar.json of an avatar project that was opened before it had a built model is listed too.
    */
   recent: string[];
+  /** The open avatar project (avatar mode); absent when the open document is not one. */
+  avatar?: AvatarRef;
 }
 
 export interface FileEntry {
@@ -297,6 +312,13 @@ export interface FileEntry {
   /** Bytes (0 for directories). */
   size: number;
   mtimeMs: number;
+  /**
+   * Present on a directory that is an avatar project (it holds an avatar.json) and on the avatar.json
+   * itself: `spec` is the avatar.json to open (POST /api/open {file: spec}), `name` the avatar's name
+   * (null while the spec has no usable one) and `model` its built model when that exists (paths
+   * relative to the root, '/'-separated).
+   */
+  avatar?: { spec: string; name: string | null; model: string | null };
 }
 
 export interface FileListing {
@@ -365,9 +387,494 @@ export interface OpenResult {
   mtimeMs: number;
   /** Notes such as rewritten texture paths after save-as or skipped files after import. */
   notes: string[];
+  /** The avatar project the opened model belongs to (its folder holds an avatar.json): the editor is in avatar mode. */
+  avatar?: AvatarRef;
+}
+
+/**
+ * POST /api/open (and the "open" command) for an avatar project that has no built model yet: the
+ * project is open, no model is (the UI shows the illustration and the landmarks, with a Build button).
+ */
+export interface AvatarOpenResult {
+  file: null;
+  text: null;
+  mtimeMs: 0;
+  notes: string[];
+  avatar: AvatarRef;
 }
 
 export interface TemplateInfo {
   name: string;
   description: string;
+}
+
+// ----------------------------------------------------------------------------- avatar mode
+//
+// An avatar project is a folder with avatar.json (the spec), source.png (the illustration) and what
+// is built from them: <name>.r2d.json, textures/ (src/avatar/DESIGN.md §1). The editor is in AVATAR
+// MODE while the open model has a sibling avatar.json, or after an avatar project itself was opened:
+// POST /api/open (and the "open" command) accept an avatar.json or a project folder and open its
+// built model; while it has none, the project is open WITHOUT a model (AvatarOpenResult; /api/model
+// answers 409 "no model is open" until the first build). src/server/avatar-routes.ts implements:
+//
+//   GET  /api/avatar                          -> AvatarInfo
+//   PUT  /api/avatar  AvatarSaveRequest       -> AvatarSaveResult  (write avatar.json, recompile the model)
+//   POST /api/avatar/build AvatarBuildRequest -> 202 AvatarJobEvent (state "running"; one job at a time)
+//   GET  /api/avatar/build                    -> {job: AvatarJobEvent | null}  (the latest event of the last job)
+//   GET  /api/avatar/file?path=<relative>     -> the bytes of a file of the project folder
+//   POST /api/avatar/new   AvatarNewRequest   -> AvatarNewResult   (a new project from one uploaded PNG; it is opened)
+//   SSE "avatar-changed" AvatarChangedEvent, SSE "avatar-job" AvatarJobEvent on GET /api/events
+//
+// The SSE events "hello" and "file-changed", GET /api/workspace and the answers of the endpoints that
+// open a model gain `avatar` (AvatarRef) while an avatar project is open; it is absent otherwise.
+// GET /api/files marks avatar projects (FileEntry.avatar).
+//
+// Errors are JSON {error, hint?}: 400 malformed request, 403 a path outside the project folder or the
+// workspace root, 404 the open document is not an avatar project / no such file, 409 the folder of a
+// new project exists / avatar.json changed on disk (with mtimeMs) / a build is running (with job),
+// 413 the picture is too large, 415 a file type GET /api/avatar/file does not serve, 422 the picture
+// is not a PNG.
+
+/** The avatar project that is open in the editor. */
+export interface AvatarRef {
+  /** Absolute project folder. */
+  project: string;
+  /**
+   * The folder relative to the workspace root, '/'-separated ('' = the root itself): what an agent
+   * job takes as `context.project` (POST /api/agent/jobs).
+   */
+  projectPath: string;
+  /** Absolute path of its avatar.json. */
+  specFile: string;
+}
+
+/** A file of an avatar project that the server watches. */
+export interface AvatarFileInfo {
+  /** Path relative to the project folder, '/'-separated: the `path` of GET /api/avatar/file. */
+  path: string;
+  size: number;
+  mtimeMs: number;
+}
+
+/** GET /api/avatar: the open avatar project. */
+export interface AvatarInfo extends AvatarRef {
+  /** Name of the avatar (its built model is <name>.r2d.json); null while avatar.json has no usable name. */
+  name: string | null;
+  /** Text of avatar.json; null when the file is missing or unreadable (`diagnostics` says so; PUT writes it again). */
+  specText: string | null;
+  /** mtime of avatar.json (0 when it is missing): the `baseMtimeMs` of the next PUT /api/avatar. */
+  mtimeMs: number;
+  /**
+   * The illustration: its path inside the project (GET /api/avatar/file?path=<file>) and its real
+   * pixel size. null when it is missing or not a usable PNG (`diagnostics` says why).
+   */
+  image: { file: string; width: number; height: number } | null;
+  built: {
+    /** Absolute path of the built model <name>.r2d.json when it exists, else null. */
+    model: string | null;
+    /** Its mtime (null without a model). */
+    modelMtimeMs: number | null;
+    /** textures/layers.json: what compileAvatar needs besides the spec; null until the layers are built. */
+    meta: LayersMeta | null;
+    /**
+     * True when the layer images are older than the spec: a landmark that cuts pixels changed since
+     * they were built (meta.inputsHash differs from layerInputsHash(spec)); POST /api/avatar/build
+     * rebuilds them. False without layers and while the spec has errors (it cannot be told then).
+     */
+    stale: boolean;
+    /** Ids of the drawn variants that were accepted and cut into sprites (meta.variants). */
+    variants: string[];
+  };
+  /**
+   * The watched files of the project: avatar.json, the illustration and everything directly inside
+   * textures/, variants/, variant-requests/ and review/, by path.
+   */
+  files: AvatarFileInfo[];
+  /** File problems first ("file-not-found", "avatar-source-*"), then the spec's diagnostics (parseAvatarSpec), then "avatar-layers-*". */
+  diagnostics: Diagnostic[];
+  /** The latest event of the last build job of this project, or null. */
+  job: AvatarJobEvent | null;
+}
+
+/** PUT /api/avatar. */
+export interface AvatarSaveRequest {
+  /** The new avatar.json: raw text (written verbatim), or ... */
+  text?: string;
+  /** ... the document (written with the stable formatter; CRLF is kept when the file uses it). Exactly one of the two. */
+  doc?: unknown;
+  /**
+   * mtimeMs of the version the edit is based on (GET /api/avatar, or the last PUT): the write is
+   * refused with 409 {error, hint, mtimeMs} when avatar.json changed on disk since (same rule as PUT
+   * /api/model). Omit it to write unconditionally.
+   */
+  baseMtimeMs?: number;
+  /** Recompile the model after the write (default true). */
+  compile?: boolean;
+}
+
+/** PUT /api/avatar: 200 also when the spec has errors (a draft is saved all the same). */
+export interface AvatarSaveResult {
+  /** The spec has no errors. */
+  ok: boolean;
+  /** avatar.json holds the new text (its previous content is kept as avatar.json.bak). False only when the text is not a JSON object: nothing was written then (`hint`). */
+  written: boolean;
+  /** Diagnostics of the new spec, as in AvatarInfo. */
+  diagnostics: Diagnostic[];
+  /** As AvatarInfo.built.stale, for the new spec. */
+  stale: boolean;
+  /** mtime of avatar.json now. */
+  mtimeMs: number;
+  /**
+   * The model was recompiled from the new spec and the existing layer metadata. False when the spec
+   * has errors, the layers are not built yet, a build job is running, `compile` was false or the
+   * compile failed (`notes` says which; `error` has the failure).
+   */
+  compiled: boolean;
+  /** The built model after the recompile (`changed`: its text differs from before, so it was rewritten); null when not compiled. */
+  model: { file: string; mtimeMs: number; changed: boolean } | null;
+  notes: string[];
+  /** Why the compile failed. */
+  error?: { message: string; hint?: string; diagnostics?: Diagnostic[] };
+  hint?: string;
+}
+
+/** POST /api/avatar/build (the body may be empty). */
+export interface AvatarBuildRequest {
+  /**
+   * true (default): the whole build: cut the layer images, write textures/ and layers.json, compile
+   * the model. false: only recompile the model from the existing layers (fast).
+   */
+  layers?: boolean;
+}
+
+/** running: the job works (`step` says on what); done / failed: it ended. */
+export type AvatarJobState = 'running' | 'done' | 'failed';
+
+/**
+ * What a running job does: "start" (accepted), "build" (cutting the layer images and compiling the
+ * model), "compile" (compiling the model from the existing layers), "reload" (the editor opens or
+ * reloads the built model).
+ */
+export type AvatarJobStep = 'start' | 'build' | 'compile' | 'variants' | 'reload';
+
+/** What a job does: cut the layers and compile (build), only compile, or import the drawn variants. */
+export type AvatarJobKind = 'build' | 'compile' | 'variants';
+
+/** What a finished build did. */
+export interface AvatarBuildReport {
+  /** Whether the layer images were rebuilt (false: the model was recompiled from the existing layers). */
+  layers: boolean;
+  name: string;
+  /** Absolute path of the built model and its size. */
+  modelFile: string;
+  modelBytes: number;
+  /** The layer images of the build, relative to the project ("textures/base.png", ...); empty for a compile-only job. */
+  layerFiles: string[];
+  /** Layer images of an earlier build that were deleted. */
+  removed: string[];
+  /** Number of spec.post ops applied. */
+  postOps: number;
+  /** Warnings among `issues` and `diagnostics`. */
+  warnings: number;
+  /** Issues of the build (e.g. "avatar-mesh-fold"), with JSON pointers into avatar.json where they have one. */
+  issues: AvatarIssue[];
+  /** Counts and measurements of the build (layers, parameters, warps, latticePoints, ...). */
+  stats: Record<string, number>;
+  /** Validation diagnostics of the built model (warnings and info; errors fail the build). */
+  diagnostics: Diagnostic[];
+  /** Milliseconds per stage (layersMs, compileMs, validateMs, foldsMs, writeMs, totalMs, ...). */
+  timings: Record<string, number>;
+}
+
+/**
+ * One event of a build job: the answer of POST /api/avatar/build (202, state "running", step "start"),
+ * every SSE "avatar-job" event, and `job` of GET /api/avatar and GET /api/avatar/build. A job sends
+ * "running" events (one per step) and ends with exactly one "done" or "failed" event.
+ */
+export interface AvatarJobEvent {
+  /** Id of the job. */
+  job: string;
+  state: AvatarJobState;
+  /** Absolute folder of the project the job builds. */
+  project: string;
+  /** AvatarBuildRequest.layers (false for a variants import: no layer image is cut). */
+  layers: boolean;
+  /** "variants" for POST /api/avatar/variants/import; absent for builds ("build" or "compile" by `layers`). */
+  kind?: AvatarJobKind;
+  /** running: what the job is doing. */
+  step?: AvatarJobStep;
+  /** A sentence for the person: what happens (running), what was built (done), what went wrong (failed). */
+  message?: string;
+  /** failed: how to fix it. */
+  hint?: string;
+  /** failed: the diagnostics behind the failure (spec errors with JSON pointers into avatar.json, model errors). */
+  diagnostics?: Diagnostic[];
+  /** failed: the end of the builder's error output, when it wrote any. */
+  log?: string;
+  /** done: what was built. */
+  report?: AvatarBuildReport;
+  /** done: whether the layers are older than the spec again (avatar.json changed while the job ran). */
+  stale?: boolean;
+  /** done, kind "variants": what the import did. */
+  variants?: AvatarVariantsImport;
+  /** ISO 8601 times; `elapsedMs` since the start. */
+  startedAt: string;
+  endedAt?: string;
+  elapsedMs: number;
+}
+
+// ----------------------------------------------------------------------------- drawn variants
+
+/** POST /api/avatar/variants/import (the body may be empty): a job like a build ("avatar-job" events, kind "variants"). */
+export interface AvatarVariantsImportRequest {
+  /** Only these variants (default: every drawing in variants/). */
+  ids?: VariantId[];
+  /** Delete these drawings (variants/<id>.png) first: their sprites go with the import. */
+  remove?: VariantId[];
+}
+
+/** What a variants import did (AvatarJobEvent.variants). */
+export interface AvatarVariantsImport {
+  /** Drawings accepted and cut into sprites now. */
+  accepted: VariantId[];
+  /** Drawings rejected now, with the reason and what to ask the image generator next (`code` / `values`: VariantCheckResult). */
+  rejected: Array<{ id: VariantId; reason: string; hint?: string; code?: string; values?: Record<string, number | string> }>;
+  /** Rejected drawings whose earlier sprite stays. */
+  kept: VariantId[];
+  /** Variants whose drawing is gone (or was removed): their sprites were removed. */
+  removed: VariantId[];
+  /** The variants with a sprite in the model now. */
+  variants: VariantId[];
+  /** Files in variants/ that are not drawings of a known variant. */
+  ignored: Array<{ file: string; reason: string; hint?: string }>;
+  notes: string[];
+}
+
+/** One variant in GET /api/avatar/variants (src/node/avatar-variants.ts VariantStatusEntry). */
+export type AvatarVariantStatus = VariantStatusEntry;
+
+/** GET /api/avatar/variants: the state of every drawn variant of the open project. */
+export interface AvatarVariantsInfo {
+  /** Absolute project folder. */
+  project: string;
+  /** The project has layers (drawings can be imported). */
+  built: boolean;
+  /** Every variant id (VARIANT_IDS order) with its state: missing, requested, drawn, accepted, rejected or stale. */
+  variants: AvatarVariantStatus[];
+  counts: Record<AvatarVariantStatus['state'], number>;
+  /** Files in variants/ that are not drawings of a known variant. */
+  ignored: Array<{ file: string; reason: string; hint?: string }>;
+  /** The edit areas in source pixels, [x, y, width, height] (eyes: both eyes; mouth: the mouth area); null without a valid spec. */
+  areas: { eyes: [number, number, number, number] | null; mouth: [number, number, number, number] | null };
+  /** variant-requests/README.md and preview.png when written (project-relative), else null. */
+  requests: { readme: string | null; preview: string | null };
+  notes: string[];
+}
+
+/** POST /api/avatar/variants/request: write the masks and prompts for an image generator. */
+export interface AvatarVariantRequestsRequest {
+  /** Default: the recommended eyes_closed and mouth_a, plus every variant requested before. */
+  ids?: VariantId[];
+}
+
+/** POST /api/avatar/variants/request answers this. */
+export interface AvatarVariantRequestsResult {
+  /** The variants requested (masks and prompts written), project-relative paths. */
+  requests: Array<{ id: VariantId; maskFile: string; promptFile: string; file: string; prompt: string }>;
+  readme: string;
+  preview: string;
+  /** Every file written, project-relative. */
+  files: string[];
+  notes: string[];
+}
+
+/** POST /api/avatar/new: a new avatar project from one picture. */
+export interface AvatarNewRequest {
+  /**
+   * Name of the avatar (letters, digits, "_" and "-", not starting with a digit): its model will be
+   * <name>.r2d.json. Default: made from the picture's file name.
+   */
+  name?: string;
+  /** Folder to create, relative to the workspace root (default: the name). */
+  dir?: string;
+  /**
+   * The picture: its file name (for messages and the default name) and its bytes, base64-encoded (a
+   * data: URL is accepted). PNG only, at most 20 MB and 8192 px per side.
+   */
+  image: { name: string; base64: string };
+  /**
+   * What to do when the folder exists and is not empty: false (default) answers 409; true creates
+   * "<dir>-2", "<dir>-3", ... instead (the answer says which).
+   */
+  unique?: boolean;
+}
+
+/**
+ * POST /api/avatar/new: the project was created (source.png and a draft avatar.json with every
+ * landmark still to place) and is open, without a model (SSE "file-changed" {file: null, avatar}).
+ * Everything an "avatar-create" agent job needs: POST /api/agent/jobs {provider, kind: "avatar-create",
+ * context: {project: projectPath}, images: [image.path]}.
+ */
+export interface AvatarNewResult extends AvatarRef {
+  /** avatar.json relative to the workspace root. */
+  specPath: string;
+  name: string;
+  image: {
+    /** The illustration inside the project ("source.png"; GET /api/avatar/file?path=) and relative to the workspace root (for `images` of an agent job). */
+    file: string;
+    path: string;
+    width: number;
+    height: number;
+    bytes: number;
+  };
+  /** mtime of the new avatar.json. */
+  mtimeMs: number;
+  /** Landmarks the draft still lacks ("avatar-missing-landmark" diagnostics). */
+  landmarksToPlace: number;
+  /** Things worth telling the person (the picture has no transparent background, the folder got another name, ...). */
+  notes: string[];
+}
+
+/**
+ * SSE "avatar-changed": files of the open avatar project changed on disk. origin "editor": this
+ * server wrote them (PUT /api/avatar, a build job); "external": another program did (an agent, a
+ * text editor). Debounced; GET /api/avatar has the new state.
+ */
+export interface AvatarChangedEvent {
+  origin: 'editor' | 'external';
+  /** Absolute project folder. */
+  project: string;
+  /** What changed (created, modified or deleted), relative to the project: "avatar.json", "textures/base.png", "variants/eyes_closed.png", ... */
+  files: string[];
+  /** mtime of avatar.json now (0 when it is missing). */
+  mtimeMs: number;
+}
+
+// ----------------------------------------------------------------------------- agent bridge (in-app coding agents)
+//
+// The editor can start a coding agent (the Codex CLI or Claude Code) for a request, show its progress
+// live and continue it with follow-up messages (docs/AGENT-BRIDGE.md; src/server/agent-routes.ts,
+// src/node/agent). One job runs at a time.
+//
+//   GET  /api/session                       -> SessionInfo           (the token for the calls below)
+//   GET  /api/agent/providers               -> AgentProviderInfo[]
+//   GET  /api/agent/tasks                   -> AgentTaskInfo[]
+//   GET  /api/agent/jobs                    -> AgentJobList
+//   POST /api/agent/jobs  AgentStartRequest -> 202 {job: AgentJobInfo}
+//   GET  /api/agent/jobs/:id?since=<seq>    -> AgentJobDetail
+//   POST /api/agent/jobs/:id/cancel         -> {job: AgentJobInfo}
+//   POST /api/agent/jobs/:id/message AgentMessageRequest -> 202 {job: AgentJobInfo}
+//   GET  /api/agent/settings                -> AgentSettingsInfo  (effective settings + where each comes from)
+//   PUT  /api/agent/settings AgentSettingsRequest -> AgentSettingsInfo (saved to ~/.rev2d/settings.json)
+//   SSE event "agent-job" AgentJobEventPayload on GET /api/events
+//
+// Every /api/agent request needs the header "X-Rev2D-Token: <SessionInfo.token>". The endpoints exist
+// only while the editor server is bound to a loopback address (or was started with --allow-agent);
+// otherwise they answer 404 {error, hint, code: "agent-disabled"} and SessionInfo.agent.enabled is false.
+// Errors are JSON {error, hint?, code?}: 400 invalid, 401 token-required, 403 outside the workspace root,
+// 404 unknown-job, 409 busy | not-resumable | unavailable | settings-file, 413 too-large, 429 rate-limited.
+//
+// Settings (today: codexWindowsSandbox, which of Codex's Windows sandbox implementations a job uses)
+// are never part of a job request. "error" events may carry a stable `code`; "codex-windows-sandbox"
+// (also on the "stalled" status event) means Codex cannot start commands on Windows, and its hint
+// names the fixes, one of which is PUT /api/agent/settings {"codexWindowsSandbox": "unelevated"}.
+
+export type {
+  AgentDoneReason,
+  AgentEffort,
+  AgentEvent,
+  AgentEventBody,
+  AgentEventType,
+  AgentFileChange,
+  AgentItemPhase,
+  AgentItemStatus,
+  AgentJobEvents,
+  AgentJobInfo,
+  AgentJobState,
+  AgentProviderId,
+  AgentProviderInfo,
+  AgentSandbox,
+  AgentSettingSource,
+  AgentSettings,
+  AgentSettingsInfo,
+  AgentUsage,
+  CodexWindowsSandbox,
+} from './agent/types.js';
+
+/** PUT /api/agent/settings: the user settings to save (kept in ~/.rev2d/settings.json). */
+export interface AgentSettingsRequest {
+  codexWindowsSandbox: CodexWindowsSandbox;
+}
+
+/** GET /api/session. */
+export interface SessionInfo {
+  /** Value of the X-Rev2D-Token header of /api/agent requests; null while the agent bridge is disabled. */
+  token: string | null;
+  agent: {
+    enabled: boolean;
+    /** Why the bridge is disabled (the server is not bound to a loopback address). */
+    reason?: string;
+  };
+}
+
+/** POST /api/agent/jobs. */
+export interface AgentStartRequest {
+  provider: AgentProviderId;
+  /** Task template (GET /api/agent/tasks); default "freeform": `prompt` is the task. */
+  kind?: string;
+  /** The request in the person's words (at most 32 KiB; required by "freeform"). */
+  prompt?: string;
+  /**
+   * Input of the task template, plus two entries the server reads itself: `project` (a folder of the
+   * workspace, relative to its root: the agent's working directory; default the workspace root) and
+   * `file` (the model the request is about; default the open model).
+   */
+  context?: Record<string, unknown>;
+  /** Image files of the workspace to attach (paths relative to the root, at most 8; PNG, JPEG, WebP, GIF). */
+  images?: string[];
+  model?: string;
+  effort?: AgentEffort;
+  /** Default "workspace-write": the agent may change files inside its working directory. */
+  sandbox?: AgentSandbox;
+  /** Default false. True lets the agent use its built-in image generator (and only that one). */
+  allowImageGeneration?: boolean;
+}
+
+/** POST /api/agent/jobs/:id/message: a follow-up in the provider session of the finished job :id. */
+export interface AgentMessageRequest {
+  prompt: string;
+  images?: string[];
+  /** Default: as in the job that is continued. */
+  allowImageGeneration?: boolean;
+}
+
+/** GET /api/agent/jobs. */
+export interface AgentJobList {
+  /** The jobs the server remembers (the newest 20), newest first. */
+  jobs: AgentJobInfo[];
+  /** Id of the queued or running job, or null. */
+  active: string | null;
+}
+
+/** GET /api/agent/jobs/:id?since=<seq>: the job, its request text and its events after `since`. */
+export interface AgentJobDetail extends AgentJobEvents {
+  job: AgentJobInfo;
+  /** The request in the person's words. */
+  prompt: string;
+}
+
+/** SSE event "agent-job": one event of a job, with the job as it is right after it. */
+export interface AgentJobEventPayload {
+  job: AgentJobInfo;
+  state: AgentJobState;
+  event?: AgentEvent;
+}
+
+/** GET /api/agent/tasks: a task template. */
+export interface AgentTaskInfo {
+  kind: string;
+  title: string;
+  description: string;
+  /** Whether the template needs the person's own text (`prompt`). */
+  needsPrompt: boolean;
 }

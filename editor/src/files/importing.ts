@@ -8,6 +8,7 @@
 import { parseJsonc } from '../../../src/core/index.js';
 import { atlasPageNames, detectInteropFile, isAtlasName, live2dFormatFromName, looksLikeSpineSkeleton, type DetectedFormat } from '../../../src/interop/detect.js';
 import type { ImportRequest } from '../../../src/node/editor-registry.js';
+import { t } from '../i18n/index.js';
 import { formatSize } from './paths.js';
 
 /**
@@ -44,11 +45,11 @@ export function planImport(files: readonly PickedFile[]): ImportPlan {
   const skipped = files.filter((f) => !isJson(f.name) && !isPng(f.name) && !isAtlasName(f.name)).map((f) => f.name);
   const totalBytes = [...models, ...textures, ...atlases].reduce((n, f) => n + f.size, 0);
   let error: string | null = null;
-  if (models.length === 0) error = 'Pick a model file (.json) with its PNG textures, or a Spine skeleton (.json) with its .atlas and PNG pages.';
+  if (models.length === 0) error = t('files.import.error.noModel');
   else if (models.every((m) => live2dFormatFromName(m.name) !== null)) {
-    error = 'These are Live2D files: they are imported into an open model. Open or create a model, then use File > Import Live2D motions…';
-  } else if (models.length > 1) error = `Pick one model file at a time (picked ${models.map((m) => m.name).join(', ')}).`;
-  else if (totalBytes > MAX_IMPORT_BYTES) error = `The files are too large to import (${formatSize(totalBytes)}; the limit is ${formatSize(MAX_IMPORT_BYTES)}). Copy them into the workspace folder instead.`;
+    error = t('files.import.error.live2d');
+  } else if (models.length > 1) error = t('files.import.error.several', { names: models.map((m) => m.name).join(', ') });
+  else if (totalBytes > MAX_IMPORT_BYTES) error = t('files.import.error.tooLarge', { size: formatSize(totalBytes), limit: formatSize(MAX_IMPORT_BYTES) });
   return {
     model: models.length === 1 ? models[0].name : null,
     textures: textures.map((t) => t.name),
@@ -65,10 +66,10 @@ export function planImport(files: readonly PickedFile[]): ImportPlan {
  */
 export function modelTextProblem(text: string): string | null {
   const parsed = parseJsonc(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
-  if (!parsed.ok) return 'The .json file is not valid JSON.';
+  if (!parsed.ok) return t('files.import.error.notJson');
   const v = parsed.value as { format?: unknown } | null;
-  if (typeof v !== 'object' || v === null || Array.isArray(v)) return 'The .json file does not contain a JSON object.';
-  if (v.format !== 'rev2d' && !looksLikeSpineSkeleton(v)) return 'The .json file is not a Rev2D model (it needs "format": "rev2d") nor a Spine skeleton export.';
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return t('files.import.error.notObject');
+  if (v.format !== 'rev2d' && !looksLikeSpineSkeleton(v)) return t('files.import.error.notModel');
   return null;
 }
 
@@ -105,9 +106,9 @@ export function planLive2d(files: readonly PickedFile[]): Live2dPlan {
   const model3 = list.filter((f) => f.format === 'live2d-model3').length;
   const totalBytes = files.reduce((n, f) => n + f.size, 0);
   let error: string | null = null;
-  if (!importable) error = 'Pick Live2D files: .motion3.json, .exp3.json, .physics3.json, .cdi3.json, or a .model3.json with the files it lists.';
-  else if (model3 > 1) error = 'Pick one .model3.json at a time.';
-  else if (totalBytes > MAX_IMPORT_BYTES) error = `The files are too large to import (${formatSize(totalBytes)}; the limit is ${formatSize(MAX_IMPORT_BYTES)}).`;
+  if (!importable) error = t('files.live2d.error.none');
+  else if (model3 > 1) error = t('files.live2d.error.severalModels');
+  else if (totalBytes > MAX_IMPORT_BYTES) error = t('files.live2d.error.tooLarge', { size: formatSize(totalBytes), limit: formatSize(MAX_IMPORT_BYTES) });
   return { files: list, importable, error };
 }
 

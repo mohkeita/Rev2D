@@ -1,0 +1,136 @@
+/* Interop dialogs: Live2D import, export to Spine / Live2D, the conversion report. Design tokens only. */
+
+/* --------------------------------------------------------------------------------------- export */
+.ed-export-anims {
+  max-height: 148px;
+  border-radius: var(--r2-radius-concentric, var(--r2-radius-group));
+}
+
+.ed-export-links {
+  display: inline-flex;
+  gap: var(--r2-space-3);
+  font: var(--r2-text-callout);
+}
+
+.r2-field.ed-export-fps {
+  flex: none;
+  width: 96px;
+}
+
+.ed-export-fps .r2-field-input {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Option rows explain themselves in a sentence: let it wrap. */
+.ed-export-options .r2-row-subtitle {
+  white-space: normal;
+}
+
+.ed-export-options .r2-row-main {
+  padding-block: var(--r2-space-1-5);
+}
+
+/* --------------------------------------------------------------------------------------- report */
+.ed-report {
+  display: grid;
+  gap: var(--r2-space-2);
+  min-width: 0;
+}
+
+.ed-report-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--r2-space-1-5) var(--r2-space-2);
+  font: var(--r2-text-callout);
+}
+
+.ed-report-toggle {
+  margin-inline-start: auto;
+}
+
+.ed-report-list {
+  --_px: var(--r2-space-3);
+  --_icon: 16px;
+  --_gap: var(--r2-space-2);
+  max-height: min(320px, calc(100vh - 380px));
+  min-height: 64px;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--r2-radius-concentric, var(--r2-radius-group));
+  background: var(--r2-plate);
+  list-style: none;
+}
+
+.ed-report-issue {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--_gap);
+  padding: var(--r2-space-2) var(--_px);
+}
+
+.ed-report-issue + .ed-report-issue::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: calc(var(--_px) + var(--_icon) + var(--_gap));
+  height: var(--r2-hairline);
+  background: var(--r2-separator);
+}
+
+.ed-report-icon {
+  flex: none;
+  color: var(--r2-tint);
+}
+
+.ed-report-issue[data-severity='warning'] .ed-report-icon {
+  color: var(--r2-warning);
+}
+
+.ed-report-body {
+  display: grid;
+  flex: 1 1 auto;
+  gap: var(--r2-space-0-5);
+  min-width: 0;
+}
+
+.ed-report-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--r2-space-2);
+  min-width: 0;
+}
+
+.ed-report-code {
+  color: var(--r2-label);
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-report-where {
+  color: var(--r2-label-2);
+}
+
+.ed-report-message {
+  color: var(--r2-label);
+  font: var(--r2-text-callout);
+}
+
+.ed-report-hint {
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+}
+
+.ed-report-stats {
+  margin: 0;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+@media (forced-colors: active) {
+  .ed-report-list {
+    border: 1px solid CanvasText;
+  }
+}

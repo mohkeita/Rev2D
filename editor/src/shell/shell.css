@@ -1,0 +1,497 @@
+/*
+ * The editor shell: page reset, the free area above the canvas (banners, status line, toasts),
+ * toolbar details, the shortcut sheet and the drop target. Design tokens only; classes `ed-*`.
+ */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.ed-shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--r2-canvas);
+}
+
+.ed-canvas-empty {
+  position: absolute;
+  inset: 0;
+  background: var(--r2-canvas);
+}
+
+/* ------------------------------------------------------------------------------------- free area */
+/*
+ * The part of the canvas that the floating chrome leaves uncovered (--r2-safe-* come from the
+ * SplitView; a side without a pane keeps the window inset). Messages at the top, the status line
+ * at the bottom; presses fall through to the canvas between them.
+ */
+.ed-hud {
+  position: absolute;
+  top: var(--r2-safe-top);
+  right: max(var(--r2-safe-right), var(--r2-panel-inset));
+  bottom: max(var(--r2-safe-bottom), var(--r2-panel-inset));
+  left: max(var(--r2-safe-left), var(--r2-panel-inset));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--r2-space-2);
+  pointer-events: none;
+  container: ed-hud / inline-size;
+}
+
+.ed-hud-status {
+  display: flex;
+  margin-top: auto;
+  /* The trailing corner belongs to the canvas's own controls (zoom). */
+  padding-inline-end: 188px;
+}
+
+/* ---------------------------------------------------------------------------------- status line */
+.ed-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  max-width: 100%;
+  height: 32px;
+  padding: 3px;
+  border-radius: var(--r2-radius-capsule);
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ed-status-item {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 26px;
+  margin: 0;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--r2-radius-capsule);
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+
+/* A hairline between neighbours. */
+.ed-status-item + .ed-status-item::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: -1px;
+  width: var(--r2-hairline);
+  background: var(--r2-separator-strong);
+}
+
+.ed-status-button {
+  cursor: default;
+  transition: background-color var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.ed-status-button:hover,
+.ed-status-button[data-open] {
+  background: var(--r2-fill-3);
+  color: var(--r2-label);
+}
+
+.ed-status-item[data-tone='success'] .r2-icon {
+  color: var(--r2-success);
+}
+
+/* A mode's own status items (StatusItem). */
+.ed-status-item[data-tone='warning'] .r2-icon {
+  color: var(--r2-warning);
+}
+
+.ed-status-item[data-tone='danger'] .r2-icon {
+  color: var(--r2-danger);
+}
+
+.ed-status-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-status-count[data-tone='danger'] {
+  color: var(--r2-danger-text);
+}
+
+.ed-status-count[data-tone='warning'] {
+  color: var(--r2-warning-text);
+}
+
+.ed-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--r2-gray);
+}
+
+[data-state='live'] > .ed-status-dot {
+  background: var(--r2-success);
+}
+
+[data-state='offline'] > .ed-status-dot {
+  background: var(--r2-danger);
+}
+
+[data-state='connecting'] > .ed-status-dot {
+  background: var(--r2-warning);
+}
+
+/* A command arrived through the bridge: one soft pulse. */
+.ed-status-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--r2-tint-fill-pressed);
+  opacity: 0;
+  pointer-events: none;
+  animation: ed-status-flash var(--r2-duration-slower) var(--r2-ease-out);
+}
+
+@keyframes ed-status-flash {
+  from {
+    opacity: 1;
+  }
+}
+
+.ed-status-file {
+  flex: 0 1 auto;
+}
+
+.ed-status-path {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The file name is the end of the path: keep it when the path is cut. */
+  direction: rtl;
+  unicode-bidi: plaintext;
+  text-align: left;
+}
+
+.ed-status-save[data-state='saved'] {
+  color: var(--r2-label-3);
+}
+
+.ed-status-save[data-state='unsaved'] {
+  color: var(--r2-warning-text);
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-status-save[data-state='saving'] {
+  color: var(--r2-tint);
+}
+
+.ed-status-coords {
+  gap: var(--r2-space-2);
+  flex: 0 1 auto;
+}
+
+.ed-status-subject {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--r2-label);
+  font: var(--r2-text-mono-small);
+  text-overflow: ellipsis;
+}
+
+@container ed-hud (max-width: 760px) {
+  .ed-status-path {
+    max-width: 140px;
+  }
+
+  .ed-status-subject {
+    display: none;
+  }
+}
+
+@container ed-hud (max-width: 600px) {
+  .ed-status-path,
+  .ed-status-save {
+    display: none;
+  }
+}
+
+@container ed-hud (max-width: 470px) {
+  .ed-status-coords {
+    display: none;
+  }
+}
+
+/* The details behind the AI button of the status line. */
+.ed-status-details {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--r2-space-1-5) var(--r2-space-3);
+  margin: 0;
+  font: var(--r2-text-callout);
+}
+
+.ed-status-details dt {
+  color: var(--r2-label-2);
+}
+
+.ed-status-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ed-status-state {
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-status-state[data-state='live'] {
+  color: var(--r2-success-text);
+}
+
+.ed-status-state[data-state='offline'] {
+  color: var(--r2-danger-text);
+}
+
+/* --------------------------------------------------------------------------------------- banners */
+.ed-banners {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--r2-space-2);
+}
+
+.ed-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-3);
+  max-width: min(680px, 100%);
+  padding: var(--r2-space-2) var(--r2-space-2) var(--r2-space-2) var(--r2-space-4);
+  border-radius: var(--r2-radius-xl);
+  color: var(--r2-label);
+  font: var(--r2-text-body);
+  pointer-events: auto;
+  animation: r2-rise-in var(--r2-duration-base) var(--r2-spring-smooth);
+}
+
+.ed-banner-icon {
+  flex: none;
+}
+
+.ed-banner[data-tone='warning'] .ed-banner-icon {
+  color: var(--r2-warning);
+}
+
+.ed-banner[data-tone='danger'] .ed-banner-icon {
+  color: var(--r2-danger);
+}
+
+.ed-banner-text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-block: var(--r2-space-1);
+}
+
+.ed-banner-text > strong {
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-banner-text > strong + span {
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+}
+
+.ed-banner-actions {
+  display: flex;
+  flex: none;
+  gap: var(--r2-space-1-5);
+}
+
+/* ---------------------------------------------------------------------------------------- toasts */
+.ed-toasts {
+  --_left: max(var(--ed-free-left, 0px), var(--r2-panel-inset));
+  --_right: max(var(--ed-free-right, 0px), var(--r2-panel-inset));
+  position: fixed;
+  bottom: calc(max(var(--ed-free-bottom, 0px), var(--r2-panel-inset)) + 44px);
+  left: calc(var(--_left) + (100vw - var(--_left) - var(--_right)) / 2);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: var(--r2-space-2);
+  width: max-content;
+  max-width: min(540px, calc(100vw - var(--_left) - var(--_right)));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.ed-toast-source {
+  margin-inline-end: var(--r2-space-1-5);
+  vertical-align: 1px;
+}
+
+.ed-toast-detail {
+  display: block;
+}
+
+.ed-toasts .r2-toast-title {
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------------------------------- toolbar */
+.ed-toolbar {
+  height: var(--r2-toolbar-height);
+}
+
+.ed-toolbar-save {
+  box-shadow:
+    var(--r2-shadow-1),
+    0 8px 20px -6px color-mix(in srgb, var(--r2-tint-solid) 55%, transparent);
+}
+
+/* Present but not available (aria-disabled): dimmed, still focusable so its tooltip can say why. */
+.ed-toolbar-unavailable {
+  opacity: 0.38;
+}
+
+.ed-toolbar-unavailable:hover,
+.ed-toolbar-unavailable:active {
+  background: none;
+  transform: none;
+}
+
+.ed-toolbar-modes .r2-segmented {
+  min-width: 132px;
+}
+
+/* -------------------------------------------------------------------------------- shortcut sheet */
+/* Sections flow into balanced columns (two in the large sheet, one when it is narrow). */
+.ed-help {
+  columns: 300px 2;
+  column-gap: var(--r2-space-5);
+}
+
+.ed-help-section {
+  margin-bottom: var(--r2-space-4);
+  break-inside: avoid;
+}
+
+.ed-help-section:last-child {
+  margin-bottom: 0;
+}
+
+.ed-help-title {
+  margin: 0 0 var(--r2-space-1);
+  padding-inline: var(--r2-space-3);
+  color: var(--r2-label-2);
+  font: var(--r2-text-subhead);
+}
+
+.ed-help-list {
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--r2-radius-concentric, var(--r2-radius-group));
+  background: var(--r2-plate);
+}
+
+.ed-help-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--r2-space-3);
+  min-height: var(--r2-row-height);
+  padding: var(--r2-space-1) var(--r2-space-3);
+}
+
+.ed-help-row + .ed-help-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: var(--r2-space-3);
+  height: var(--r2-hairline);
+  background: var(--r2-separator);
+}
+
+.ed-help-row dt {
+  min-width: 0;
+}
+
+.ed-help-row dd {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--r2-space-1-5);
+  margin: 0;
+}
+
+.ed-load-error {
+  margin: 0;
+}
+
+/* ----------------------------------------------------------------------------------- drop target */
+.ed-drop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--r2-z-overlay);
+  display: grid;
+  place-items: center;
+  padding: var(--r2-space-6);
+  background: var(--r2-scrim);
+  pointer-events: none;
+  animation: r2-fade-in var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.ed-drop-card {
+  display: grid;
+  justify-items: center;
+  gap: var(--r2-space-1-5);
+  max-width: 420px;
+  padding: var(--r2-space-8) var(--r2-space-6) var(--r2-space-6);
+  border-radius: var(--r2-radius-sheet);
+  color: var(--r2-label-2);
+  font: var(--r2-text-body);
+  text-align: center;
+}
+
+.ed-drop-card > strong {
+  color: var(--r2-label);
+  font: var(--r2-text-title-2);
+  letter-spacing: var(--r2-tracking-display);
+}
+
+.ed-drop-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--r2-space-2);
+  border-radius: 50%;
+  background: var(--r2-tint-fill);
+  color: var(--r2-tint);
+}
+
+@media (forced-colors: active) {
+  .ed-status-dot {
+    background: CanvasText;
+  }
+}

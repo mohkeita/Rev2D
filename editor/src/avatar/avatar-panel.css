@@ -1,0 +1,155 @@
+/* Avatar mode, trailing panel: the preview stage, the page switcher, variants, the draft checklist. */
+
+.ed-avpanel .r2-panel-header {
+  padding-top: var(--r2-space-2);
+}
+
+.ed-avpanel-center {
+  display: grid;
+  min-height: 200px;
+  place-items: center;
+}
+
+.ed-avpanel .r2-panel-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.ed-avpanel-page {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: var(--r2-space-3);
+  min-height: 0;
+  padding: var(--r2-space-1) var(--r2-space-2) var(--r2-space-3);
+  overflow-y: auto;
+}
+
+.ed-avpanel-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-start: 5px;
+  border-radius: 50%;
+  background: var(--r2-tint-solid);
+  vertical-align: middle;
+}
+
+/* ------------------------------------------------------------------------------------- draft */
+.ed-avdraft-progress {
+  padding: var(--r2-space-1) var(--r2-space-2) var(--r2-space-3);
+}
+
+.ed-avdraft-hint {
+  margin: 0 var(--r2-space-2) var(--r2-space-2);
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+.ed-avdraft-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--r2-radius-concentric);
+  background: var(--r2-fill-4);
+  list-style: none;
+}
+
+.ed-avdraft-list > li + li {
+  border-top: var(--r2-hairline) solid var(--r2-separator);
+}
+
+.ed-avdraft-row {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: var(--r2-space-1) var(--r2-space-3);
+  border: 0;
+  background: none;
+  color: var(--r2-label);
+  text-align: start;
+  cursor: default;
+}
+
+.ed-avdraft-row:hover {
+  background: var(--r2-fill-4);
+}
+
+.ed-avdraft-row[data-placing] {
+  background: var(--r2-tint-fill);
+}
+
+.ed-avdraft-row:focus-visible {
+  outline: var(--r2-focus-ring);
+  outline-offset: -2px;
+}
+
+.ed-avdraft-ring {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px var(--_c);
+}
+
+.ed-avdraft-text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ed-avdraft-label {
+  overflow: hidden;
+  font: var(--r2-text-callout);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-avdraft-group {
+  color: var(--r2-label-2);
+  font: var(--r2-text-caption);
+}
+
+.ed-avdraft-go {
+  flex: none;
+  color: var(--r2-tint);
+  font: var(--r2-text-footnote);
+  font-weight: var(--r2-weight-medium);
+}
+
+.ed-avdraft-done {
+  display: flex;
+  gap: var(--r2-space-3);
+  padding: var(--r2-space-3);
+  border-radius: var(--r2-radius-concentric);
+  background: var(--r2-fill-4);
+}
+
+.ed-avdraft-done > .r2-icon {
+  flex: none;
+}
+
+.ed-avdraft-done > .r2-icon[data-tone='success'] {
+  color: var(--r2-success);
+}
+
+.ed-avdraft-done > .r2-icon[data-tone='warning'] {
+  color: var(--r2-warning);
+}
+
+.ed-avdraft-done p {
+  margin: var(--r2-space-1) 0 0;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+.ed-avdraft-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--r2-space-2);
+  width: 100%;
+}

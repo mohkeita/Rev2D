@@ -1,0 +1,193 @@
+/* Button, IconButton. Variants set the private --_bg* / --_fg properties. */
+
+.r2-button {
+  --_h: var(--r2-control-md);
+  --_px: 12px;
+  --_radius: var(--r2-radius-control);
+  --_bg: var(--r2-fill-3);
+  --_bg-hover: var(--r2-fill-2);
+  --_bg-active: var(--r2-fill);
+  --_fg: var(--r2-label);
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--_h);
+  min-width: var(--_h);
+  margin: 0;
+  padding: 0 var(--_px);
+  border: 0;
+  border-radius: var(--_radius);
+  background: var(--_bg);
+  color: var(--_fg);
+  font: var(--r2-text-body);
+  font-weight: var(--r2-weight-medium);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition:
+    background-color var(--r2-duration-fast) var(--r2-ease-out),
+    color var(--r2-duration-fast) var(--r2-ease-out),
+    opacity var(--r2-duration-fast) var(--r2-ease-out),
+    transform var(--r2-duration-base) var(--r2-spring-snappy);
+}
+
+.r2-button:hover {
+  background: var(--_bg-hover);
+}
+
+.r2-button:active {
+  background: var(--_bg-active);
+  transform: scale(var(--r2-press-scale));
+  transition-duration: var(--r2-duration-instant);
+}
+
+.r2-button:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.r2-button[data-loading] {
+  cursor: progress;
+}
+
+.r2-button-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------------------------------- sizes */
+.r2-button[data-size='sm'] {
+  --_h: var(--r2-control-sm);
+  --_px: 9px;
+  --_radius: var(--r2-radius-control-sm);
+  gap: 4px;
+  font: var(--r2-text-callout);
+  font-weight: var(--r2-weight-medium);
+}
+
+.r2-button[data-size='lg'] {
+  --_h: var(--r2-control-lg);
+  --_px: 16px;
+  --_radius: var(--r2-radius-control-lg);
+  gap: 7px;
+  font-weight: var(--r2-weight-semibold);
+}
+
+.r2-button[data-size='xl'] {
+  --_h: var(--r2-control-xl);
+  --_px: 22px;
+  --_radius: var(--r2-radius-lg);
+  gap: 8px;
+  font: var(--r2-text-title-3);
+}
+
+.r2-button[data-shape='capsule'] {
+  --_radius: var(--r2-radius-capsule);
+}
+
+.r2-button[data-shape='capsule']:not(.r2-icon-button) {
+  --_px: calc(var(--_h) * 0.42);
+}
+
+.r2-button[data-block] {
+  display: flex;
+  width: 100%;
+}
+
+/* -------------------------------------------------------------------------------------- variants */
+.r2-button[data-variant='filled'] {
+  --_bg: var(--r2-tint-solid);
+  --_bg-hover: var(--r2-tint-solid-hover);
+  --_bg-active: var(--r2-tint-solid-pressed);
+  --_fg: var(--r2-on-tint);
+  font-weight: var(--r2-weight-semibold);
+}
+
+.r2-button[data-variant='tinted'] {
+  --_bg: var(--r2-tint-fill);
+  --_bg-hover: var(--r2-tint-fill-hover);
+  --_bg-active: var(--r2-tint-fill-pressed);
+  --_fg: var(--r2-tint);
+  font-weight: var(--r2-weight-semibold);
+}
+
+.r2-button[data-variant='plain'] {
+  --_bg: transparent;
+  --_bg-hover: var(--r2-fill-4);
+  --_bg-active: var(--r2-fill-2);
+  --_fg: var(--r2-tint);
+}
+
+.r2-icon-button[data-variant='plain'] {
+  --_fg: var(--r2-label);
+}
+
+.r2-button[data-variant='glass'] {
+  --_bg: var(--r2-glass-plate);
+  --_bg-hover: linear-gradient(var(--r2-fill-4), var(--r2-fill-4)), var(--r2-glass-plate);
+  --_bg-active: linear-gradient(var(--r2-fill-2), var(--r2-fill-2)), var(--r2-glass-plate);
+  --_fg: var(--r2-label);
+}
+
+/* Destructive */
+.r2-button[data-destructive][data-variant='filled'] {
+  --_bg: var(--r2-danger-solid);
+  --_bg-hover: var(--r2-danger-solid-hover);
+  --_bg-active: var(--r2-danger-solid-pressed);
+}
+
+.r2-button[data-destructive][data-variant='tinted'] {
+  --_bg: var(--r2-danger-fill);
+  --_bg-hover: color-mix(in srgb, var(--r2-danger) 20%, transparent);
+  --_bg-active: color-mix(in srgb, var(--r2-danger) 28%, transparent);
+  --_fg: var(--r2-danger-text);
+}
+
+.r2-button[data-destructive]:is([data-variant='gray'], [data-variant='plain'], [data-variant='glass']) {
+  --_fg: var(--r2-danger-text);
+}
+
+/* Toggle (IconButton pressed) */
+.r2-button[aria-pressed='true']:not([data-variant='filled']) {
+  --_bg: var(--r2-tint-fill);
+  --_bg-hover: var(--r2-tint-fill-hover);
+  --_bg-active: var(--r2-tint-fill-pressed);
+  --_fg: var(--r2-tint);
+}
+
+/* ----------------------------------------------------------------------------------- icon button */
+.r2-icon-button {
+  width: var(--_h);
+  padding: 0;
+}
+
+.r2-icon-button[data-shape='rounded'] {
+  --_radius: var(--r2-radius-control);
+}
+
+@media (forced-colors: active) {
+  .r2-button {
+    border: 1px solid ButtonBorder;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+
+  .r2-button[data-variant='filled'],
+  .r2-button[aria-pressed='true'] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  .r2-button:disabled {
+    color: GrayText;
+    opacity: 1;
+  }
+}

@@ -1,25 +1,34 @@
 /**
- * Parameter sliders grouped by `group`. The slider shows the EVALUATED value live (after animation
- * and physics); moving it sets an explicit value, which beats animation AND physics (core SPEC §9).
- * Badges mark params driven by the active animation layers ("anim") or by physics: the physics badge
- * is also the pin toggle (pinned = explicit value held; unpinned = physics drives it), and a pinned
- * physics output shows where physics would put it as a ghost tick on the slider.
+ * Parameter sliders grouped by `group` (a page of the trailing inspector). The slider shows the
+ * EVALUATED value live (after animation and physics); moving it sets an explicit value, which beats
+ * animation AND physics (core SPEC §9). A dot marks explicit values (reset releases them). Badges
+ * mark parameters driven by the active animation layers or by physics: the physics badge is also
+ * the pin toggle (pinned = explicit value held; unpinned = physics drives it), and a pinned physics
+ * output shows where physics would put it as a ghost tick on the slider.
  */
 import { useMemo, useState } from 'react';
 import type { Parameter } from '../../../src/core/index.js';
+import { Badge, Button, ContextMenu, Icon, IconButton, InspectorSection, NumberField, Slider, type MenuEntry } from '../design/index.js';
+import { useT } from '../i18n/index.js';
 import { useApp, useSession } from '../state/context.js';
 import { matches } from '../state/outline.js';
 import { physicsParams } from '../state/playback.js';
-import { Icon } from '../ui/icons.js';
+import { Chip } from '../ui/kit.js';
+import './parameters.css';
+
+/** Decimals shown for a parameter: more for small ranges. */
+function decimalsFor(p: Parameter): number {
+  const span = Math.abs(p.max - p.min);
+  return span >= 100 ? 1 : span >= 10 ? 2 : 3;
+}
 
 function formatValue(v: number, p: Parameter): string {
-  const span = Math.abs(p.max - p.min);
-  const decimals = span >= 100 ? 1 : span >= 10 ? 2 : 3;
-  return v.toFixed(decimals);
+  return v.toFixed(decimalsFor(p));
 }
 
 export function Parameters() {
   const session = useSession();
+  const t = useT();
   const model = useApp((s) => s.model);
   const overridden = useApp((s) => Object.keys(s.overrides).length);
   const search = useApp((s) => s.search);
@@ -33,200 +42,162 @@ export function Parameters() {
   const groups = useMemo(() => {
     const out = new Map<string, Parameter[]>();
     for (const p of model?.parameters ?? []) {
-      const g = p.group ?? 'General';
+      const g = p.group ?? '';
       out.set(g, [...(out.get(g) ?? []), p]);
     }
     return [...out.entries()];
   }, [model]);
+  const total = model?.parameters.length ?? 0;
   // The outliner's filter applies here too; say so, since it hides sliders.
   const matching = model?.parameters.filter((p) => matches(p.id, search)).length ?? 0;
 
   return (
-    <section className="panel-section params" data-testid="parameters">
-      <div className="section-head">
-        <span className="section-title">Parameters</span>
-        <span className="count">{model?.parameters.length ?? 0}</span>
+    <div className="ed-params" data-testid="parameters">
+      <div className="ed-pane-bar">
+        <span className="ed-pane-bar-title">{t('params.count', { n: total })}</span>
         {search && model && (
-          <button className="tag tag-accent filter-tag" title="Filtered by the outliner search — click to clear" onClick={() => session.store.set({ search: '' })}>
-            {matching} match “{search}” ✕
-          </button>
+          <Chip label={t('params.filter.clear')} onRemove={() => session.store.set({ search: '' })} data-testid="params-filter">
+            {t('params.filter', { n: matching, query: search })}
+          </Chip>
         )}
-        <div className="section-actions">
-          <button
-            className="button button-small"
-            disabled={overridden === 0}
-            title="Clear all explicit parameter values (animation / defaults take over)"
-            onClick={() => session.resetAllParams()}
-            data-testid="reset-all-params"
-          >
-            <Icon name="reset" size={12} /> Reset all
-          </button>
-        </div>
+        <span className="ed-pane-bar-space" />
+        <Button variant="plain" size="sm" icon="reset" disabled={overridden === 0} title={t('params.resetAll.tip')} onClick={() => session.resetAllParams()} data-testid="reset-all-params">
+          {t('params.resetAll')}
+        </Button>
       </div>
-      <div className="section-body">
-        {!model || model.parameters.length === 0 ? (
-          <p className="empty-note">{model ? 'This model has no parameters.' : 'No valid model loaded.'}</p>
+      <div className="ed-pane-scroll r2-scroll">
+        {!model || total === 0 ? (
+          <p className="ed-pane-empty">{model ? t('params.none') : t('outliner.noModel')}</p>
         ) : matching === 0 ? (
-          <p className="empty-note">No parameter id contains “{search}”.</p>
+          <p className="ed-pane-empty">{t('params.noMatch', { query: search })}</p>
         ) : (
           groups.map(([group, params]) => {
             const shown = params.filter((p) => matches(p.id, search));
             if (shown.length === 0) return null;
-            const open = !collapsed.has(group);
             return (
-              <div key={group} className="param-group">
-                {groups.length > 1 && (
-                  <button
-                    className="group-head"
-                    onClick={() => {
-                      const next = new Set(collapsed);
-                      if (open) next.add(group);
-                      else next.delete(group);
-                      setCollapsed(next);
-                    }}
-                  >
-                    <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} />
-                    <span>{group}</span>
-                    <span className="count">{params.length}</span>
-                  </button>
-                )}
-                {open && shown.map((p) => <ParamRow key={p.id} param={p} anim={animated.has(p.id)} phys={physics.has(p.id)} />)}
-              </div>
+              <InspectorSection
+                key={group}
+                title={group || t('params.general')}
+                collapsible={groups.length > 1}
+                open={!collapsed.has(group)}
+                onOpenChange={(open) => {
+                  const next = new Set(collapsed);
+                  if (open) next.delete(group);
+                  else next.add(group);
+                  setCollapsed(next);
+                }}
+                trailing={<span className="ed-section-count r2-num">{params.length}</span>}
+              >
+                {shown.map((p) => (
+                  <ParamRow key={p.id} param={p} anim={animated.has(p.id)} phys={physics.has(p.id)} />
+                ))}
+              </InspectorSection>
             );
           })
         )}
       </div>
-    </section>
+    </div>
   );
 }
 
-/** Horizontal position of value v on a slider track (the 12 px thumb's center travels inside the track). */
+/** Horizontal position of value v on the small slider (its 18 px knob's centre travels inside the track). */
 const trackPos = (v: number, p: Parameter): string => {
   const u = Math.min(1, Math.max(0, (v - p.min) / (p.max - p.min || 1)));
-  return `calc(6px + (100% - 12px) * ${u})`;
+  return `calc(9px + (100% - 18px) * ${u})`;
 };
 
 function ParamRow({ param: p, anim, phys }: { param: Parameter; anim: boolean; phys: boolean }) {
   const session = useSession();
-  const value = useApp((s) => s.values[p.id] ?? p.default ?? Math.min(p.max, Math.max(p.min, 0)));
+  const t = useT();
+  const fallback = p.default ?? Math.min(p.max, Math.max(p.min, 0));
+  const value = useApp((s) => s.values[p.id] ?? fallback);
   const override = useApp((s) => s.overrides[p.id]);
   const physValue = useApp((s) => (phys ? s.physicsValues[p.id] : undefined));
   const selected = useApp((s) => s.selection.includes(`param:${p.id}`));
-  const [draft, setDraft] = useState<string | null>(null);
   const step = (p.max - p.min) / 1000 || 0.001;
-  const commitDraft = (): void => {
-    if (draft === null) return;
-    const v = Number(draft);
-    if (draft.trim() !== '' && Number.isFinite(v)) session.setParam(p.id, v);
-    setDraft(null);
-  };
-  const overriddenFlag = override !== undefined;
-  const pct = ((value - p.min) / (p.max - p.min || 1)) * 100;
+  const pinned = override !== undefined;
   // Animation / physics move the slider by themselves unless an explicit value holds it.
-  const driver = overriddenFlag ? null : phys ? 'phys' : anim ? 'anim' : null;
+  const driver = pinned ? null : phys ? 'physics' : anim ? 'animation' : null;
   const fmt = (v: number): string => formatValue(v, p);
-  const pinTitle = overriddenFlag
-    ? `Pinned at ${fmt(value)}: this explicit value replaces the physics output${physValue !== undefined ? ` (physics would give ${fmt(physValue)}, the ghost tick on the slider)` : ''}.\nClick to unpin: physics drives ${p.id} again.`
-    : `Physics drives ${p.id} every frame (now ${fmt(value)}).\nClick to pin it at this value: an explicit value beats physics. Dragging the slider or typing a value pins it too.`;
+  const origin = p.min < fallback && fallback < p.max ? fallback : undefined;
+
+  const pinTip = pinned
+    ? t('params.pin.pinnedTip', { id: p.id, value: fmt(value) }) + (physValue !== undefined ? ` ${t('params.pin.ghostTip', { value: fmt(physValue) })}` : '')
+    : t('params.pin.drivenTip', { id: p.id, value: fmt(value) });
+
+  const menu = (): MenuEntry[] => [
+    { id: 'inspect', label: t('outliner.menu.inspect'), icon: 'sidebarRight', onSelect: () => session.inspect([`param:${p.id}`]) },
+    { id: 'reset', label: t('params.reset'), icon: 'reset', disabled: !pinned, onSelect: () => session.resetParam(p.id) },
+    ...(phys ? [{ id: 'pin', label: pinned ? t('params.unpin') : t('params.pin'), icon: 'pin' as const, onSelect: () => session.setPinned(p.id, !pinned) }] : []),
+    { type: 'separator' },
+    { id: 'copy', label: t('outliner.menu.copyId'), icon: 'copy', onSelect: () => void navigator.clipboard?.writeText(p.id).catch(() => undefined) },
+  ];
+
   return (
-    <div
-      className={`param-row${selected ? ' is-selected' : ''}${overriddenFlag ? ' is-overridden' : ''}${driver ? ` is-driven driven-${driver}` : ''}`}
-      data-param={p.id}
-    >
-      <div className="param-top">
-        <button
-          className="param-name"
-          title={`${p.description ? `${p.description}\n` : ''}param:${p.id}  [${p.min} … ${p.max}]  default ${p.default ?? 0}\nClick to inspect · double-click to reset`}
-          onClick={() => session.select([`param:${p.id}`])}
-          onDoubleClick={() => session.resetParam(p.id)}
-        >
-          {overriddenFlag && <span className="override-dot" title="Explicit value (double-click to reset)" />}
-          {p.id}
-        </button>
-        {anim && (
-          <span
-            className="badge badge-anim"
-            title={
-              overriddenFlag
-                ? 'An animation track drives this parameter, but your explicit value beats it (reset to let the animation drive it; starting playback releases it)'
-                : 'Driven by the active animation (moving the slider sets an explicit value, which beats the animation, and pauses playback)'
-            }
-          >
-            anim
-          </span>
-        )}
-        {phys && (
+    <ContextMenu items={menu}>
+      <div className="ed-param" data-param={p.id} data-selected={selected ? '' : undefined} data-pinned={pinned ? '' : undefined} data-driver={driver ?? undefined}>
+        <div className="ed-param-top">
           <button
             type="button"
-            className={`badge badge-phys pin-toggle${overriddenFlag ? ' is-pinned' : ''}`}
-            title={pinTitle}
-            aria-pressed={overriddenFlag}
-            aria-label={overriddenFlag ? `Unpin ${p.id} (let physics drive it)` : `Pin ${p.id} at its current value`}
-            onClick={() => session.setPinned(p.id, !overriddenFlag)}
-            data-testid={`param-pin-${p.id}`}
+            className="ed-param-name"
+            title={`${p.description ? `${p.description}\n` : ''}param:${p.id}  [${p.min} … ${p.max}]  ${t('params.default', { value: p.default ?? 0 })}\n${t('params.name.tip')}`}
+            onClick={() => session.inspect([`param:${p.id}`])}
+            onDoubleClick={() => session.resetParam(p.id)}
           >
-            <Icon name="pin" size={10} />
-            {overriddenFlag ? 'pinned' : 'phys'}
+            {pinned && <span className="ed-param-dot" title={t('params.explicit')} />}
+            <span className="r2-truncate">{p.id}</span>
           </button>
-        )}
-        <input
-          className="param-number"
-          type="text"
-          inputMode="decimal"
-          aria-label={`${p.id} value`}
-          value={draft ?? formatValue(value, p)}
-          onFocus={(e) => {
-            setDraft(formatValue(value, p));
-            e.currentTarget.select();
-          }}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commitDraft}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') e.currentTarget.blur();
-            if (e.key === 'Escape') {
-              setDraft(null);
-              e.currentTarget.blur();
-            }
-            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-              e.preventDefault();
-              const delta = (e.shiftKey ? 100 : 10) * step * (e.key === 'ArrowUp' ? 1 : -1);
-              session.setParam(p.id, value + delta);
-              setDraft(formatValue(Math.min(p.max, Math.max(p.min, value + delta)), p));
-            }
-          }}
-        />
-        <button
-          className={`icon-button icon-button-small reset-param${overriddenFlag ? '' : ' is-hidden'}`}
-          title="Reset (release the explicit value)"
-          onClick={() => session.resetParam(p.id)}
-          tabIndex={overriddenFlag ? 0 : -1}
-        >
-          <Icon name="reset" size={12} />
-        </button>
-      </div>
-      <div className="slider-wrap">
-        <input
-          className="slider"
-          type="range"
-          min={p.min}
-          max={p.max}
-          step={step}
-          value={value}
-          style={{ ['--fill' as string]: `${pct}%` }}
-          aria-label={p.id}
-          data-testid={`param-slider-${p.id}`}
-          onChange={(e) => session.setParam(p.id, Number(e.target.value))}
-          onDoubleClick={() => session.resetParam(p.id)}
-        />
-        {overriddenFlag && physValue !== undefined && (
-          <span
-            className="param-ghost"
-            style={{ left: trackPos(physValue, p) }}
-            title={`Physics output: ${fmt(physValue)} (not applied while ${p.id} is pinned)`}
-            data-testid={`param-ghost-${p.id}`}
+          {anim && (
+            <Badge icon="film" title={pinned ? t('params.anim.overriddenTip') : t('params.anim.tip')} className="ed-param-badge" data-tone-kind="animation">
+              {t('params.anim')}
+            </Badge>
+          )}
+          {phys && (
+            <button
+              type="button"
+              className="ed-param-pin"
+              title={pinTip}
+              aria-pressed={pinned}
+              aria-label={pinned ? t('params.pin.unpinLabel', { id: p.id }) : t('params.pin.pinLabel', { id: p.id })}
+              onClick={() => session.setPinned(p.id, !pinned)}
+              data-testid={`param-pin-${p.id}`}
+            >
+              <Icon name="pin" size={12} strokeWidth={2.2} />
+              {pinned ? t('params.pinned') : t('params.physics')}
+            </button>
+          )}
+          <NumberField
+            className="ed-param-number"
+            size="sm"
+            width={64}
+            aria-label={t('params.valueOf', { id: p.id })}
+            value={Number(fmt(value))}
+            min={p.min}
+            max={p.max}
+            step={step * 10}
+            precision={decimalsFor(p)}
+            onChange={(v) => session.setParam(p.id, v)}
+            data-testid={`param-value-${p.id}`}
           />
-        )}
+          <IconButton
+            icon="reset"
+            size="sm"
+            label={t('params.reset.tip')}
+            className="ed-param-reset"
+            data-hidden={pinned ? undefined : ''}
+            tabIndex={pinned ? 0 : -1}
+            tooltip={pinned ? 'left' : false}
+            onClick={() => session.resetParam(p.id)}
+          />
+        </div>
+        {/* A double click releases the explicit value (the slider follows animation / physics / the default again). */}
+        <div className="ed-param-slider" onDoubleClick={() => session.resetParam(p.id)}>
+          <Slider size="sm" min={p.min} max={p.max} step={step} origin={origin} value={value} formatValue={fmt} onChange={(v) => session.setParam(p.id, v)} aria-label={p.id} data-testid={`param-slider-${p.id}`} />
+          {pinned && physValue !== undefined && (
+            <span className="ed-param-ghost" style={{ left: trackPos(physValue, p) }} title={t('params.ghost.tip', { id: p.id, value: fmt(physValue) })} data-testid={`param-ghost-${p.id}`} />
+          )}
+        </div>
       </div>
-    </div>
+    </ContextMenu>
   );
 }

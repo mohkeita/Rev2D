@@ -1,0 +1,215 @@
+/*
+ * Avatar mode HUD: banners at the top of the free area, zoom and framing at its trailing bottom
+ * corner. Banners reuse the shell's .ed-banner look (shell.css).
+ */
+
+.ed-avhud {
+  position: absolute;
+  top: calc(var(--r2-safe-top) + var(--r2-space-1));
+  right: max(var(--r2-safe-right), var(--r2-panel-inset));
+  bottom: max(var(--r2-safe-bottom), var(--r2-panel-inset));
+  left: max(var(--r2-safe-left), var(--r2-panel-inset));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--r2-space-2);
+  pointer-events: none;
+}
+
+.ed-avhud-top {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.ed-avhud-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--r2-space-2);
+  min-width: 0;
+}
+
+.ed-avbanners {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--r2-space-2);
+  max-width: 100%;
+}
+
+.ed-avbanners > * {
+  pointer-events: auto;
+}
+
+.ed-avbanner-info {
+  color: var(--r2-tint);
+}
+
+.ed-avbanner-layers {
+  color: var(--r2-warning);
+}
+
+.ed-avbanner-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--r2-space-1);
+  margin-top: var(--r2-space-1);
+}
+
+.ed-avchip {
+  height: 22px;
+  margin: 0;
+  padding: 0 var(--r2-space-2);
+  border: 0;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-fill-3);
+  color: var(--r2-label);
+  font: var(--r2-text-caption);
+  line-height: 22px;
+  cursor: default;
+}
+
+button.ed-avchip:hover {
+  background: var(--r2-fill-2);
+}
+
+.ed-avchip[data-more] {
+  background: none;
+  color: var(--r2-label-2);
+}
+
+/* Build job. */
+.ed-avjob-done {
+  color: var(--r2-success);
+}
+
+.ed-avjob-hint {
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+.ed-avjob-steps {
+  display: flex;
+  gap: var(--r2-space-1);
+  margin-top: var(--r2-space-1-5);
+}
+
+.ed-avjob-step {
+  width: 22px;
+  height: 3px;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-fill-2);
+  transition: background-color var(--r2-duration-base) var(--r2-ease-out);
+}
+
+.ed-avjob-step[data-on] {
+  background: var(--r2-tint-solid);
+}
+
+.ed-avjob-log {
+  max-height: 320px;
+  margin: 0;
+  padding: var(--r2-space-2);
+  overflow: auto;
+  border-radius: var(--r2-radius-md);
+  background: var(--r2-fill-4);
+  font: var(--r2-text-mono-small);
+  white-space: pre-wrap;
+}
+
+/* A part waiting for a click. */
+.ed-avplacing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  height: 36px;
+  padding: 0 var(--r2-space-1) 0 var(--r2-space-3);
+  border-radius: var(--r2-radius-capsule);
+  color: var(--r2-label);
+  font: var(--r2-text-callout);
+}
+
+.ed-avplacing > .r2-icon {
+  color: var(--r2-tint);
+}
+
+/* The AI at work. */
+.ed-avai {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  max-width: 100%;
+  height: 36px;
+  padding: 0 var(--r2-space-1) 0 var(--r2-space-3);
+  border-radius: var(--r2-radius-capsule);
+  color: var(--r2-label);
+  font: var(--r2-text-callout);
+}
+
+.ed-avai-icon {
+  flex: none;
+  color: var(--r2-tint);
+}
+
+.ed-avai[data-state='done'] .ed-avai-icon {
+  color: var(--r2-success);
+}
+
+.ed-avai[data-state='failed'] .ed-avai-icon {
+  color: var(--r2-warning);
+}
+
+.ed-avai-pulse {
+  animation: ed-avai-pulse 1.6s var(--r2-ease-in-out) infinite;
+}
+
+@keyframes ed-avai-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ed-avai-pulse {
+    animation: none;
+  }
+}
+
+.ed-avai-title {
+  flex: none;
+  font-weight: var(--r2-weight-medium);
+}
+
+.ed-avai-status {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--r2-label-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Zoom and framing. */
+.ed-avview {
+  margin-inline-start: auto;
+  pointer-events: auto;
+}
+
+.ed-avzoom {
+  min-width: 52px;
+  height: 100%;
+  margin: 0;
+  padding: 0 var(--r2-space-1);
+  border: 0;
+  border-radius: var(--r2-radius-capsule);
+  background: none;
+  color: var(--r2-label);
+  font: var(--r2-text-callout);
+  font-weight: var(--r2-weight-medium);
+  text-align: center;
+  cursor: default;
+}
+
+.ed-avzoom:hover {
+  background: var(--r2-fill-4);
+}

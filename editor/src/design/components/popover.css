@@ -1,0 +1,36 @@
+/* Popover: a glass panel that grows out of its anchor. */
+
+.r2-popover {
+  --_pad: var(--r2-space-3);
+  /* Nested shapes (list groups, wells) follow the corner: radius minus padding. */
+  --r2-radius-concentric: calc(var(--r2-radius-popover) - var(--_pad) + 2px);
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: min(420px, calc(100vw - 16px));
+  max-height: min(var(--r2-floating-available, 80vh), 80vh);
+  border-radius: var(--r2-radius-popover);
+  outline: none;
+  color: var(--r2-label);
+  font: var(--r2-text-body);
+  animation: r2-pop-in var(--r2-duration-base) var(--r2-spring-snappy);
+}
+
+.r2-popover-title {
+  flex: none;
+  padding: var(--_pad) var(--_pad) 0;
+  font: var(--r2-text-headline);
+}
+
+.r2-popover-body {
+  min-height: 0;
+  border-radius: inherit;
+}
+
+.r2-popover[data-padded] .r2-popover-body {
+  padding: var(--_pad);
+}
+
+.r2-popover[data-padded] .r2-popover-title + .r2-popover-body {
+  padding-top: var(--r2-space-2);
+}

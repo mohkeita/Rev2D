@@ -1,0 +1,77 @@
+/* The Rig canvas: full-bleed WebGL viewport, its overlay, messages and zoom controls. */
+
+.ed-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--r2-canvas);
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ed-viewport[data-panning],
+body.is-space-held .ed-viewport {
+  cursor: grab;
+}
+
+.ed-viewport[data-panning] {
+  cursor: grabbing;
+}
+
+.ed-viewport-gl,
+.ed-viewport-overlay {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ed-viewport-overlay {
+  pointer-events: none;
+}
+
+/* Centred in the part of the canvas the chrome leaves free. */
+.ed-viewport-message {
+  position: absolute;
+  top: var(--r2-safe-top);
+  right: max(var(--r2-safe-right), var(--r2-panel-inset));
+  bottom: max(var(--r2-safe-bottom), var(--r2-panel-inset));
+  left: max(var(--r2-safe-left), var(--r2-panel-inset));
+  display: grid;
+  place-items: center;
+  color: var(--r2-label-2);
+  pointer-events: none;
+}
+
+.ed-viewport-message > * {
+  pointer-events: auto;
+}
+
+/* Zoom and framing: the trailing bottom corner of the free area. */
+.ed-view-controls {
+  position: absolute;
+  right: max(var(--r2-safe-right), var(--r2-panel-inset));
+  bottom: max(var(--r2-safe-bottom), var(--r2-panel-inset));
+}
+
+.ed-zoom-value {
+  min-width: 48px;
+  height: 100%;
+  margin: 0;
+  padding: 0 var(--r2-space-1);
+  border: 0;
+  border-radius: var(--r2-radius-capsule);
+  background: none;
+  color: var(--r2-label);
+  font: var(--r2-text-callout);
+  font-weight: var(--r2-weight-medium);
+  text-align: center;
+  cursor: default;
+}
+
+.ed-zoom-value:hover {
+  background: var(--r2-fill-4);
+}

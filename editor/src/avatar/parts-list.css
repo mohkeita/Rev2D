@@ -1,0 +1,361 @@
+/* Avatar mode, leading sidebar: the parts by category, group heads with their colour, item rows, problems. */
+
+.ed-avparts .r2-panel-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.ed-avparts-loading {
+  display: grid;
+  flex: 1;
+  place-items: center;
+}
+
+.ed-avparts-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 var(--r2-space-2) var(--r2-space-3);
+  overflow-y: auto;
+}
+
+.ed-avparts-cat + .ed-avparts-cat {
+  margin-top: var(--r2-space-3);
+}
+
+.ed-avparts-cat-title {
+  margin: var(--r2-space-2) var(--r2-space-2) var(--r2-space-1);
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+  font-weight: var(--r2-weight-semibold);
+}
+
+/* A group: a rounded plate with its head and items. */
+.ed-avgroup {
+  margin-bottom: var(--r2-space-1-5);
+  padding: var(--r2-space-0-5);
+  border-radius: var(--r2-radius-concentric);
+  background: var(--r2-fill-4);
+  transition: background-color var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.ed-avgroup[data-active] {
+  background: color-mix(in srgb, var(--r2-tint-fill) 70%, var(--r2-fill-4));
+}
+
+.ed-avgroup[data-absent] {
+  background: none;
+  box-shadow: inset 0 0 0 var(--r2-hairline) var(--r2-separator);
+}
+
+.ed-avgroup-head {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-0-5);
+  min-width: 0;
+}
+
+.ed-avgroup-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: var(--r2-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--r2-space-1-5) var(--r2-space-2);
+  border: 0;
+  border-radius: calc(var(--r2-radius-concentric) - 2px);
+  background: none;
+  color: var(--r2-label);
+  font: inherit;
+  text-align: start;
+  cursor: default;
+}
+
+.ed-avgroup-main:hover {
+  background: var(--r2-fill-4);
+}
+
+.ed-avgroup-main[data-selected] {
+  background: var(--r2-selection);
+}
+
+.ed-avgroup-main:focus-visible,
+.ed-avitem-main:focus-visible,
+.ed-avproblem:focus-visible {
+  outline: var(--r2-focus-ring);
+  outline-offset: -2px;
+}
+
+/* The group colour (the same on the canvas). */
+.ed-avdot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--_c);
+  box-shadow: 0 0 0 var(--r2-hairline) color-mix(in srgb, var(--r2-label) 25%, transparent);
+}
+
+.ed-avgroup[data-absent] .ed-avdot,
+.ed-avgroup[data-hidden] .ed-avdot {
+  opacity: 0.4;
+}
+
+.ed-avgroup-text {
+  display: grid;
+  min-width: 0;
+}
+
+.ed-avgroup-label {
+  font: var(--r2-text-body);
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-avgroup-desc {
+  overflow: hidden;
+  color: var(--r2-label-2);
+  font: var(--r2-text-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-avgroup[data-absent] .ed-avgroup-label,
+.ed-avgroup[data-absent] .ed-avgroup-desc {
+  color: var(--r2-label-3);
+}
+
+.ed-avgroup-eye[aria-pressed='true'] {
+  color: var(--r2-label-2);
+}
+
+/* Items. */
+.ed-avitems {
+  display: grid;
+  gap: 1px;
+  padding: 0 0 var(--r2-space-0-5);
+}
+
+.ed-avitem-main {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 var(--r2-space-2) 0 var(--r2-space-5);
+  border: 0;
+  border-radius: calc(var(--r2-radius-concentric) - 2px);
+  background: none;
+  color: var(--r2-label);
+  font: var(--r2-text-callout);
+  text-align: start;
+  cursor: default;
+}
+
+.ed-avitem-main:hover {
+  background: var(--r2-fill-4);
+}
+
+.ed-avitem[data-selected] .ed-avitem-main {
+  background: var(--r2-tint-solid);
+  color: var(--r2-on-tint);
+}
+
+.ed-avitem-mark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--_c);
+}
+
+.ed-avitem[data-state='missing'] .ed-avitem-mark,
+.ed-avitem[data-state='optional'] .ed-avitem-mark {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--_c);
+}
+
+.ed-avitem[data-selected] .ed-avitem-mark {
+  box-shadow: 0 0 0 1.5px var(--r2-on-tint);
+}
+
+.ed-avitem-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-avitem[data-state='optional'] .ed-avitem-label {
+  color: var(--r2-label-3);
+}
+
+.ed-avitem[data-selected] .ed-avitem-label {
+  color: inherit;
+}
+
+.ed-avitem-note {
+  flex: none;
+  padding: 0 6px;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-fill-3);
+  color: var(--r2-label-2);
+  font: var(--r2-text-caption);
+  line-height: 16px;
+}
+
+.ed-avitem-note[data-tone='warning'] {
+  background: var(--r2-warning-fill);
+  color: var(--r2-warning-text);
+}
+
+.ed-avitem-note[data-tone='tint'] {
+  background: var(--r2-tint-fill);
+  color: var(--r2-tint);
+}
+
+.ed-avitem[data-selected] .ed-avitem-note {
+  background: color-mix(in srgb, var(--r2-on-tint) 22%, transparent);
+  color: var(--r2-on-tint);
+}
+
+.ed-avitem-sev[data-sev='error'] {
+  color: var(--r2-danger);
+}
+
+.ed-avitem-sev[data-sev='warning'] {
+  color: var(--r2-warning);
+}
+
+.ed-avitem-sev[data-sev='info'] {
+  color: var(--r2-label-3);
+}
+
+.ed-avitem[data-selected] .ed-avitem-sev {
+  color: var(--r2-on-tint);
+}
+
+/* Problems, at the bottom of the sidebar. */
+.ed-avparts .r2-panel-footer {
+  display: block;
+  padding: var(--r2-space-1) var(--r2-space-2) var(--r2-space-2);
+}
+
+.ed-avproblems-head {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  width: 100%;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 var(--r2-space-2);
+  border: 0;
+  border-radius: var(--r2-radius-control);
+  background: none;
+  color: var(--r2-label);
+  font: var(--r2-text-callout);
+  text-align: start;
+  cursor: default;
+}
+
+.ed-avproblems-head:not(:disabled):hover {
+  background: var(--r2-fill-4);
+}
+
+.ed-avproblems-head:disabled {
+  color: var(--r2-label);
+}
+
+.ed-avproblems-ok {
+  color: var(--r2-success);
+}
+
+.ed-avproblems-glyph[data-sev='error'] {
+  color: var(--r2-danger);
+}
+
+.ed-avproblems-glyph[data-sev='warning'] {
+  color: var(--r2-warning);
+}
+
+.ed-avproblems-glyph[data-sev='info'] {
+  color: var(--r2-label-3);
+}
+
+.ed-avproblems-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ed-avproblems-missing {
+  flex: none;
+  color: var(--r2-label-2);
+  font: var(--r2-text-caption);
+}
+
+.ed-avproblems-chevron {
+  flex: none;
+  color: var(--r2-label-3);
+  transform: rotate(-90deg);
+  transition: transform var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.ed-avproblems-chevron[data-open] {
+  transform: none;
+}
+
+.ed-avproblems-list {
+  display: grid;
+  gap: 1px;
+  max-height: 180px;
+  margin: var(--r2-space-1) 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.ed-avproblem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--r2-space-1-5);
+  width: 100%;
+  margin: 0;
+  padding: var(--r2-space-1) var(--r2-space-2);
+  border: 0;
+  border-radius: var(--r2-radius-control-sm);
+  background: none;
+  color: var(--r2-label);
+  font: var(--r2-text-footnote);
+  text-align: start;
+  cursor: default;
+}
+
+.ed-avproblem:hover {
+  background: var(--r2-fill-4);
+}
+
+.ed-avproblem-icon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.ed-avproblem[data-sev='error'] .ed-avproblem-icon {
+  color: var(--r2-danger);
+}
+
+.ed-avproblem[data-sev='warning'] .ed-avproblem-icon {
+  color: var(--r2-warning);
+}
+
+.ed-avproblem[data-sev='info'] .ed-avproblem-icon {
+  color: var(--r2-label-3);
+}
+
+.ed-avproblem-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}

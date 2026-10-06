@@ -1,0 +1,153 @@
+/* Parameter rows: name, driver badges, value field, reset; an iOS slider underneath. */
+
+.ed-param {
+  position: relative;
+  padding: var(--r2-space-1-5) var(--r2-space-2) var(--r2-space-1) var(--r2-space-3);
+}
+
+/* Hairline between rows, starting at the text. */
+.ed-param + .r2-context-target > .ed-param::before,
+.r2-context-target + .r2-context-target > .ed-param::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: var(--r2-space-3);
+  height: var(--r2-hairline);
+  background: var(--r2-separator);
+}
+
+.ed-param[data-selected] {
+  background: var(--r2-selection);
+}
+
+.ed-param-top {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  min-width: 0;
+  min-height: var(--r2-control-sm);
+}
+
+.ed-param-name {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  min-width: 0;
+  height: var(--r2-control-sm);
+  margin: 0 0 0 calc(var(--r2-space-1) * -1);
+  padding: 0 var(--r2-space-1);
+  border: 0;
+  border-radius: var(--r2-radius-control-sm);
+  background: none;
+  color: var(--r2-label);
+  font: var(--r2-text-body);
+  text-align: start;
+  cursor: default;
+}
+
+.ed-param-name:hover {
+  background: var(--r2-fill-4);
+}
+
+/* An explicit value holds this parameter. */
+.ed-param-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--r2-tint-solid);
+}
+
+.ed-param[data-pinned] .ed-param-name {
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-param-badge[data-tone-kind='animation'] {
+  --_fg: var(--r2-success-text);
+  --_bg: var(--r2-success-fill);
+}
+
+/* Physics badge = pin toggle: a capsule button; pressed (pinned) it is the tint. */
+.ed-param-pin {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  margin: 0;
+  padding: 0 7px 0 5px;
+  border: 0;
+  border-radius: var(--r2-radius-capsule);
+  background: color-mix(in srgb, var(--r2-kind-physics) 18%, transparent);
+  color: color-mix(in srgb, var(--r2-kind-physics) 62%, var(--r2-label));
+  font: var(--r2-text-footnote);
+  font-weight: var(--r2-weight-semibold);
+  white-space: nowrap;
+  cursor: default;
+  transition: background-color var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.ed-param-pin:hover {
+  background: color-mix(in srgb, var(--r2-kind-physics) 28%, transparent);
+}
+
+.ed-param-pin[aria-pressed='true'] {
+  background: var(--r2-tint-solid);
+  color: var(--r2-on-tint);
+}
+
+.ed-param-number {
+  flex: none;
+}
+
+/* The value reads as text; it shows its field on hover and while it is edited. */
+.ed-param-number .r2-field-box:not(:hover, :focus-within) {
+  background: none;
+}
+
+.ed-param-number .r2-field-input {
+  color: var(--r2-label-2);
+}
+
+.ed-param-number .r2-field-box:focus-within .r2-field-input,
+.ed-param[data-pinned] .ed-param-number .r2-field-input {
+  color: var(--r2-label);
+}
+
+.ed-param-reset {
+  flex: none;
+  color: var(--r2-label-2);
+}
+
+.ed-param-reset[data-hidden] {
+  visibility: hidden;
+}
+
+.ed-param-slider {
+  position: relative;
+  display: flex;
+}
+
+/* Where physics would put a pinned parameter. */
+.ed-param-ghost {
+  position: absolute;
+  top: calc(50% - 7px);
+  width: 3px;
+  height: 14px;
+  margin-left: -1.5px;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-kind-physics);
+  box-shadow: 0 0 0 1px var(--r2-plate);
+  pointer-events: none;
+}
+
+/* Driven by animation or physics: the fill takes the driver's colour instead of the tint. */
+.ed-param[data-driver='animation'] .r2-slider-fill {
+  background: var(--r2-kind-animation);
+}
+
+.ed-param[data-driver='physics'] .r2-slider-fill {
+  background: var(--r2-kind-physics);
+}

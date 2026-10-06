@@ -1,0 +1,415 @@
+/*
+ * Timeline drawer: the transport bar (all that shows while the drawer is closed), the track sheet
+ * (labels | ruler and lanes under a playhead) and the extra layers. Design tokens only.
+ */
+
+.ed-tl {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  container: ed-tl / inline-size;
+}
+
+/* ------------------------------------------------------------------------------------------- bar */
+.ed-tl-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--r2-space-2);
+  min-width: 0;
+  /* The closed drawer is exactly this bar (52 px). */
+  height: 52px;
+  padding: 0 var(--r2-space-3);
+}
+
+.ed-tl-transport {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-fill-4);
+}
+
+.ed-tl-time {
+  flex: none;
+  padding: 0 var(--r2-space-1);
+  white-space: nowrap;
+}
+
+.ed-tl-now {
+  font: var(--r2-text-headline);
+}
+
+.ed-tl-duration {
+  color: var(--r2-label-3);
+  font: var(--r2-text-body);
+}
+
+.ed-tl-frame {
+  margin-inline-start: var(--r2-space-2);
+  color: var(--r2-label-3);
+  font: var(--r2-text-footnote);
+}
+
+.ed-tl-animation {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 220px;
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-tl-space {
+  flex: 1 1 0;
+}
+
+.ed-tl-speed {
+  flex: none;
+  color: var(--r2-label-2);
+}
+
+/* ------------------------------------------------------------------------------------------ body */
+.ed-tl-body {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--r2-space-2);
+  min-height: 0;
+  padding: 0 var(--r2-space-2) var(--r2-space-2);
+}
+
+.ed-tl-tracks,
+.ed-tl-layers {
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--r2-radius-concentric, var(--r2-radius-group));
+  background: var(--r2-plate);
+}
+
+.ed-tl-tracks {
+  display: flex;
+  overflow: hidden;
+}
+
+/* Narrow drawer: the layers go under the tracks. */
+@container ed-tl (max-width: 760px) {
+  .ed-tl-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.ed-tl-empty {
+  align-self: center;
+  margin: auto;
+  padding: var(--r2-space-4);
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* ---------------------------------------------------------------------------------------- tracks */
+.ed-tl-grid {
+  --_labels: 152px;
+  --_row: 22px;
+  --_edge: 16px;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  touch-action: none;
+}
+
+.ed-tl-head,
+.ed-tl-rows {
+  display: grid;
+  grid-template-columns: var(--_labels) minmax(0, 1fr);
+}
+
+.ed-tl-head {
+  flex: none;
+  /* The rows keep room for their scrollbar: so does the ruler, to stay aligned with them. */
+  padding-inline-end: 10px;
+  border-bottom: var(--r2-hairline) solid var(--r2-separator);
+}
+
+.ed-tl-rows {
+  flex: 1 1 auto;
+  align-content: start;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+.ed-tl-corner {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 var(--r2-space-3);
+  border-inline-end: var(--r2-hairline) solid var(--r2-separator);
+  color: var(--r2-label-3);
+  font: var(--r2-text-footnote);
+  white-space: nowrap;
+}
+
+.ed-tl-labels {
+  border-inline-end: var(--r2-hairline) solid var(--r2-separator);
+}
+
+.ed-tl-label {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  width: 100%;
+  height: var(--_row);
+  margin: 0;
+  padding: 0 var(--r2-space-2) 0 var(--r2-space-3);
+  border: 0;
+  background: none;
+  color: var(--r2-label);
+  font: var(--r2-text-callout);
+  text-align: start;
+  cursor: default;
+}
+
+button.ed-tl-label:hover {
+  background: var(--r2-fill-4);
+}
+
+button.ed-tl-label:focus-visible {
+  outline-offset: -2px;
+}
+
+.ed-tl-label-summary {
+  color: var(--r2-label-2);
+}
+
+.ed-tl-swatch {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+
+.ed-tl-group-head {
+  display: flex;
+  align-items: flex-end;
+  height: 20px;
+  padding: 0 var(--r2-space-3) 2px;
+  color: var(--r2-label-3);
+  font: var(--r2-text-caption);
+  letter-spacing: var(--r2-tracking-caption);
+  white-space: nowrap;
+}
+
+.ed-tl-lanes {
+  min-width: 0;
+  overflow: hidden;
+  cursor: default;
+}
+
+/* Times map to percentages of this box; the margin keeps the first and last key inside. */
+.ed-tl-lanes-inner {
+  position: relative;
+  min-height: 100%;
+  margin: 0 var(--_edge);
+}
+
+.ed-tl-ruler {
+  position: relative;
+  height: 24px;
+  color: var(--r2-label-3);
+  font: var(--r2-text-caption);
+}
+
+.ed-tl-tick {
+  position: absolute;
+  bottom: 0;
+  height: 5px;
+  border-left: 1px solid var(--r2-separator-strong);
+  line-height: 14px;
+  /* Clear of the playhead's head when it stands on the tick. */
+  text-indent: 9px;
+  white-space: nowrap;
+}
+
+.ed-tl-tick[data-major] {
+  height: 100%;
+  border-left-color: var(--r2-separator);
+  line-height: 22px;
+}
+
+/* The label of the last tick (the end of the animation) sits before it: after it there is no room. */
+.ed-tl-tick[data-major]:last-child {
+  padding-inline-end: 4px;
+  border-right: 1px solid var(--r2-separator);
+  border-left: 0;
+  text-indent: 0;
+  transform: translateX(-100%);
+}
+
+.ed-tl-lane {
+  position: relative;
+  height: var(--_row);
+}
+
+/* Hairlines between lanes, running to the edges of the sheet. */
+.ed-tl-lane::before {
+  content: '';
+  position: absolute;
+  right: calc(var(--_edge) * -1);
+  bottom: 0;
+  left: calc(var(--_edge) * -1);
+  height: var(--r2-hairline);
+  background: var(--r2-separator);
+  opacity: 0.6;
+}
+
+.ed-tl-lane-head {
+  height: 20px;
+}
+
+.ed-tl-lane-head::before {
+  display: none;
+}
+
+.ed-tl-clip {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  margin: 0 -7px;
+  border-radius: var(--r2-radius-capsule);
+}
+
+.ed-tl-key {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+
+.ed-tl-key[data-summary] {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  background: var(--r2-label-3);
+}
+
+.ed-tl-event {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1.5px dashed var(--r2-warning);
+  pointer-events: none;
+}
+
+.ed-tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 0;
+  border-left: 1.5px solid var(--r2-tint-solid);
+  pointer-events: none;
+}
+
+.ed-tl-playhead-head {
+  position: absolute;
+  top: 4px;
+  left: -6.5px;
+  width: 11.5px;
+  height: 15px;
+  border-radius: 4px 4px 6px 6px;
+  background: var(--r2-tint-solid);
+  box-shadow: var(--r2-shadow-1);
+}
+
+/* ---------------------------------------------------------------------------------------- layers */
+.ed-tl-layers {
+  display: flex;
+  flex-direction: column;
+}
+
+.ed-tl-layers-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  height: 24px;
+  padding: 0 var(--r2-space-3);
+  border-bottom: var(--r2-hairline) solid var(--r2-separator);
+  color: var(--r2-label-2);
+  font: var(--r2-text-subhead);
+}
+
+.ed-tl-layer {
+  position: relative;
+  padding: var(--r2-space-1) var(--r2-space-2) var(--r2-space-1) var(--r2-space-3);
+}
+
+.ed-tl-layer + .ed-tl-layer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: var(--r2-space-3);
+  height: var(--r2-hairline);
+  background: var(--r2-separator);
+}
+
+.ed-tl-layer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  min-height: var(--r2-control-md);
+}
+
+.ed-tl-layer-name {
+  flex: 1 1 60px;
+  min-width: 0;
+  color: var(--r2-label-2);
+}
+
+.ed-tl-layer[data-on] .ed-tl-layer-name {
+  color: var(--r2-label);
+  font-weight: var(--r2-weight-medium);
+}
+
+.ed-tl-layer-weight {
+  flex: 1 1 72px;
+  max-width: 96px;
+}
+
+.ed-tl-layer-value {
+  flex: none;
+  width: 30px;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+  text-align: end;
+}
+
+.ed-tl-layer-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  padding: var(--r2-space-0-5) 0 var(--r2-space-1);
+}
+
+.ed-tl-layer-options > span {
+  display: inline-flex;
+}
+
+.ed-tl-layer-loops {
+  color: var(--r2-label-3);
+  font: var(--r2-text-footnote);
+}

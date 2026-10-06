@@ -1,0 +1,119 @@
+/* The document button of the toolbar and the File menu (rows come from design/components/menu.css). */
+
+/* ----------------------------------------------------------------------------- document button */
+.r2-button.ed-doc-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 240px;
+  font: var(--r2-text-headline);
+}
+
+.ed-doc-title .r2-button-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  min-width: 0;
+}
+
+.ed-doc-name {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The chevron is a quiet affordance next to the name. */
+.ed-doc-title > .r2-icon:last-child {
+  flex: none;
+  color: var(--r2-label-3);
+}
+
+.ed-doc-title-empty > .r2-icon:first-child {
+  color: var(--r2-label-2);
+}
+
+/* An edit that is not on disk yet. */
+.ed-doc-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--r2-warning);
+}
+
+.ed-doc-saving {
+  flex: none;
+  color: var(--r2-label-2);
+}
+
+/* ---------------------------------------------------------------------------------------- menu */
+.r2-menu.ed-filemenu {
+  min-width: 256px;
+  max-width: min(380px, calc(100vw - 16px));
+}
+
+/* Rows take the real focus: the focused row is the highlighted one. */
+.ed-filemenu .r2-menu-item:focus:not([aria-disabled]) {
+  background: var(--r2-fill-2);
+}
+
+.ed-filemenu-chevron {
+  flex: none;
+  margin-inline-start: var(--r2-space-2);
+  color: var(--r2-label-3);
+}
+
+.ed-filemenu .r2-menu-item[aria-disabled] .ed-filemenu-chevron {
+  color: inherit;
+}
+
+.ed-filemenu .r2-menu-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Where the files live: a quiet last line under a hairline. */
+.ed-filemenu-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  min-width: 0;
+  margin-top: var(--r2-space-1);
+  padding: var(--r2-space-1-5) var(--r2-space-2) var(--r2-space-1);
+  border-top: var(--r2-hairline) solid var(--r2-separator);
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+.ed-filemenu-foot .r2-icon {
+  flex: none;
+}
+
+/* Submenus line up with the row they belong to (the menu's own padding is 5 px). */
+.r2-menu.ed-filemenu-sub {
+  min-width: 200px;
+  margin-top: -5px;
+}
+
+.r2-menu.ed-filemenu-recent {
+  min-width: 240px;
+}
+
+.ed-filemenu-empty {
+  color: var(--r2-label-3);
+}
+
+@media (forced-colors: active) {
+  .ed-filemenu .r2-menu-item:focus:not([aria-disabled]) {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  .ed-doc-dot {
+    background: Highlight;
+  }
+}

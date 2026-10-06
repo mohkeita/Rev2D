@@ -5,6 +5,9 @@
  * (bad discriminator, no branch matching the value's type) use `schema-invalid-union`; otherwise a
  * union is collapsed to the issues of its most relevant branch so authors see one actionable error
  * instead of one per alternative.
+ *
+ * Other documents validated with zod (the avatar spec, src/avatar) reuse the conversion by passing
+ * their root schema and wording as StructuralOptions.
  */
 import type { z } from 'zod';
 import type { Diagnostic } from '../types.js';
@@ -67,9 +70,26 @@ interface Variant {
   schema: Schema | undefined;
 }
 
-export function structuralDiagnostics(issues: readonly Issue[], input: unknown): Diagnostic[] {
+/** What a document other than a Rev2D model is validated against and how it is named in messages. */
+export interface StructuralOptions {
+  /** Root schema that produced the issues (default: ModelSchema). */
+  schema?: Schema;
+  /** The document with its article, for "... must be a JSON object" (default "a model"). */
+  noun?: string;
+  /** Hint for a missing or wrong root "format" / "version" field (default: the model's). */
+  formatHint?: string;
+  /** Hint shown when the root is not an object: what such a document looks like. */
+  skeleton?: string;
+}
+
+export function structuralDiagnostics(issues: readonly Issue[], input: unknown, options: StructuralOptions = {}): Diagnostic[] {
   const sink = new DiagnosticSink();
-  new IssueConverter(sink).convert(issues, { path: [], schema: ModelSchema, input });
+  const wording: Wording = {
+    noun: options.noun ?? 'a model',
+    formatHint: options.formatHint ?? FORMAT_HINT,
+    skeleton: options.skeleton ?? MODEL_SKELETON,
+  };
+  new IssueConverter(sink, wording).convert(issues, { path: [], schema: options.schema ?? ModelSchema, input });
   const seen = new Set<string>();
   return sink.items.filter((d) => {
     const key = `${d.path}\u0000${d.code}\u0000${d.message}`;
@@ -79,8 +99,13 @@ export function structuralDiagnostics(issues: readonly Issue[], input: unknown):
   });
 }
 
+type Wording = Required<Omit<StructuralOptions, 'schema'>>;
+
 class IssueConverter {
-  constructor(private readonly sink: DiagnosticSink) {}
+  constructor(
+    private readonly sink: DiagnosticSink,
+    private readonly wording: Wording,
+  ) {}
 
   convert(issues: readonly Issue[], frame: Frame): void {
     for (const issue of withoutLengthArtifacts(issues)) this.convertOne(issue, frame);
@@ -126,6 +151,10 @@ class IssueConverter {
         );
         return;
       }
+      case 'custom':
+        // A refinement (e.g. "must be > 0"): say what was found and what the field is for.
+        this.sink.error(site.code, abs, site.value === undefined ? issue.message : `${issue.message}, got ${describeJson(site.value)}`, describedHint(site.loc));
+        return;
       default:
         this.sink.error(site.code, abs, issue.message);
     }
@@ -134,14 +163,14 @@ class IssueConverter {
   // --------------------------------------------------------------------------- types & presence
 
   private missingField({ code, abs, key, frame, rel, loc }: Site): void {
-    const hint = isFormatField(abs) ? FORMAT_HINT : missingFieldHint(key, valueAt(frame.input, rel.slice(0, -1)), loc);
+    const hint = isFormatField(abs) ? this.wording.formatHint : missingFieldHint(key, valueAt(frame.input, rel.slice(0, -1)), loc);
     this.sink.error(code, abs, `missing required field ${q(key)}`, hint);
   }
 
   private invalidType(site: Site, expected: string): void {
     const { code, abs, value, loc } = site;
     if (abs.length === 0) {
-      this.sink.error(code, abs, `a model must be a JSON object, got ${describeJson(value)}`, MODEL_SKELETON);
+      this.sink.error(code, abs, `${this.wording.noun} must be a JSON object, got ${describeJson(value)}`, this.wording.skeleton);
       return;
     }
     const nonFinite = typeof value === 'number' && !Number.isFinite(value);
@@ -155,7 +184,7 @@ class IssueConverter {
     if (isFormatField(abs)) {
       const message =
         value === undefined ? `missing required field ${q(key)}` : `${q(key)} must be ${expected[0]}, got ${describeJson(value)}`;
-      this.sink.error(code, abs, message, FORMAT_HINT);
+      this.sink.error(code, abs, message, this.wording.formatHint);
       return;
     }
     if (value === undefined) return this.missingField(site);

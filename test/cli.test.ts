@@ -9,6 +9,7 @@ import { main, report } from '../src/cli/main.js';
 import { Args, parseArgs, UsageError, type FlagSpec } from '../src/cli/args.js';
 import { COMMANDS } from '../src/cli/commands/index.js';
 import { commandFlags } from '../src/cli/help.js';
+import { draftAvatarSpec } from '../src/avatar/index.js';
 import { blankModel, listTemplates, PACKAGE_ROOT } from '../src/api/templates.js';
 import { formatModelJson } from '../src/core/format.js';
 import { decodePNG, encodePNG, createImage } from '../src/render/index.js';
@@ -1112,6 +1113,30 @@ describe('edit and editor', () => {
     const openWithout = await run(['editor', 'command', '{"type":"open"}', '--url', 'http://127.0.0.1:9'], { cwd: dir });
     expect(openWithout.code).toBe(2);
     expect(openWithout.stderr).toContain('an "open" command needs "file"');
+  });
+
+  it('opens an avatar project (its folder or its avatar.json) with the folder above it as the workspace', async () => {
+    const dir = workspace(blankModel({ name: 'first', width: 32, height: 32 }));
+    const project = path.join(dir, 'neko');
+    mkdirSync(project);
+    // A draft spec: the avatar validator reports missing landmarks, the model validator is not used.
+    writeFileSync(path.join(project, 'avatar.json'), JSON.stringify(draftAvatarSpec('neko', 64, 64)));
+    for (const target of ['neko', 'neko/avatar.json']) {
+      const e = start(['edit', target, '--port', '0', '--no-open', '--json'], dir);
+      const events = () => e.buf.stdout.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+      await until(() => events().length > 0 || e.buf.stderr.includes('error:'), 'the editor to listen', 60000);
+      const listening = events()[0];
+      try {
+        expect(listening, e.buf.stderr).toMatchObject({ event: 'listening', root: dir });
+        expect(e.buf.stderr).not.toContain('error:');
+        expect(e.buf.stderr).not.toContain('avatar.json has');
+        expect(e.buf.stderr).toContain('the avatar spec has');
+        const info = await (await fetch(`${listening.url}/api/avatar`)).json();
+        expect(info.projectPath).toBe('neko');
+      } finally {
+        expect(await e.stop()).toBe(0);
+      }
+    }
   });
 
   it('starts without a model and switches models with --open / {"type":"open"}; "editor state" follows', async () => {

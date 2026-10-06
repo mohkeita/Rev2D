@@ -12,8 +12,11 @@
  *   with texelFetch at gl_FragCoord. Consecutive items sharing a mask list reuse the coverage. A
  *   present but empty mask list is zero coverage (nothing drawn; with maskInvert: drawn unmasked).
  * - No culling (the core does not guarantee winding). MSAA via the default framebuffer.
+ * - The workspace, the transparency checkerboard and the fixed backdrops take their colours from the
+ *   design tokens (`RenderInput.colors`), so the viewport follows the light / dark appearance.
  */
 import type { DrawItem, RenderList, RGBA } from '../../../src/core/index.js';
+import type { CanvasColors } from '../overlay/theme.js';
 import type { BackgroundMode } from '../state/app.js';
 import { clipTransform, type Camera, type ViewportSize } from '../view/camera.js';
 import { FramePacker, maskModeOf, type PackedRange } from './pack.js';
@@ -27,6 +30,8 @@ export interface RenderInput {
   dpr: number;
   background: BackgroundMode;
   hidden: ReadonlySet<string>;
+  /** Workspace, checkerboard and backdrop colours of the appearance in effect (overlay/theme.ts). */
+  colors: CanvasColors;
 }
 
 export interface RenderStats {
@@ -38,12 +43,7 @@ export interface TextureSource {
   bitmap: ImageBitmap;
 }
 
-/** Workspace around the model canvas (matches --bg-0 in styles.css). */
-export const WORKSPACE_COLOR: RGBA = [0.074, 0.082, 0.098, 1];
-const CHECKER_A: RGBA = [0.2, 0.21, 0.23, 1];
-const CHECKER_B: RGBA = [0.25, 0.26, 0.285, 1];
-const DARK_BACKDROP: RGBA = [0.12, 0.13, 0.15, 1];
-const LIGHT_BACKDROP: RGBA = [0.91, 0.92, 0.93, 1];
+/** Side of one checkerboard square in CSS px (the design system's Checkerboard uses the same). */
 const CHECKER_CELL_CSS = 8;
 
 interface GlState {
@@ -182,7 +182,8 @@ export class GlRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
     gl.disable(gl.BLEND);
-    gl.clearColor(WORKSPACE_COLOR[0], WORKSPACE_COLOR[1], WORKSPACE_COLOR[2], 1);
+    const workspace = input.colors.workspace;
+    gl.clearColor(workspace[0], workspace[1], workspace[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     if (!input.list) return { draws: 0, triangles: 0 };
 
@@ -249,13 +250,13 @@ export class GlRenderer {
     const mode = input.background;
     if (mode === 'dark' || mode === 'light') {
       gl.disable(gl.BLEND);
-      solid(mode === 'dark' ? DARK_BACKDROP : LIGHT_BACKDROP);
+      solid(mode === 'dark' ? input.colors.darkBackdrop : input.colors.lightBackdrop);
       return;
     }
     gl.disable(gl.BLEND);
     gl.uniform1i(p.uniforms.u_checker, 1);
-    gl.uniform4f(p.uniforms.u_colorA, ...CHECKER_A);
-    gl.uniform4f(p.uniforms.u_colorB, ...CHECKER_B);
+    gl.uniform4f(p.uniforms.u_colorA, ...input.colors.checkA);
+    gl.uniform4f(p.uniforms.u_colorB, ...input.colors.checkB);
     gl.uniform1f(p.uniforms.u_cell, Math.max(1, Math.round(CHECKER_CELL_CSS * input.dpr)));
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     if (mode === 'model' && list.background[3] > 0) {

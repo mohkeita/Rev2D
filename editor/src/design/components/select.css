@@ -1,0 +1,86 @@
+/* Select: a pop-up button (value + up/down chevrons). */
+
+.r2-select {
+  --_h: var(--r2-control-md);
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: var(--_h);
+  margin: 0;
+  padding: 0 6px 0 10px;
+  border: 0;
+  border-radius: var(--r2-radius-control);
+  background: var(--r2-fill-3);
+  color: var(--r2-label);
+  font: var(--r2-text-body);
+  text-align: start;
+  cursor: default;
+  transition: background-color var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.r2-select[data-size='sm'] {
+  --_h: var(--r2-control-sm);
+  padding-inline-start: 8px;
+  border-radius: var(--r2-radius-control-sm);
+  font: var(--r2-text-callout);
+}
+
+.r2-select[data-size='lg'] {
+  --_h: var(--r2-control-lg);
+  padding: 0 10px 0 14px;
+  border-radius: var(--r2-radius-control-lg);
+}
+
+.r2-select:hover:not(:disabled),
+.r2-select[data-open] {
+  background: var(--r2-fill-2);
+}
+
+.r2-select:active:not(:disabled) {
+  background: var(--r2-fill);
+}
+
+.r2-select[data-variant='plain'] {
+  padding-inline: 6px 2px;
+  background: none;
+  color: var(--r2-label-2);
+}
+
+.r2-select[data-variant='plain']:hover:not(:disabled),
+.r2-select[data-variant='plain'][data-open] {
+  background: var(--r2-fill-4);
+  color: var(--r2-label);
+}
+
+.r2-select[data-block] {
+  display: flex;
+  width: 100%;
+}
+
+.r2-select-value {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.r2-select[data-placeholder] .r2-select-value {
+  color: var(--r2-placeholder);
+}
+
+.r2-select-chevrons {
+  color: var(--r2-label-3);
+}
+
+.r2-select:disabled {
+  opacity: 0.45;
+}
+
+@media (forced-colors: active) {
+  .r2-select {
+    border: 1px solid ButtonBorder;
+  }
+}

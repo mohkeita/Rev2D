@@ -18,11 +18,19 @@ export type BackgroundMode = 'checker' | 'dark' | 'light' | 'model';
 export const BACKGROUND_MODES: readonly BackgroundMode[] = ['model', 'checker', 'dark', 'light'];
 
 export type OutlinerTab = 'tree' | 'parts' | 'warps' | 'params' | 'animations' | 'rig';
-export type BottomTab = 'timeline' | 'problems';
-/** Collapsible layout panels: outliner (left), parameters + inspector (right), bottom dock. */
+/** Pages of the built-in trailing panel: parameter sliders, the selection inspector, validation problems. */
+export type InspectorTab = 'parameters' | 'selection' | 'problems';
+/**
+ * Collapsible panes of the shell: outliner = the leading sidebar, inspector = the trailing sidebar,
+ * dock = the bottom drawer (closed, it is a slim transport bar).
+ */
 export type PanelName = 'outliner' | 'inspector' | 'dock';
 export type PanelState = Record<PanelName, boolean>;
 export const DEFAULT_PANELS: PanelState = { outliner: true, inspector: true, dock: true };
+/** Id of the workspace mode every editor has (see shell/registry.ts). */
+export const DEFAULT_MODE = 'rig';
+/** Id of the trailing panel a mode brings itself (`render.trailing`); other ids are registered panels. */
+export const MODE_PANEL = 'inspector';
 
 export interface ToastAction {
   label: string;
@@ -170,14 +178,30 @@ export interface AppState {
 
   // ---- ui
   outlinerTab: OutlinerTab;
-  bottomTab: BottomTab;
-  /** Which layout panels are shown (collapsed ones keep their size). */
+  /**
+   * The workspace mode the person picked (shell/registry.ts) for the document `modeFor` names
+   * (documentKey); '' = none picked. For another document, or when that mode is not available, the
+   * shell shows the document's default mode (resolveMode).
+   */
+  mode: string;
+  /** documentKey of the document `mode` was picked for. */
+  modeFor: string;
+  /** Trailing panel shown: MODE_PANEL (the mode's own) or the id of a registered panel (e.g. 'ai'). */
+  trailingPanel: string;
+  inspectorTab: InspectorTab;
+  /** Which panes are shown on a wide window (remembered per browser; collapsed ones keep their size). */
   panels: PanelState;
+  /** Narrow window (below ~1100 px): the sidebars are closed until opened, one at a time. */
+  compact: boolean;
+  /** Sidebars opened while `compact` (not remembered). */
+  compactPanels: { outliner: boolean; inspector: boolean };
   search: string;
   helpOpen: boolean;
   toasts: Toast[];
   bridge: BridgeActivity | null;
   stats: { fps: number; draws: number; triangles: number };
+  /** Avatar mode: the selected avatar part (published as EditorState.avatar.part), or null. */
+  avatarPart: string | null;
 }
 
 export const DEFAULT_OVERLAYS: OverlayLayer[] = ['bones'];
@@ -232,14 +256,52 @@ export function initialState(): AppState {
     values: {},
     physicsValues: {},
     outlinerTab: 'tree',
-    bottomTab: 'timeline',
+    mode: '',
+    modeFor: '',
+    trailingPanel: MODE_PANEL,
+    inspectorTab: 'parameters',
     panels: { ...DEFAULT_PANELS },
+    compact: false,
+    compactPanels: { outliner: false, inspector: false },
     search: '',
     helpOpen: false,
     toasts: [],
     bridge: null,
     stats: { fps: 0, draws: 0, triangles: 0 },
+    avatarPart: null,
   };
+}
+
+/**
+ * What the window has open:
+ * - 'model': a model (being loaded, shown, or failed to load);
+ * - 'avatar-project': an avatar project WITHOUT a built model (Avatar mode shows it; the Rig modes
+ *   need a model);
+ * - 'none': nothing (the start screen).
+ * An avatar project WITH a built model is a 'model' (its project is `workspace.avatar`).
+ */
+export type DocumentKind = 'model' | 'avatar-project' | 'none';
+
+export function documentKind(s: Pick<AppState, 'status' | 'workspace'>): DocumentKind {
+  if (s.status !== 'empty') return 'model';
+  return s.workspace?.avatar ? 'avatar-project' : 'none';
+}
+
+/**
+ * Identity of the open document, for what is remembered per document (the picked mode): an avatar
+ * project is ONE document whether or not it has a built model yet (its first build keeps the mode),
+ * a model is its file, nothing open is ''.
+ */
+export function documentKey(s: Pick<AppState, 'status' | 'workspace' | 'file'>): string {
+  const project = s.workspace?.avatar?.project;
+  if (project) return `avatar:${project}`;
+  return s.status === 'empty' ? '' : `model:${s.file}`;
+}
+
+/** Whether a pane is shown: on a narrow window the sidebars follow `compactPanels`. */
+export function panelOpen(s: Pick<AppState, 'panels' | 'compact' | 'compactPanels'>, panel: PanelName): boolean {
+  if (s.compact && panel !== 'dock') return s.compactPanels[panel];
+  return s.panels[panel];
 }
 
 export function errorCount(diags: readonly Diagnostic[]): number {

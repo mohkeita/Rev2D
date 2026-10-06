@@ -8,8 +8,9 @@
  *                                     409 {error, hint, mtimeMs} when the file changed on disk since baseMtimeMs,
  *                                     409 {error, hint, file} when `file` is not the open model (it was switched)
  *   GET  /api/texture/:id          -> image/png
- *   GET  /api/events               -> SSE: hello {file | null, mtimeMs, root} | model-changed {origin, mtimeMs, files}
- *                                     | file-changed {file | null, origin: "editor" | "ai"} | command <EditorCommand>
+ *   GET  /api/events               -> SSE: hello {file | null, mtimeMs, root, avatar?} | model-changed {origin, mtimeMs, files}
+ *                                     | file-changed {file | null, origin: "editor" | "ai", avatar?} | command <EditorCommand>
+ *                                     | avatar-changed | avatar-job | agent-job
  *   GET  /api/state                -> EditorState (404 until the UI published one)
  *   POST /api/state                EditorState -> 204 (animations: [{id, weight?, mode?, start?, hold?}]);
  *                                     409 when its absolute `file` is not the open model
@@ -27,33 +28,55 @@
  *   interop:   POST /api/live2d-import (Live2D files -> the resulting doc, not written),
  *              POST /api/export {format: spine | live2d} (files into a workspace folder)
  *              (see src/node/interop.ts and interop-routes.ts)
+ *   agents:    GET /api/session -> {token, agent: {enabled, reason?}}; with the token in X-Rev2D-Token:
+ *              GET /api/agent/providers, GET /api/agent/tasks, GET | POST /api/agent/jobs,
+ *              GET /api/agent/jobs/:id?since=, POST /api/agent/jobs/:id/cancel | message, GET | PUT
+ *              /api/agent/settings; SSE event "agent-job" {job, state, event}
+ *              (see agent-routes.ts, src/node/agent and docs/AGENT-BRIDGE.md)
+ *   avatar:    GET | PUT /api/avatar (the open avatar project: avatar.json, build state; saving recompiles
+ *              the model), POST | GET /api/avatar/build (one build job at a time; SSE "avatar-job"),
+ *              GET /api/avatar/file?path= (a file of the project folder), POST /api/avatar/new (a project
+ *              from one uploaded PNG); SSE "avatar-changed" {origin, project, files, mtimeMs}. POST /api/open
+ *              and the "open" command take an avatar.json or a project folder; `avatar` in hello,
+ *              file-changed and /api/workspace names the open project
+ *              (see avatar-routes.ts and the "avatar mode" section of src/node/editor-registry.ts)
  *   everything else                -> editor UI
  *
  * Endpoints that need a model answer 409 {error: "no model is open", hint} while none is open.
  *
  * Bound to 127.0.0.1 by default; requests must address a local Host (DNS-rebinding guard) and
- * browser writes must be same-origin (CSRF guard).
+ * browser writes must be same-origin (CSRF guard). The agent endpoints start local programs with the
+ * person's credentials: they exist only on a loopback bind (or with `allowAgent`) and need the
+ * per-server session token.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { ApiError } from '../api/index.js';
 import { PACKAGE_ROOT } from '../api/templates.js';
-import { registerEditor } from '../node/editor-registry.js';
+import { registerEditor, type AvatarRef } from '../node/editor-registry.js';
+import { defaultSettingsFile } from '../node/agent/index.js';
+import { AgentBridge, type AgentBridgeOptions } from './agent-routes.js';
+import './avatar-agent-tasks.js';
+import { AvatarBridge, avatarOpenTarget, avatarProjectAt, detectAvatarProject, type AvatarBridgeOptions } from './avatar-routes.js';
 import { HttpError, allowedHostnames, checkRequestOrigin, sendError, sendJson } from './http.js';
 import { ModelStore } from './model-store.js';
-import { handleApi, relativeFiles, type ApiContext } from './routes.js';
+import { handleApi, relativeFiles, type ApiContext, type ChangeOrigin } from './routes.js';
 import { SseHub } from './sse.js';
 import { createUiHandler, type UiMode } from './ui.js';
 import { FileWatcher } from './watch.js';
 import { RecentFiles, WorkspaceRoot, defaultRecentFile } from './workspace.js';
 
 export type { UiMode } from './ui.js';
+export type { AgentBridgeOptions } from './agent-routes.js';
+export type { AvatarBridgeOptions } from './avatar-routes.js';
 
 export interface EditorServerOptions {
   /**
    * Model file to open at start (must exist and lie inside the workspace root). Without it the
-   * server starts with no model open (the UI shows its start screen).
+   * server starts with no model open (the UI shows its start screen). The avatar.json of an avatar
+   * project opens that project: with its built model, or without a model while it has none.
    */
   file?: string;
   /**
@@ -93,6 +116,19 @@ export interface EditorServerOptions {
   recentFile?: string | null;
   /** Sink for operational messages (watch fallbacks, internal errors). Default: console.error. */
   log?: (message: string) => void;
+  /**
+   * Keep the agent endpoints (/api/agent/*: they start Codex / Claude Code with the person's
+   * credentials) although `host` is not a loopback address. Default false: they only exist on
+   * localhost, 127.0.0.0/8 and ::1.
+   */
+  allowAgent?: boolean;
+  /**
+   * Settings of the agent bridge: timeouts, limits, the log directory, `codexWindowsSandbox` (Codex's
+   * sandbox implementation on Windows) and the settings file (tests replace the CLIs with fakes).
+   */
+  agent?: AgentBridgeOptions;
+  /** Settings of avatar mode: how builds run, their timeout, the upload limit of new projects. */
+  avatar?: AvatarBridgeOptions;
 }
 
 export interface EditorServer {
@@ -105,6 +141,8 @@ export interface EditorServer {
   root: string;
   /** How the editor UI is served ('none' = only the API; `detail` says why). */
   ui: { mode: UiMode; detail: string };
+  /** Whether the agent endpoints (/api/agent/*) exist, and why not when they do not. */
+  agent: { enabled: boolean; reason?: string };
   /** Stop serving: ends event streams, stops watchers and Vite, removes the registry entry. */
   close(): Promise<void>;
 }
@@ -117,16 +155,55 @@ export async function startEditorServer(opts: EditorServerOptions): Promise<Edit
   const log = opts.log ?? ((m: string) => console.error(`[rev2d editor] ${m}`));
   const host = opts.host ?? '127.0.0.1';
   const allowed = allowedHostnames(host, opts.allowedHosts);
-  const initial = opts.file !== undefined ? await ModelStore.open(opts.file) : null;
-  const root = await WorkspaceRoot.open(opts.root ?? (initial ? initial.dir : process.cwd()));
-  if (initial) {
-    await root.resolve(initial.file, 'model').catch(() => {
-      throw new Error(`the model ${initial.file} is outside the workspace root ${root.dir} (the root must contain every file the editor opens)`);
+  // An avatar.json opens its project: with the built model when there is one, else the project alone.
+  let startProject: string | null = null;
+  if (opts.file !== undefined) {
+    const abs = path.resolve(opts.file);
+    const st = await stat(abs).catch(() => null);
+    startProject = st?.isFile() ? await avatarProjectAt(abs, st) : null;
+  }
+  let initial = opts.file !== undefined && startProject === null ? await ModelStore.open(opts.file) : null;
+  const root = await WorkspaceRoot.open(opts.root ?? (initial ? initial.dir : (startProject ?? process.cwd())));
+  const outside = (what: string, file: string) => new Error(`the ${what} ${file} is outside the workspace root ${root.dir} (the root must contain every file the editor opens)`);
+  let startAvatar: AvatarRef | null = null;
+  if (startProject !== null) {
+    const project = startProject;
+    const target = await avatarOpenTarget(
+      root,
+      await root.resolve(project, 'file').catch(() => {
+        throw outside('avatar project', project);
+      }),
+    );
+    startAvatar = target.ref;
+    if (target.model !== null) initial = await ModelStore.open(target.model);
+  } else if (initial) {
+    const model = initial;
+    await root.resolve(model.file, 'model').catch(() => {
+      throw outside('model', model.file);
     });
+    startAvatar = await detectAvatarProject(root, model.dir);
   }
   const register = opts.register ?? true;
   const recent = new RecentFiles(opts.recentFile === undefined ? (register ? defaultRecentFile() : null) : opts.recentFile, log);
   const sse = new SseHub();
+  const agent = new AgentBridge({
+    host,
+    allowAgent: opts.allowAgent === true,
+    root: root.dir,
+    sse,
+    allowedHosts: allowed,
+    log,
+    // Like the recent-files list: the person's file for a registered editor, memory only otherwise (tests).
+    defaultSettingsFile: register ? defaultSettingsFile() : null,
+    options: opts.agent,
+  });
+  const avatar = new AvatarBridge({ root, sse, log, poll: opts.poll, pollIntervalMs: opts.pollIntervalMs, options: opts.avatar });
+
+  /** Report what really changed among `files` of the open model `store` (watchers repeat themselves and see our own writes). */
+  const reportChanges = async (store: ModelStore, files: readonly string[], origin: ChangeOrigin): Promise<void> => {
+    const { changed, mtimeMs } = await store.detectChanges(files);
+    if (changed.length) ctx.modelChanged(store, origin, mtimeMs, changed);
+  };
 
   const watcher = new FileWatcher({
     poll: opts.poll,
@@ -135,12 +212,10 @@ export async function startEditorServer(opts: EditorServerOptions): Promise<Edit
     onChange: (files) => {
       const store = ctx.store;
       if (!store) return;
-      store
-        .detectChanges(files)
-        .then(({ changed, mtimeMs }) => {
-          if (changed.length) ctx.modelChanged(store, 'external', mtimeMs, changed);
-        })
-        .catch((e: Error) => log(`change detection failed: ${e.message}`));
+      // An avatar build or save of this server is rewriting the model and its textures: it reports
+      // the result itself (origin "editor") when it is done (ApiContext.syncModel).
+      if (avatar.holdsModel(store.dir)) return;
+      reportChanges(store, files, 'external').catch((e: Error) => log(`change detection failed: ${e.message}`));
     },
   });
 
@@ -160,19 +235,29 @@ export async function startEditorServer(opts: EditorServerOptions): Promise<Edit
     maxBodyBytes: opts.maxBodyBytes ?? DEFAULT_MAX_BODY,
     maxImportBytes: opts.maxImportBytes ?? DEFAULT_MAX_IMPORT,
     state: null,
+    agent,
+    avatar,
     modelChanged(store, origin, mtimeMs, files) {
       if (store !== ctx.store) return; // a late event of a model that was switched away from
       watcher.setFiles(store.watchedFiles());
       sse.broadcast('model-changed', { origin, mtimeMs, files: relativeFiles(store, files) });
     },
-    async switchTo(next, origin) {
+    async syncModel(origin) {
+      const store = ctx.store;
+      if (store) await reportChanges(store, store.watchedFiles(), origin);
+    },
+    async switchTo(next, origin, project) {
       const prev = ctx.store;
+      // The avatar project that is open with the model: the one named, else the one whose folder the model is in.
+      const ref = project ?? (next ? await detectAvatarProject(root, next.dir) : null);
       ctx.store = next;
       ctx.state = null;
       watcher.setFiles(next ? next.watchedFiles() : []);
+      await avatar.attach(ref);
       if (next) recent.add(next.file);
+      else if (ref) recent.add(ref.specFile);
       advertise(next?.file ?? null);
-      const delivered = sse.broadcast('file-changed', { file: next?.file ?? null, origin });
+      const delivered = sse.broadcast('file-changed', { file: next?.file ?? null, origin, ...(ref ? { avatar: ref } : {}) });
       if (prev && prev !== next) await prev.idle();
       return delivered;
     },
@@ -183,6 +268,7 @@ export async function startEditorServer(opts: EditorServerOptions): Promise<Edit
     },
   };
   if (initial) recent.add(initial.file);
+  else if (startAvatar) recent.add(startAvatar.specFile);
 
   const server = createServer();
   const ui = await createUiHandler({
@@ -217,10 +303,14 @@ export async function startEditorServer(opts: EditorServerOptions): Promise<Edit
   }
 
   const port = opts.port ?? DEFAULT_PORT;
+  // Before the first request can arrive: the open avatar project and its watcher.
+  await avatar.attach(startAvatar);
   try {
     await listenReachable(server, port, host);
   } catch (e) {
     await ui.close();
+    await agent.close();
+    await avatar.close();
     sse.close();
     const err = e as NodeJS.ErrnoException;
     throw new Error(
@@ -249,10 +339,15 @@ export async function startEditorServer(opts: EditorServerOptions): Promise<Edit
     },
     root: root.dir,
     ui: { mode: ui.mode, detail: ui.detail },
+    agent: agent.enabled ? { enabled: true } : { enabled: false, reason: agent.reason! },
     close() {
       closing ??= (async () => {
         advertised = null;
         unregister?.();
+        // A running agent job is cancelled first (its process tree is killed); its last events still go out.
+        await agent.close();
+        // So is a running avatar build; the avatar watcher stops.
+        await avatar.close();
         watcher.close();
         sse.close();
         await ui.close();

@@ -3,9 +3,11 @@
  *
  * Paths come in two shapes (see the workspace contract in src/node/editor-registry.ts): ABSOLUTE
  * paths as the server's OS writes them (Windows "C:\a\b" or POSIX "/a/b"), and ROOT-RELATIVE paths,
- * always '/'-separated, '' being the workspace root itself. Nothing here touches the DOM or the network.
+ * always '/'-separated, '' being the workspace root itself. Nothing here touches the DOM or the network;
+ * the few words these helpers produce (name problems, relative times) come from the i18n dictionary.
  */
 import type { FileEntry } from '../../../src/node/editor-registry.js';
+import { t } from '../i18n/index.js';
 
 /** The extension new model files get. */
 export const MODEL_EXT = '.r2d.json';
@@ -90,7 +92,7 @@ export function breadcrumbs(dir: string, rootLabel: string): Crumb[] {
 
 /** Display name of the workspace root: its last folder name. */
 export function rootLabel(root: string | null | undefined): string {
-  if (!root) return 'Workspace';
+  if (!root) return t('files.paths.workspace');
   const s = normalizeSlashes(root);
   return s.slice(s.lastIndexOf('/') + 1) || s;
 }
@@ -129,18 +131,18 @@ export function modelFileName(input: string): string {
  */
 export function fileNameProblem(name: string): string | null {
   const s = name.trim();
-  if (!s) return 'Enter a file name.';
-  if (s.includes('\\')) return 'Use "/" to put the file in a subfolder.';
-  if (s.startsWith('/')) return 'Use a name relative to the chosen folder.';
+  if (!s) return t('files.name.empty');
+  if (s.includes('\\')) return t('files.name.backslash');
+  if (s.startsWith('/')) return t('files.name.absolute');
   const segments = s.split('/');
   for (const seg of segments) {
-    if (!seg) return 'The name has an empty folder segment ("//").';
-    if (seg === '.' || seg === '..') return 'The name cannot contain "." or ".." segments.';
-    if (BAD_CHARS.test(seg)) return 'The name cannot contain < > : " | ? * or control characters.';
-    if (RESERVED.test(seg)) return `"${seg}" is a reserved name on Windows.`;
-    if (/[. ]$/.test(seg)) return 'Names cannot end with a dot or a space.';
+    if (!seg) return t('files.name.emptySegment');
+    if (seg === '.' || seg === '..') return t('files.name.dots');
+    if (BAD_CHARS.test(seg)) return t('files.name.badChars');
+    if (RESERVED.test(seg)) return t('files.name.reserved', { name: seg });
+    if (/[. ]$/.test(seg)) return t('files.name.trailing');
   }
-  if (!/\.json$/i.test(s)) return 'Model files end in .json (".r2d.json" is added for you).';
+  if (!/\.json$/i.test(s)) return t('files.name.extension');
   return null;
 }
 
@@ -233,13 +235,13 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 export function formatWhen(mtimeMs: number, now: number = Date.now()): string {
   if (!Number.isFinite(mtimeMs) || mtimeMs <= 0) return '';
   const diff = now - mtimeMs;
-  if (diff < 45_000 && diff > -60_000) return 'just now';
-  if (diff > 0 && diff < 3_600_000) return `${Math.max(1, Math.round(diff / 60_000))} min ago`;
+  if (diff < 45_000 && diff > -60_000) return t('files.when.now');
+  if (diff > 0 && diff < 3_600_000) return t('files.when.minutes', { n: Math.max(1, Math.round(diff / 60_000)) });
   const d = new Date(mtimeMs);
   const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
   const today = new Date(now);
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  if (mtimeMs >= startOfToday && diff > 0) return diff < 6 * 3_600_000 ? `${Math.round(diff / 3_600_000)} h ago` : `today ${time}`;
-  if (mtimeMs >= startOfToday - 86_400_000 && mtimeMs < startOfToday) return `yesterday ${time}`;
+  if (mtimeMs >= startOfToday && diff > 0) return diff < 6 * 3_600_000 ? t('files.when.hours', { n: Math.round(diff / 3_600_000) }) : t('files.when.today', { time });
+  if (mtimeMs >= startOfToday - 86_400_000 && mtimeMs < startOfToday) return t('files.when.yesterday', { time });
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${time}`;
 }

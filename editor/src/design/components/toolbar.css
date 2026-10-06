@@ -1,0 +1,102 @@
+/* Toolbar: glass capsule groups; no bar background. */
+
+.r2-toolbar {
+  --_h: var(--r2-toolbar-height);
+  --_pad: 4px;
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  min-width: 0;
+  /* The bar itself lets presses through to the canvas between its groups. */
+  pointer-events: none;
+}
+
+.r2-toolbar > * {
+  pointer-events: auto;
+}
+
+.r2-toolbar[data-size='md'] {
+  --_h: var(--r2-control-lg);
+  --_pad: 3px;
+}
+
+.r2-toolbar[data-orientation='vertical'] {
+  flex-direction: column;
+}
+
+.r2-toolbar-group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: var(--_h);
+  padding: var(--_pad);
+  border-radius: var(--r2-radius-capsule);
+  color: var(--r2-label);
+}
+
+.r2-toolbar[data-orientation='vertical'] .r2-toolbar-group {
+  flex-direction: column;
+  width: var(--_h);
+  height: auto;
+}
+
+/* Controls in a group are concentric with the capsule: group height minus twice its padding. */
+.r2-toolbar .r2-toolbar-group > .r2-button {
+  --_h: calc(var(--r2-toolbar-height) - 8px);
+  --_radius: var(--r2-radius-capsule);
+}
+
+.r2-toolbar[data-size='md'] .r2-toolbar-group > .r2-button {
+  --_h: calc(var(--r2-control-lg) - 6px);
+}
+
+.r2-toolbar .r2-toolbar-group > .r2-button[data-variant='plain']:not(.r2-icon-button) {
+  --_fg: var(--r2-label);
+}
+
+.r2-toolbar-spacer {
+  flex: 1 1 0;
+  min-width: var(--r2-space-1);
+  pointer-events: none;
+}
+
+.r2-toolbar-separator {
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 46%;
+  margin: 0 var(--r2-space-1);
+  background: var(--r2-separator-strong);
+}
+
+.r2-toolbar[data-orientation='vertical'] .r2-toolbar-separator {
+  width: 46%;
+  height: 1px;
+  margin: var(--r2-space-1) 0;
+}
+
+.r2-toolbar-title {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 var(--r2-space-3) 0 var(--r2-space-2);
+  line-height: 1.15;
+}
+
+.r2-toolbar-title-text {
+  overflow: hidden;
+  font: var(--r2-text-headline);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.r2-toolbar-subtitle {
+  overflow: hidden;
+  color: var(--r2-label-2);
+  font: var(--r2-text-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,326 @@
+/* Avatar mode, trailing panel pages: Pose sliders, Lip sync, the Selected part. */
+
+/* ---------------------------------------------------------------------------------------- Pose */
+.ed-avpose {
+  display: grid;
+  gap: var(--r2-space-2);
+}
+
+.ed-avpose-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--r2-space-2);
+  min-height: var(--r2-control-md);
+  padding: 0 var(--r2-space-2);
+}
+
+.ed-avpose-note {
+  margin: 0;
+  padding: 0 var(--r2-space-2);
+  color: var(--r2-label-3);
+  font: var(--r2-text-caption);
+}
+
+.ed-avpose-list {
+  display: grid;
+  border-radius: var(--r2-radius-concentric);
+  background: var(--r2-fill-4);
+}
+
+.ed-avpose-row {
+  position: relative;
+  padding: var(--r2-space-1-5) var(--r2-space-3) var(--r2-space-1);
+}
+
+.ed-avpose-row + .ed-avpose-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: var(--r2-space-3);
+  height: var(--r2-hairline);
+  background: var(--r2-separator);
+}
+
+.ed-avpose-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--r2-space-2);
+  margin-bottom: 2px;
+}
+
+.ed-avpose-name {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--r2-text-callout);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-avpose-row[data-pinned] .ed-avpose-name {
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-avpose-value {
+  flex: none;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+.ed-avpose-clear {
+  justify-self: start;
+}
+
+/* ------------------------------------------------------------------------------------ Lip sync */
+.ed-avlip {
+  display: grid;
+  gap: var(--r2-space-3);
+}
+
+.ed-avlip-section {
+  display: grid;
+  gap: var(--r2-space-2);
+  padding: var(--r2-space-2) var(--r2-space-3) var(--r2-space-3);
+  border-radius: var(--r2-radius-concentric);
+  background: var(--r2-fill-4);
+}
+
+.ed-avlip-title {
+  margin: 0;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-avlip-vowels {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--r2-space-1-5);
+}
+
+.ed-avvowel {
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r2-radius-control);
+  background: var(--r2-fill-3);
+  color: var(--r2-label);
+  font: var(--r2-text-headline);
+  touch-action: none;
+  cursor: default;
+  transition:
+    background-color var(--r2-duration-fast) var(--r2-ease-out),
+    transform var(--r2-duration-fast) var(--r2-spring-snappy);
+}
+
+.ed-avvowel:hover {
+  background: var(--r2-fill-2);
+}
+
+.ed-avvowel[data-held] {
+  background: var(--r2-tint-solid);
+  color: var(--r2-on-tint);
+  transform: scale(var(--r2-press-scale));
+}
+
+.ed-avvowel:focus-visible {
+  outline: var(--r2-focus-ring);
+  outline-offset: var(--r2-focus-offset);
+}
+
+.ed-avlip-hint {
+  margin: 0;
+  color: var(--r2-label-3);
+  font: var(--r2-text-caption);
+}
+
+.ed-avlip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  min-height: var(--r2-control-md);
+}
+
+.ed-avlip-label {
+  flex: none;
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+}
+
+.ed-avlip-rate {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ed-avlip-value {
+  flex: none;
+  min-width: 52px;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+  text-align: end;
+}
+
+.ed-avlip-spacer {
+  flex: 1;
+}
+
+.ed-avlip-note {
+  margin: 0;
+}
+
+.ed-avlip-meter {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--r2-space-2);
+  padding: 0 var(--r2-space-2);
+  color: var(--r2-label-2);
+  font: var(--r2-text-mono-small);
+}
+
+.ed-avlip-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-fill-3);
+}
+
+.ed-avlip-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--r2-tint-solid);
+}
+
+/* ------------------------------------------------------------------------------------ Selected */
+.ed-avsel {
+  display: grid;
+  gap: var(--r2-space-3);
+}
+
+.ed-avsel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  padding: 0 var(--r2-space-1);
+}
+
+.ed-avsel-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--_c);
+}
+
+.ed-avsel-titles {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ed-avsel-title {
+  overflow: hidden;
+  font: var(--r2-text-headline);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-avsel-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+.ed-avsel-cuts {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-warning-fill);
+  color: var(--r2-warning-text);
+  font: var(--r2-text-caption);
+  line-height: 16px;
+}
+
+.ed-avsel-tip {
+  margin: 0;
+  padding: var(--r2-space-2) var(--r2-space-3);
+  border-radius: var(--r2-radius-concentric);
+  background: var(--r2-fill-4);
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+.ed-avsel-vertex {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  padding: 0 var(--r2-space-1);
+}
+
+.ed-avsel-label,
+.ed-avsel-count {
+  flex: none;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+.ed-avsel-count {
+  margin-inline-start: auto;
+}
+
+.ed-avsel-fields,
+.ed-avsel-strand {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--r2-space-1-5);
+}
+
+.ed-avsel-problems {
+  display: grid;
+  gap: var(--r2-space-1-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--r2-text-footnote);
+}
+
+.ed-avsel-problems > li {
+  display: flex;
+  gap: var(--r2-space-1-5);
+  padding: var(--r2-space-2);
+  border-radius: var(--r2-radius-md);
+  background: var(--r2-fill-4);
+}
+
+.ed-avsel-problems > li[data-sev='error'] > .r2-icon {
+  color: var(--r2-danger);
+}
+
+.ed-avsel-problems > li[data-sev='warning'] > .r2-icon {
+  color: var(--r2-warning);
+}
+
+.ed-avsel-problems > li > .r2-icon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.ed-avsel-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--r2-label-2);
+}
+
+.ed-avsel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--r2-space-2);
+}

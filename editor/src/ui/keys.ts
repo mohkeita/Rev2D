@@ -11,6 +11,7 @@ interface ElementLike {
   tagName?: string;
   type?: string;
   isContentEditable?: boolean;
+  getAttribute?: (name: string) => string | null;
 }
 
 function asElement(target: EventTarget | null): ElementLike | null {
@@ -33,14 +34,20 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 /** Keys a focused control uses for itself (slider steps, list navigation, caret movement). */
 export const NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
 
+/** ARIA widgets of the design system that move or change with the arrow keys / Home / End. */
+const NAVIGATION_ROLES = new Set(['slider', 'radio', 'tab', 'option', 'menuitem', 'menuitemcheckbox', 'spinbutton', 'separator', 'switch', 'combobox', 'listbox', 'treeitem']);
+
 /**
  * True when the focused element handles NAVIGATION_KEYS itself, so global shortcuts (frame
- * stepping, go to start) must leave them alone: sliders, selects, radio groups and text fields.
+ * stepping, go to start) must leave them alone: sliders, selects, radio groups, text fields and
+ * the ARIA widgets that work like them (role="slider", "radio", "tab", ...).
  */
 export function keepsNavigationKeys(target: EventTarget | null): boolean {
   const el = asElement(target);
   if (!el) return false;
   if (el.tagName === 'SELECT') return true;
   if (el.tagName === 'INPUT' && ['range', 'radio'].includes((el.type ?? '').toLowerCase())) return true;
+  const role = typeof el.getAttribute === 'function' ? el.getAttribute('role') : null;
+  if (role && NAVIGATION_ROLES.has(role)) return true;
   return isTypingTarget(target);
 }

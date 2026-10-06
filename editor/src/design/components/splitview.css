@@ -1,0 +1,172 @@
+/* SplitView: main area + panes on its edges, docked or floating. */
+
+.r2-split {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.r2-split-main {
+  position: absolute;
+  min-width: 0;
+  min-height: 0;
+}
+
+.r2-split-slot {
+  display: contents;
+}
+
+.r2-split-pane {
+  position: absolute;
+  z-index: var(--r2-z-chrome);
+  min-width: 0;
+  min-height: 0;
+  transition:
+    opacity var(--r2-duration-base) var(--r2-ease-out),
+    transform var(--r2-duration-slow) var(--r2-spring-smooth),
+    visibility 0s;
+}
+
+.r2-split-pane[data-passthrough] {
+  pointer-events: none;
+}
+
+.r2-split-pane[data-passthrough] > * {
+  pointer-events: none;
+}
+
+.r2-split-pane[data-passthrough] > * > * {
+  pointer-events: auto;
+}
+
+/* Collapsed panes slide out toward their edge and fade. */
+.r2-split-pane[data-collapsed] {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--r2-duration-base) var(--r2-ease-out),
+    transform var(--r2-duration-base) var(--r2-ease-in),
+    visibility 0s var(--r2-duration-base);
+}
+
+.r2-split-slot[data-edge='leading'] .r2-split-pane[data-collapsed] {
+  transform: translateX(calc(-100% - 24px));
+}
+
+.r2-split-slot[data-edge='trailing'] .r2-split-pane[data-collapsed] {
+  transform: translateX(calc(100% + 24px));
+}
+
+.r2-split:dir(rtl) .r2-split-slot[data-edge='leading'] .r2-split-pane[data-collapsed] {
+  transform: translateX(calc(100% + 24px));
+}
+
+.r2-split:dir(rtl) .r2-split-slot[data-edge='trailing'] .r2-split-pane[data-collapsed] {
+  transform: translateX(calc(-100% - 24px));
+}
+
+.r2-split-slot[data-edge='top'] .r2-split-pane[data-collapsed] {
+  transform: translateY(calc(-100% - 24px));
+}
+
+.r2-split-slot[data-edge='bottom'] .r2-split-pane[data-collapsed] {
+  transform: translateY(calc(100% + 24px));
+}
+
+/* While a divider is dragged nothing animates and the cursor stays a resize cursor everywhere. */
+.r2-split[data-dragging] .r2-split-pane {
+  transition: none;
+}
+
+.r2-split[data-dragging] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---------------------------------------------------------------------------------------- dividers */
+.r2-split-divider {
+  position: absolute;
+  z-index: calc(var(--r2-z-chrome) + 1);
+  outline: none;
+  touch-action: none;
+}
+
+.r2-split-divider[aria-orientation='vertical'] {
+  cursor: col-resize;
+}
+
+.r2-split-divider[aria-orientation='horizontal'] {
+  cursor: row-resize;
+}
+
+/* Docked: a hairline with a wider invisible grab area. */
+.r2-split:not([data-floating]) .r2-split-divider {
+  background: var(--r2-separator);
+}
+
+.r2-split:not([data-floating]) .r2-split-divider::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.r2-split:not([data-floating]) .r2-split-divider[aria-orientation='vertical']::before {
+  inset: 0 -4px;
+}
+
+.r2-split:not([data-floating]) .r2-split-divider[aria-orientation='horizontal']::before {
+  inset: -4px 0;
+}
+
+.r2-split:not([data-floating]) .r2-split-divider:is(:hover, :focus-visible, [data-active]) {
+  background: var(--r2-tint);
+  box-shadow: 0 0 0 1px var(--r2-tint);
+}
+
+/* Floating: the gap next to the pane is the grab area; a small pill appears on hover / focus. */
+.r2-split[data-floating] .r2-split-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-label-3);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity var(--r2-duration-fast) var(--r2-ease-out),
+    background-color var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.r2-split[data-floating] .r2-split-divider[aria-orientation='vertical']::after {
+  width: 4px;
+  height: 36px;
+}
+
+.r2-split[data-floating] .r2-split-divider[aria-orientation='horizontal']::after {
+  width: 36px;
+  height: 4px;
+}
+
+.r2-split[data-floating] .r2-split-divider:is(:hover, [data-collapsed])::after {
+  opacity: 1;
+}
+
+.r2-split[data-floating] .r2-split-divider:is(:focus-visible, [data-active])::after {
+  background: var(--r2-tint);
+  opacity: 1;
+}
+
+@media (forced-colors: active) {
+  .r2-split-divider {
+    background: CanvasText !important;
+  }
+
+  .r2-split-divider:focus-visible {
+    background: Highlight !important;
+  }
+}

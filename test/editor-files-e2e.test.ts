@@ -120,6 +120,11 @@ describe.skipIf(!ready)('editor file management end to end (server without a mod
     await shot(`${name}-1024x640`);
     await page.setViewportSize({ width: 1440, height: 900 });
   };
+  /**
+   * Take the focus out of whatever has it, like a click on the empty canvas (which is full-bleed under
+   * the floating chrome now, so there is no corner that is free at every window size).
+   */
+  const leaveFields = () => page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined));
   const menu = async (item: string) => {
     await page.click('[data-testid=file-menu-button]');
     await page.locator('[data-testid=file-menu]').waitFor();
@@ -128,7 +133,8 @@ describe.skipIf(!ready)('editor file management end to end (server without a mod
 
   beforeAll(async () => {
     mkdirSync(SHOTS, { recursive: true });
-    page = await e.browser.newPage({ viewport: { width: 1440, height: 900 } });
+    // The editor follows the browser's language: pin it, the assertions below read English labels.
+    page = await e.browser.newPage({ viewport: { width: 1440, height: 900 }, locale: 'en-US' });
     page.on('pageerror', (err) => pageErrors.push(err.message));
     await page.goto(e.server.url);
   }, 60000);
@@ -178,11 +184,14 @@ describe.skipIf(!ready)('editor file management end to end (server without a mod
     expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('file-menu-button');
 
     // The shortcut sheet lists the file shortcuts.
-    await page.locator('body').click({ position: { x: 700, y: 860 } });
+    await leaveFields();
     await page.keyboard.press('?');
-    await page.locator('[role=dialog][aria-label="Keyboard shortcuts"]', { hasText: 'Alt + N' }).waitFor();
+    await page.locator('[data-testid=shortcuts-dialog]').waitFor();
+    // "Alt" and "N" are separate key caps: compare without spacing and "+".
+    expect(((await page.textContent('[data-testid=shortcuts-dialog]')) ?? '').replace(/[\s+]/g, '')).toContain('AltN');
     await shotBoth('shortcuts');
     await page.keyboard.press('Escape');
+    await page.locator('[data-testid=shortcuts-dialog]').waitFor({ state: 'detached' });
 
     // With the menu open, a file shortcut it lists runs that command (not a jump to a letter).
     await page.click('[data-testid=file-menu-button]');
@@ -231,7 +240,7 @@ describe.skipIf(!ready)('editor file management end to end (server without a mod
     await shot('menu-open-1440x900');
     await page.keyboard.press('Escape');
 
-    await page.locator('[data-testid=viewport]').click({ position: { x: 5, y: 5 } });
+    await leaveFields();
     await page.keyboard.press('Control+Shift+S');
     await page.locator('[data-testid=save-as-dialog]').waitFor();
     expect(await page.inputValue('[data-testid=save-as-name]')).toBe('blob-copy.r2d.json');
@@ -275,7 +284,7 @@ describe.skipIf(!ready)('editor file management end to end (server without a mod
   });
 
   it('opens a file with the Open dialog from the keyboard', async () => {
-    await page.locator('[data-testid=viewport]').click({ position: { x: 5, y: 5 } });
+    await leaveFields();
     await page.keyboard.press('Control+o');
     await page.locator('[data-testid=open-dialog]').waitFor();
     // It starts in the open model's folder; Backspace goes up to the root.
@@ -317,21 +326,24 @@ describe.skipIf(!ready)('editor file management end to end (server without a mod
     expect(res.status).toBe(200);
     await waitOpen('characters/blob-final.r2d.json');
     // "AI" badge + "opened <file>".
-    const toast = page.locator('.toast', { has: page.locator('.toast-source', { hasText: 'AI' }), hasText: 'opened characters/blob-final.r2d.json' });
+    const toast = page.locator('[data-testid=toast]', { has: page.locator('[data-testid=toast-source]', { hasText: 'AI' }), hasText: 'opened characters/blob-final.r2d.json' });
     await toast.waitFor({ timeout: 5000 });
   });
 
   it('answers a replace question with Esc without losing the dialog; Ctrl+S stays in the dialog', async () => {
     const blob = path.join(e.root, 'blob.r2d.json');
     const before = readFileSync(blob, 'utf8');
-    await page.locator('[data-testid=viewport]').click({ position: { x: 5, y: 5 } });
+    await leaveFields();
     await page.keyboard.press('Control+Shift+S');
     await page.locator('[data-testid=save-as-dialog]').waitFor();
     await page.click('[data-testid=fb-crumb-0]');
     await page.locator('[data-testid=fb-row][data-path="blob.r2d.json"]').waitFor();
     await page.fill('[data-testid=save-as-name]', 'blob');
     await page.keyboard.press('Enter');
+    // The question is an alert on top of the dialog: it names the file and Cancel has the focus.
     await page.locator('[data-testid=replace-confirm]').waitFor();
+    expect(await page.textContent('[data-testid=replace-confirm]')).toContain('blob.r2d.json');
+    expect(await page.getAttribute('[data-testid=replace-confirm] [role=alertdialog]', 'aria-modal')).toBe('true');
     await page.keyboard.press('Escape');
     await page.locator('[data-testid=replace-confirm]').waitFor({ state: 'detached' });
     expect(await page.locator('[data-testid=save-as-dialog]').isVisible()).toBe(true);
@@ -355,7 +367,7 @@ describe.skipIf(!ready)('editor file management end to end (server without a mod
       return t;
     });
     await page.dispatchEvent('[data-testid=viewport]', 'dragenter', { dataTransfer: dt });
-    await page.locator('.drop-overlay').waitFor();
+    await page.locator('[data-testid=drop-overlay]').waitFor();
     await page.dispatchEvent('[data-testid=viewport]', 'drop', { dataTransfer: dt });
     await page.locator('[data-testid=import-dialog]').waitFor();
     expect(await page.textContent('[data-testid=import-files]')).toContain('dropped.r2d.json');
@@ -414,7 +426,7 @@ describe.skipIf(!ready)('editor file management end to end (server without a mod
     };
 
     // Cancel: nothing happens, the Open dialog is still there.
-    await page.locator('[data-testid=viewport]').click({ position: { x: 5, y: 5 } });
+    await leaveFields();
     await openBlob();
     expect(await page.textContent('[data-testid=unsaved-dialog]')).toContain('Save changes to koi.r2d.json?');
     await shotBoth('unsaved');
@@ -428,7 +440,7 @@ describe.skipIf(!ready)('editor file management end to end (server without a mod
     await page.dblclick('[data-testid=fb-row][data-path="blob.r2d.json"]');
     await page.locator('[data-testid=unsaved-dialog]').waitFor();
     await page.click('[data-testid=unsaved-save]');
-    await page.locator('[data-testid=unsaved-dialog] .notice-error').waitFor();
+    await page.locator('[data-testid=unsaved-dialog] [data-testid=unsaved-error]').waitFor();
     await page.keyboard.press('Escape');
     await page.locator('[data-testid=unsaved-dialog]').waitFor({ state: 'detached' });
     expect(norm((await stats()).file)).toBe(norm(koi));
@@ -451,9 +463,9 @@ describe.skipIf(!ready)('editor file management end to end (server without a mod
     rmSync(blob);
     await page.locator('[data-testid=unsaved-dot]').waitFor({ timeout: 10000 });
     expect(await page.title()).toBe('● blob.r2d.json • Rev2D');
-    await page.locator('.toast', { hasText: 'blob.r2d.json was deleted or moved on disk' }).waitFor();
-    expect(await page.locator('.toast', { hasText: 'Reload failed' }).count()).toBe(0);
-    await page.locator('[data-testid=viewport]').click({ position: { x: 5, y: 5 } });
+    await page.locator('[data-testid=toast]', { hasText: 'blob.r2d.json was deleted or moved on disk' }).waitFor();
+    expect(await page.locator('[data-testid=toast]', { hasText: 'Reload failed' }).count()).toBe(0);
+    await leaveFields();
     await page.keyboard.press('Control+s');
     const written = () => {
       try {

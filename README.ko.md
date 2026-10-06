@@ -17,7 +17,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Node >= 22](https://img.shields.io/badge/node-%3E%3D22-339933?logo=nodedotjs&logoColor=white)
 ![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Tests: 1600+ passing](https://img.shields.io/badge/tests-1600%2B%20passing-brightgreen)
+![Tests: 2600+ passing](https://img.shields.io/badge/tests-2600%2B%20passing-brightgreen)
 [![MCP: 18 tools](https://img.shields.io/badge/MCP-18%20tools-6E56CF)](docs/MCP.md)
 
 <img src="docs/media/hero.gif" width="720" alt="Rev2D 예제 모델 네 개가 2×2 격자에서 움직이는 모습: 눈을 깜빡이며 대기 동작을 하는 애니메이션풍 흉상 hana, 점프하는 슬라임, IK로 팔을 뻗는 로봇 팔, 깃대에서 펄럭이는 텍스처 잉어 깃발">
@@ -36,14 +36,18 @@
 - **결정론적 헤드리스 렌더러.** GPU도 브라우저도 쓰지 않는 순수 TypeScript 구현이라, 같은 모델과
   같은 입력이면 언제나 같은 픽셀이 나옵니다. 디버그 오버레이, 컨택트 시트, GIF, PNG 시퀀스를
   렌더합니다.
-- **에이전트가 직접 다루는 도구.** `--json` 출력을 지원하는 CLI 명령 21개, 원자적이고 검증되는 편집
+- **에이전트가 직접 다루는 도구.** `--json` 출력을 지원하는 CLI 명령 35개, 원자적이고 검증되는 편집
   연산(ops), 렌더 결과를 이미지로 돌려주는 MCP 도구 18개를 제공합니다. 자세한 흐름은
   [AI 에이전트 사용법](#ai-에이전트는-rev2d를-이렇게-사용합니다)에 있습니다.
+- **일러스트 한 장으로 아바타.** 그림 한 장에 에이전트가(또는 사람이 핸들을 끌어서) 랜드마크를
+  찍으면, 눈을 깜빡이고 말하고 고개를 돌리고 숨 쉬고 머리카락이 흔들리는 모델이 됩니다.
+  [일러스트 한 장으로 아바타 만들기](#일러스트-한-장으로-아바타-만들기)를 참고하세요.
 - **Spine·Live2D 파일 가져오기와 내보내기.** Spine 스켈레톤을 모델로 가져오고, 모델을 Spine
   런타임용으로 내보냅니다. Live2D 모션, 표정, 물리는 양방향으로 옮길 수 있습니다.
   [Spine·Live2D 호환](#spinelive2d-호환)을 참고하세요.
 - **사람을 위한 라이브 에디터.** React + WebGL2 [에디터](#에디터)가 AI가 쓴 변경을 즉시 다시
-  불러오고, AI는 사람이 보고 있는 화면을 똑같이 보고 조작할 수 있습니다.
+  불러오고, AI는 사람이 보고 있는 화면을 똑같이 보고 조작할 수 있습니다. 에디터 안의
+  [AI 패널](#ai-패널)에서 Codex나 Claude Code를 바로 실행할 수도 있습니다.
 
 ## AI 에이전트는 Rev2D를 이렇게 사용합니다
 
@@ -179,7 +183,7 @@ stdio 서버를 실행할 수 있는 클라이언트(Claude Desktop, 그 밖의 
 | --- | --- | --- |
 | 배우기 | `rev2d_guide` | AI 작성자를 위한 빠른 시작: 규칙, 작업 흐름, 주소 문법, 레시피. **가장 먼저 호출합니다.** |
 | | `rev2d_schema` | 모델 전체 또는 일부(`Part`, `Binding`, `Physics`, ...)의 JSON Schema |
-| | `rev2d_docs` | 함께 제공되는 문서: spec, ops, cli, mcp, recipes, architecture, examples, agents |
+| | `rev2d_docs` | 함께 제공되는 문서: spec, ops, cli, mcp, recipes, interop, avatar, architecture, examples, agents |
 | 확인 | `rev2d_validate` | JSON 포인터, 고정 코드, 수정 힌트가 붙은 진단 |
 | | `rev2d_info` | 개요: 파라미터와 각 파라미터가 움직이는 대상, 본 트리, 워프, 파츠, 바인딩, IK, 물리, 애니메이션 |
 | 보기 | `rev2d_render` | 포즈 하나를 인라인 PNG로. 오버레이, IK 도달 범위, 경고 메모 포함 |
@@ -247,6 +251,9 @@ rev2d editor command --open models/cat.r2d.json   # 워크스페이스 안의 �
 > `robot-arm.r2d.json`의 모든 애니메이션에서 IK 도달 범위, 물리 클램핑, 루프 이음새를 분석해줘.
 > 찾은 문제는 ops로 고치고 수정 전후 시트를 보여줘.
 
+> `my-character.png`를 `rev2d avatar ...` 명령으로 아바타로 만들어줘(먼저 `rev2d docs avatar`를 읽고).
+> 리뷰 시트를 보여 주고, 가장 자신 없는 랜드마크가 어디인지도 알려줘.
+
 ### AI가 잘 다룰 수 있는 이유
 
 **에이전트가 바로 고칠 수 있는 진단.** 모든 문제에 파일 속 정확한 위치, 고정 코드, 고치는 방법이
@@ -273,26 +280,98 @@ FAIL  blob.r2d.json
 
 <img src="docs/media/verify.png" width="800" alt="AI가 스스로 작업을 검증하는 방법: 본·워프·라벨·격자 오버레이를 겹친 hana 렌더, AngleX × AngleY 3×3 고개 돌리기 컨택트 시트, idle 애니메이션에 대한 rev2d analyze 텍스트 리포트(물리 클램핑 없음, 루프 이음새 닫힘)">
 
+## 일러스트 한 장으로 아바타 만들기
+
+캐릭터 리깅은 보통 레이어가 나뉜 원화에서 시작합니다. Rev2D는 **납작한 그림 한 장**에서도 시작할
+수 있습니다. 정면을 보는 흉상에 배경이 투명한 그림이 가장 잘 맞습니다. 그림 위에 머리, 눈, 입,
+머리카락 가닥, 몸 같은 랜드마크를 찍으면, Rev2D가 그 선을 따라 그림을 레이어로 잘라 내고 각
+레이어 뒤에 가려졌던 부분을 메운 다음 평범한 Rev2D 모델을 만듭니다. 이 모델은 눈을 깜빡이고,
+말하고, 고개를 돌리거나 갸웃하고, 숨을 쉬고, 머리카락이 흔들립니다. 물리, 애니메이션 여섯
+개(`idle`, `blink`, `talk`, `nod`, `look_around`, `sweep`), 점검용 리뷰 시트도 함께 생깁니다.
+
+<p align="center"><img src="docs/images/avatar-landmarks.png" width="300" alt="hana 테스트 일러스트 위에 아바타 랜드마크를 그룹별 색으로 그린 모습"> <img src="docs/images/avatar-turn.png" width="300" alt="생성된 아바타가 고개를 돌리는 3×3 격자: 가로로 AngleX -30, 0, 30, 세로로 AngleY 30, 0, -30"></p>
+
+```sh
+rev2d avatar new picture.png avatars/hana          # 프로젝트: source.png와 초안 avatar.json
+rev2d avatar vision-check make avatars/hana/work/vision   # 에이전트가 좌표를 정확히 읽는지 확인(이어서 score)
+rev2d avatar grid avatars/hana --region 180,220,260,280   # 랜드마크 좌표를 읽을 원본 픽셀 격자
+rev2d avatar validate avatars/hana                 # 빠졌거나 잘못된 곳과 고치는 방법
+rev2d avatar overlay avatars/hana --part eyes.imageLeft --zoom   # 그림 위에 겹친 랜드마크
+rev2d avatar build avatars/hana                    # 레이어와 avatars/hana/hana.r2d.json, 메시 접힘 검사 포함
+rev2d avatar poses avatars/hana                    # 리뷰 시트: 포즈, 고개 돌리기, 눈, 입
+```
+
+에이전트는 시트가 제대로 보일 때까지 validate, overlay, build, poses를 되풀이합니다. 감은 눈에
+홍채가 조금도 남지 않아야 하고, 고개를 돌리거나 기울여도 그림이 찢어지거나 턱이 잘리면 안 되며,
+얼굴은 그대로인 채 머리카락만 흔들려야 합니다. 감은 눈과 입 모양은 이미지 생성기로 **직접 그려
+넣을** 수도 있습니다(`rev2d avatar variants request|import|status`, 그림 주인이 허락한 경우에만).
+Rev2D가 그려 온 그림을 하나하나 검사해서 메시 변형 대신 씁니다. 가나, 한글, 로마자로 쓴 문장은
+`MouthOpen` / `MouthForm`을 움직이는 립싱크가 됩니다. 이 작업 흐름은 오픈 소스(MIT) 도구인 Mesh
+Avatar Studio에서 영감을 받았고, 그 프로젝트는 `rev2d avatar import-mas`로 가져올 수 있습니다.
+Rev2D의 빌더는 독자적으로 구현했습니다. 직접 그렸거나 사용 허락을 받은 그림만 쓰세요.
+Rev2D 자체는 아무것도 업로드하지 않습니다. 다만 AI 작업을 시작하면 그림이 해당 AI 제공자에게 전달되고,
+그려 넣은 변형을 만들 때는 그 제공자의 이미지 생성기에도 전달됩니다.
+
+에디터에서 `rev2d edit avatars/hana`를 실행하면 프로젝트가 **아바타 모드**로 열립니다. 랜드마크마다
+핸들이 달린 일러스트, 부위 목록과 각 부위의 문제, 그리고 드래그할 때마다 따라 움직이는 실시간
+미리보기(포즈, 립싱크, 선택 페이지)가 나옵니다. 새 아바타는 시작 화면이나 파일 > 그림으로 새 아바타
+만들기…에서 시작합니다. PNG를 끌어다 놓고, 랜드마크를 AI에게 맡기거나 직접 배치하면 됩니다. 저장하면
+`avatar.json`이 기록되고 미리보기가 다시 컴파일됩니다. 레이어를 자르는 윤곽을 옮겼다면 "저장하고
+레이어 다시 만들기" 배너가 나타납니다. "그려 넣은 변형" 섹션에는 감은 눈과 입 모양 변형이 썸네일,
+상태와 함께 모두 나오며, AI에게 그리게 하거나("AI로 그리기…", 시작 전에 일러스트가 에이전트의 이미지
+생성기로 보내진다고 알려 줍니다) 직접 그린 그림을 가져올 수 있습니다. 랜드마크 하나하나의 위치, 생성되는 파라미터, 그려 넣은 변형,
+립싱크, 자주 겪는 문제까지 담은 전체 가이드는 [docs/AVATAR.md](docs/AVATAR.md)(영어)이며,
+`rev2d docs avatar`로도 볼 수 있습니다.
+
 ## 에디터
 
 `rev2d edit`은 `http://127.0.0.1:4777`에서 웹 에디터(React 19 + WebGL2)를 엽니다. 모델은 CLI와 같은
-코어로 계산합니다. 에디터 UI는 영어로 되어 있어서, 아래 표의 메뉴 이름은 화면에 보이는 그대로
-적었습니다.
+코어로 계산합니다. 디자인은 iOS와 iPadOS를 따릅니다. 캔버스가 창 전체를 채우고, 조작부는 그 위에
+반투명한 둥근 패널로 떠 있으며, 강조색은 파란색 하나이고, 라이트·다크 모드(또는 시스템 설정
+따르기)를 지원합니다. 화면은 브라우저 언어에 따라 한국어, 영어, 일본어로 표시됩니다
+([docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md)). 아래 표의 메뉴 이름은 영어 화면에 보이는 그대로
+적고 괄호 안에 뜻을 달았습니다.
 
 | | |
 | --- | --- |
+| **모드** | 모델을 다루는 **리그(Rig)** 모드(아래)와 아바타 프로젝트를 다루는 **아바타** 모드([위](#일러스트-한-장으로-아바타-만들기)). 프로젝트에 빌드된 모델이 생기면 툴바에서 두 모드를 오갈 수 있습니다. |
+| **AI 패널** | 반짝이 버튼을 누르면 Codex나 Claude Code가 열린 모델이나 아바타를 작업하고, 그 과정을 그대로 지켜볼 수 있습니다([아래](#ai-패널)). |
 | **라이브 리로드** | AI, CLI, 텍스트 에디터가 디스크에서 바꾼 내용이 바로 나타납니다. 에디터에서 한 편집은 같은 파일에 다시 기록됩니다. |
 | **파라미터** | 그룹별 슬라이더(아웃라이너 검색으로도 걸러집니다). 물리 출력을 고정(pin)해 값을 유지할 수 있고, 슬라이더를 더블클릭하면 초기화됩니다. |
 | **뷰포트** | 확대와 이동, 클릭으로 파츠와 본 관절 선택, 본·메시·워프·경계·라벨·격자 오버레이(`B` `M` `W` `X` `L` `G`), 미리보기에서 파츠 숨기기(`H`). |
 | **타임라인과 레이어** | 재생, 반복, 속도, 물리 켜기/끄기, 트랙별 키, 그리고 가중치·`add`·`start`·`once`를 지정하는 추가 애니메이션 레이어. |
 | **아웃라이너와 인스펙터** | 리그 트리, 그리기 순서대로 나열한 파츠, 워프, 파라미터, 애니메이션, 바인딩, IK, 물리. 어떤 객체든 JSON으로 편집하고(`Ctrl+Enter`로 적용), IK와 물리 진단을 실시간으로 봅니다. |
 | **문제 패널과 실행 취소** | 편집하는 동안 검증 진단을 보여 주고, 인스펙터 편집은 실행 취소와 다시 실행을 지원합니다. |
-| **파일 메뉴** | New…(새 모델, `Alt+N`), Open…(열기, `Ctrl+O`), Open Recent(최근 파일), Save(저장, `Ctrl+S`), Save As…(다른 이름으로 저장, `Ctrl+Shift+S`), Import from computer…(컴퓨터에서 가져오기, 모델 `.json`과 PNG 또는 Spine 내보내기 파일을 끌어다 놓아도 됩니다), Import Live2D motions…(Live2D 모션 가져오기), Download copy(사본 다운로드), Export PNG of the view(현재 뷰를 PNG로 내보내기), Export to ▸ Spine… / Live2D motions…(Spine, Live2D 모션으로 내보내기), Reload from disk(디스크에서 다시 불러오기), Close(닫기). |
-| **시작 화면** | 새 모델, 열기, 가져오기, 최근 파일, 그리고 예제 카드(hana, robot arm, slime, textured, minimal). 예제 카드는 예제를 워크스페이스에 복사해서 쓰므로 원본은 그대로 남습니다. |
+| **파일 메뉴** | New…(새로 만들기, `Alt+N`), New Avatar from Illustration…(그림으로 새 아바타 만들기), Open…(열기, `Ctrl+O`), Open Recent(최근 파일), Save(저장, `Ctrl+S`), Save As…(다른 이름으로 저장, `Ctrl+Shift+S`), Import from computer…(컴퓨터에서 가져오기, 모델 `.json`과 PNG 또는 Spine 내보내기 파일을 끌어다 놓아도 됩니다), Import Live2D motions…(Live2D 모션 가져오기), Download copy(사본 다운로드), Export PNG of the view(현재 뷰를 PNG로 내보내기), Export to ▸ Spine… / Live2D motions…(Spine, Live2D 모션으로 내보내기), Reload from disk(디스크에서 다시 불러오기), Close(닫기). |
+| **시작 화면** | 새 모델, 그림 한 장으로 아바타 만들기, 열기, 가져오기, 최근 파일, 그리고 예제 카드(hana, robot arm, slime, textured, minimal). 예제 카드는 예제를 워크스페이스에 복사해서 쓰므로 원본은 그대로 남습니다. |
 | **안전 장치** | 편집은 하는 즉시 저장됩니다. 저장에 실패하면(유효하지 않은 모델, 충돌, 삭제된 파일) 에디터가 사람의 버전을 보관하고, New, Open, Import, Close, Reload로 그 내용을 덮어쓰기 전에 Save / Don't save / Cancel(저장 / 저장 안 함 / 취소)을 묻습니다. |
 | **워크스페이스** | 에디터는 폴더 하나 안에서만 작업합니다: `rev2d edit [model or dir] --root <dir>`(기본값은 모델이 있는 폴더, 모델이 없으면 현재 폴더). 열기, 만들기, 저장, 가져오기를 모두 이 폴더 안에서만 하며, 심볼릭 링크를 거치는 경우까지 포함해 바깥 경로는 거부합니다. 모델 없이 실행하면 시작 화면이 뜹니다. |
 
 에디터에서 `?`를 누르면 모든 단축키를 볼 수 있습니다.
+
+### AI 패널
+
+에디터가 코딩 에이전트를 직접 실행할 수도 있습니다. 툴바의 반짝이 버튼으로 AI 패널을 열고
+**Codex**나 **Claude Code**를 고른 뒤, 요청을 입력하거나 추천 항목을 고르면 됩니다. 에이전트는
+워크스페이스 안에서 작업하고, 패널에는 에이전트의 메시지, 실행한 명령, 바꾼 파일, 할 일 목록이
+차례로 나타납니다. 중간에 멈추거나 이어서 요청할 수도 있습니다. 에이전트가 모델이나 아바타를
+고치면 화면에 바로 반영됩니다. 아바타 모드의 "AI에게 맡기기"와 "AI에게 이 부위 수정 요청"도 이
+패널을 씁니다.
+
+- **필요한 것**: Codex CLI(`npm install -g @openai/codex` 후 `codex login`)나 Claude Code(`claude`를 한
+  번 실행해 로그인)가 이 컴퓨터에 설치되어 로그인된 상태여야 합니다. 에이전트는 **여러분의** 계정으로
+  실행됩니다.
+- **이 컴퓨터에서만**: 에이전트 기능은 에디터가 루프백 주소에서 실행될 때(기본값)만 켜집니다.
+  `--host`를 주면 꺼지고, `--allow-agent`를 함께 줘야 다시 켜집니다. 이때는 그 포트에 접근할 수 있는
+  모든 기기가 여러분의 계정으로 에이전트를 실행할 수 있으니 믿을 수 있는 네트워크에서만 쓰세요.
+- **보호 장치**: 모든 요청에는 서버마다 새로 만들어지는 토큰이 필요하고, 다른 웹 페이지는 이 토큰을
+  보낼 수 없습니다. 에이전트는 워크스페이스 안에서 읽기 전용 또는 워크스페이스 쓰기 샌드박스로만
+  동작하며, 이미지 생성(Codex)은 "이미지 생성 허용"을 켜야만 쓸 수 있습니다.
+- **Windows에서 Codex를 쓸 때**: Codex가 명령을 실행하지 못하면(관리자 권한이 필요한 "elevated"
+  샌드박스가 준비되지 않은 경우) 패널이 관리자 권한 없는 샌드박스로 바꾸는 버튼을 보여 줍니다. 같은
+  설정을 `rev2d edit --agent-codex-sandbox unelevated`로도 줄 수 있습니다.
+
+프로토콜, 보안 모델, 문제 해결은 [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md)(영어)에 있습니다.
 
 ## Rev2D 속 Live2D·Spine 개념
 
@@ -405,18 +484,26 @@ node bin/rev2d.js edit hero.r2d.json                    # 라이브 에디터: h
 | [docs/OPS.md](docs/OPS.md) | 편집 연산 16종, 참조 처리, `bind_warp` 수식 |
 | [docs/MCP.md](docs/MCP.md) | MCP 설정, 도구 18개, 에디터 브리지, 문제 해결 |
 | [docs/INTEROP.md](docs/INTEROP.md) | Spine·Live2D 가져오기와 내보내기: 지원 범위, 좌표, 파라미터 매핑, 작업 흐름, 제약 |
-| [docs/RECIPES.md](docs/RECIPES.md) | 복사해서 쓰는 리깅 레시피 21개와 각각을 검증하는 명령(모두 테스트 스위트가 실행) |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 파이프라인, 모듈, 데이터 계약, 결정론, 에디터 프로토콜 |
+| [docs/AVATAR.md](docs/AVATAR.md) | 일러스트 한 장으로 아바타 만들기: 단계별 작업 흐름, 랜드마크 하나하나, 생성되는 모델, 그려 넣은 변형, 립싱크, 아바타 모드, 자주 겪는 문제 |
+| [docs/RECIPES.md](docs/RECIPES.md) | 복사해서 쓰는 리깅 레시피 22개와 각각을 검증하는 명령(모두 테스트 스위트가 실행) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 파이프라인, 모듈, 데이터 계약, 결정론, 에디터 프로토콜과 UI 구조, 아바타 빌더 |
+| [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md) | 에디터 안에서 돌아가는 Codex와 Claude Code: 프로토콜, 보안 모델, 작업 템플릿, 문제 해결 |
+| [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) | iOS에서 영감을 받은 에디터 디자인: 원칙, 토큰, 컴포넌트, 접근성 |
 | [examples/README.md](examples/README.md) | 예제 모델 5종과 각 모델이 보여 주는 기법 |
 | [llms.txt](llms.txt) | LLM 도구를 위한 색인 |
 
-같은 문서를 오프라인으로도 볼 수 있습니다: `rev2d docs <spec|ops|cli|mcp|agents|recipes|interop|architecture|examples>`
+같은 문서를 오프라인으로도 볼 수 있습니다: `rev2d docs <spec|ops|cli|mcp|agents|recipes|interop|avatar|architecture|examples>`
 또는 MCP `rev2d_docs`.
 
 ## 현황과 로드맵
 
-Rev2D는 **v0.1**입니다. 포맷(버전 1), CLI, MCP 도구, 에디터는 동작하며 테스트 1,600개 이상으로 검증되지만,
+Rev2D는 **v0.1**입니다. 포맷(버전 1), CLI, MCP 도구, 에디터는 동작하며 테스트 2,600개 이상으로 검증되지만,
 1.0 전까지는 바뀔 수 있습니다. 아직 npm 배포판은 없으니 체크아웃에서 실행하세요.
+
+첫 공개 이후 새로 들어간 기능은 일러스트 한 장으로 만드는 아바타(그려 넣은 변형, 문장 립싱크,
+에디터의 아바타 모드 포함), 에디터 안의 AI 패널, 그리고 한국어·영어·일본어를 지원하는 새 에디터
+디자인입니다. 아바타 빌더는 정면 흉상에서 가장 잘 동작합니다. 어떤 그림에서 얼마나 잘 되는지는
+리뷰 시트가 말해 주며, 아직 다듬는 중입니다.
 
 Rev2D는 프로덕션 파이프라인에서 Live2D Cubism이나 Spine을 대체하려는 도구가 아닙니다. AI와 함께
 만드는 작업과 실험을 위한 텍스트 중심 툴킷입니다. 앞으로 검토해 볼 아이디어는 다음과 같습니다.
@@ -424,7 +511,8 @@ Rev2D는 프로덕션 파이프라인에서 Live2D Cubism이나 Spine을 대체�
 
 - 레이어 아트워크(PSD / Photoshop)를 파츠로 가져오기
 - 게임 엔진과 웹용 런타임(Unity, Godot, 작은 웹 플레이어)
-- 입 파라미터를 움직이는 오디오 기반 립싱크
+- CLI와 에디터에서 오디오 파일로 립싱크하기(라이브러리는 이미 WAV 음량을 읽습니다)
+- 아바타 작업 흐름을 위한 MCP 도구
 - 더 많은 컨스트레인트: 더 긴 IK 체인, 트랜스폼·패스 컨스트레인트
 
 아이디어와 사용 사례는 이슈로 남겨 주세요.
@@ -432,7 +520,7 @@ Rev2D는 프로덕션 파이프라인에서 Live2D Cubism이나 Spine을 대체�
 ## 개발
 
 ```sh
-npm test                    # 전체 vitest 스위트(테스트 1,600개 이상)
+npm test                    # 전체 vitest 스위트(테스트 2,600개 이상)
 npm run typecheck           # tsc --noEmit -p tsconfig.json
 npm run editor:dev          # 핫 리로드되는 에디터 UI. /api는 :4777의 rev2d edit로 프록시
 npm run editor:build        # 에디터 UI를 dist/editor로 빌드(rev2d edit가 제공)

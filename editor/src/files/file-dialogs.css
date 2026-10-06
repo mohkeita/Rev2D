@@ -1,0 +1,317 @@
+/* File dialogs (Open, New, Save As, Import, the replace and unsaved-changes alerts). Design tokens only. */
+
+/* ------------------------------------------------------------------------------- shared pieces */
+/* A path in the bottom row of a dialog: one line, cut at the end. */
+.ed-dialog-path {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A quiet explanation between the blocks of a dialog. */
+.ed-dialog-note {
+  margin: 0;
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+}
+
+/* Blocks inside a labelled row take its whole width. */
+.ed-field-control > .ed-fb,
+.ed-field-control > .ed-filelist,
+.ed-field-control > .ed-export-anims,
+.ed-field-control > .r2-segmented[data-block],
+.ed-field-control > .r2-select[data-block] {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+/* A warning alert: the glyph says so with the warning colour (the buttons stay neutral). */
+.r2-sheet.ed-alert-warning .r2-sheet-icon {
+  color: var(--r2-warning);
+}
+
+.ed-replace-list {
+  max-height: 120px;
+  margin: 0;
+  padding: var(--r2-space-2) var(--r2-space-3);
+  overflow: auto;
+  border-radius: var(--r2-radius-md);
+  background: var(--r2-plate);
+  color: var(--r2-label);
+  list-style: none;
+}
+
+/* A list of files (picked for an import, written by an export): an inset plate with hairlines. */
+.ed-filelist {
+  --_px: var(--r2-space-3);
+  --_icon: 16px;
+  --_gap: var(--r2-space-2);
+  flex: none;
+  min-width: 0;
+  max-height: 128px;
+  border-radius: var(--r2-radius-concentric, var(--r2-radius-group));
+  background: var(--r2-plate);
+}
+
+.ed-filelist-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--_icon) minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--_gap);
+  min-height: 30px;
+  padding: 0 var(--_px);
+}
+
+.ed-filelist-row + .ed-filelist-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: calc(var(--_px) + var(--_icon) + var(--_gap));
+  height: var(--r2-hairline);
+  background: var(--r2-separator);
+}
+
+.ed-filelist-icon {
+  color: var(--r2-label-2);
+}
+
+.ed-filelist-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-filelist-size {
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+  white-space: nowrap;
+}
+
+.ed-filelist-row[data-dim] .ed-filelist-icon,
+.ed-filelist-row[data-dim] .ed-filelist-name,
+.ed-filelist-row[data-dim] .ed-filelist-size {
+  opacity: 0.5;
+}
+
+/* ----------------------------------------------------------------------------------------- Open */
+.ed-open {
+  display: grid;
+  grid-template-columns: 212px minmax(0, 1fr);
+  gap: var(--r2-space-4);
+  min-height: 0;
+  height: min(440px, calc(100vh - 236px));
+}
+
+.ed-open-recent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--r2-space-1);
+  min-width: 0;
+  min-height: 0;
+}
+
+.ed-open-recent-title {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  height: var(--r2-control-sm);
+  padding: 0 var(--r2-space-2);
+  color: var(--r2-label-2);
+  font: var(--r2-text-subhead);
+}
+
+.ed-open-recent-list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.ed-open-recent-empty {
+  margin: 0;
+  padding: var(--r2-space-1) var(--r2-space-2);
+  color: var(--r2-label-3);
+  font: var(--r2-text-callout);
+}
+
+/* ------------------------------------------------------------------------------------------ New */
+.ed-new {
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr);
+  gap: var(--r2-space-4);
+  min-height: 0;
+  height: min(480px, calc(100vh - 236px));
+}
+
+.ed-tpl-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--r2-space-0-5);
+  min-height: 0;
+  /* Room for the focus ring and the selection ring inside the scrolling box. */
+  margin: -3px;
+  padding: 3px;
+}
+
+.ed-tpl-note {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-2);
+  padding: var(--r2-space-3);
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+}
+
+.ed-tpl {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--r2-space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--r2-space-1-5) var(--r2-space-2) var(--r2-space-1-5) var(--r2-space-1-5);
+  border: 0;
+  border-radius: var(--r2-radius-md);
+  background: none;
+  color: var(--r2-label);
+  font: var(--r2-text-body);
+  text-align: start;
+  cursor: default;
+  transition: background-color var(--r2-duration-fast) var(--r2-ease-out);
+}
+
+.ed-tpl:hover {
+  background: var(--r2-fill-4);
+}
+
+.ed-tpl[aria-checked='true'] {
+  background: var(--r2-selection);
+  box-shadow: inset 0 0 0 1.5px var(--r2-tint-solid);
+}
+
+.ed-tpl:focus-visible {
+  outline-offset: 1px;
+}
+
+.ed-tpl-thumb {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 56px;
+  height: 42px;
+  overflow: hidden;
+  border-radius: var(--r2-radius-xs);
+  background: var(--r2-fill-3);
+  box-shadow: inset 0 0 0 var(--r2-hairline) var(--r2-separator);
+  color: var(--r2-label-3);
+}
+
+.ed-tpl-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ed-tpl-text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ed-tpl-name {
+  display: flex;
+  align-items: center;
+  gap: var(--r2-space-1-5);
+  min-width: 0;
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-tpl-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.ed-new-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--r2-space-3);
+  min-width: 0;
+  min-height: 0;
+}
+
+.ed-new-form > .r2-field {
+  flex: none;
+}
+
+.r2-field.ed-new-size {
+  flex: none;
+  width: 76px;
+}
+
+.ed-new-size .r2-field-input {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The folder list takes the height the fixed fields leave. */
+.ed-new-location {
+  flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.ed-new-location .ed-field-control {
+  align-items: stretch;
+  min-height: 0;
+}
+
+.ed-new-location .ed-fb[data-variant] {
+  height: auto;
+  min-height: 112px;
+}
+
+/* --------------------------------------------------------------------------------- narrow windows */
+@media (max-width: 680px) {
+  .ed-open,
+  .ed-new {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .ed-open-recent-list,
+  .ed-tpl-list {
+    max-height: 132px;
+  }
+
+  .ed-open .ed-fb[data-variant='fill'] {
+    height: 240px;
+  }
+
+  .ed-new-location .ed-fb[data-variant] {
+    height: 180px;
+  }
+}
+
+@media (forced-colors: active) {
+  .ed-filelist,
+  .ed-replace-list,
+  .ed-tpl-thumb {
+    border: 1px solid CanvasText;
+  }
+
+  .ed-tpl[aria-checked='true'] {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+}

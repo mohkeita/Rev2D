@@ -1,0 +1,48 @@
+/* The live preview of avatar mode: a rounded stage with the WebGL view, its framing toggle and notes. */
+
+.ed-avstage {
+  display: grid;
+  gap: var(--r2-space-1);
+}
+
+.ed-avstage-view {
+  position: relative;
+  height: clamp(180px, 34vh, 340px);
+  overflow: hidden;
+  border-radius: var(--r2-radius-concentric);
+  background: var(--r2-canvas);
+  box-shadow: inset 0 0 0 var(--r2-hairline) var(--r2-separator);
+}
+
+.ed-avstage-gl {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ed-avstage-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--r2-space-3);
+  color: var(--r2-label-2);
+}
+
+.ed-avstage-frame {
+  position: absolute;
+  top: var(--r2-space-1-5);
+  right: var(--r2-space-1-5);
+}
+
+.ed-avstage-error {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--r2-warning-text);
+  font: var(--r2-text-caption);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

@@ -1,0 +1,142 @@
+/* ProgressView: linear bar, ring, activity spinner. */
+
+.r2-progress {
+  display: grid;
+  gap: var(--r2-space-1-5);
+  min-width: 48px;
+  color: var(--r2-tint-solid);
+}
+
+.r2-progress[data-tone='current'],
+.r2-progress-ring[data-tone='current'] {
+  color: currentColor;
+}
+
+.r2-progress-track {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--r2-radius-capsule);
+  background: var(--r2-fill-2);
+}
+
+.r2-progress[data-size='sm'] .r2-progress-track {
+  height: 2px;
+}
+
+.r2-progress[data-size='lg'] .r2-progress-track {
+  height: 6px;
+}
+
+.r2-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width var(--r2-duration-base) var(--r2-ease-out);
+}
+
+.r2-progress[data-indeterminate] .r2-progress-bar {
+  position: absolute;
+  width: 38%;
+  animation: r2-progress-slide 1.6s var(--r2-ease-in-out) infinite;
+}
+
+.r2-progress-label {
+  font: var(--r2-text-footnote);
+  color: var(--r2-label-2);
+}
+
+@keyframes r2-progress-slide {
+  from {
+    left: -38%;
+  }
+
+  to {
+    left: 100%;
+  }
+}
+
+.r2-progress-ring,
+.r2-spinner {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  color: var(--r2-tint-solid);
+}
+
+.r2-progress-ring svg,
+.r2-spinner svg {
+  display: block;
+}
+
+.r2-progress-ring-track,
+.r2-progress-ring-value {
+  fill: none;
+  stroke-width: 3;
+}
+
+.r2-progress-ring-track {
+  stroke: var(--r2-fill);
+}
+
+.r2-progress-ring-value {
+  stroke: currentColor;
+  stroke-linecap: round;
+  transition: stroke-dasharray var(--r2-duration-base) var(--r2-ease-out);
+}
+
+.r2-spinner {
+  color: var(--r2-label-2);
+}
+
+.r2-spinner[data-tone='current'] {
+  color: currentColor;
+}
+
+.r2-spinner svg {
+  fill: currentColor;
+  animation: r2-spin 0.8s steps(8, end) infinite;
+}
+
+/* Reduced motion: progress must still look alive, so it pulses instead of travelling. */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) .r2-progress[data-indeterminate] .r2-progress-bar {
+    left: 0;
+    width: 100%;
+    animation: r2-progress-pulse 1.6s ease-in-out infinite;
+  }
+
+  :root:not([data-motion='full']) .r2-spinner svg {
+    animation-duration: 1.6s;
+  }
+}
+
+[data-motion='reduce'] .r2-progress[data-indeterminate] .r2-progress-bar {
+  left: 0;
+  width: 100%;
+  animation: r2-progress-pulse 1.6s ease-in-out infinite;
+}
+
+[data-motion='reduce'] .r2-spinner svg {
+  animation-duration: 1.6s;
+}
+
+@keyframes r2-progress-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (forced-colors: active) {
+  .r2-progress-track {
+    border: 1px solid CanvasText;
+  }
+
+  .r2-progress-bar {
+    background: Highlight;
+  }
+
+  .r2-progress-ring-value {
+    stroke: Highlight;
+  }
+}

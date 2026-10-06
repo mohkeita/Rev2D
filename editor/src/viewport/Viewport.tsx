@@ -1,10 +1,17 @@
 /**
- * The viewport: WebGL2 canvas (model) + Canvas 2D overlay, camera navigation and picking, and the
- * view bar docked under it (zoom / framing controls and the side panel toggles, so no control sits
- * on top of the model). Rendering is demand-driven: a frame is scheduled on any store change and
- * while playing; a frame redraws only when one of its inputs changed.
+ * The viewport: WebGL2 canvas (model) + Canvas 2D overlay, camera navigation and picking. It is the
+ * full-bleed main area of the Rig mode: it runs edge to edge under the floating chrome, and its
+ * controls (zoom / framing: ViewControls) and messages sit in the part the chrome leaves free
+ * (`--r2-safe-*`, published by the shell's SplitView; the session gets the same insets and frames
+ * the model in the free area).
+ *
+ * Rendering is demand-driven: a frame is scheduled on any store change and while playing; a frame
+ * redraws only when one of its inputs changed. The workspace, checkerboard, frame, selection and
+ * handle colours come from the design tokens (overlay/theme.ts) and follow the appearance.
  */
 import { useEffect, useRef, useState } from 'react';
+import { Button, EmptyState, IconButton, Spinner, Toolbar, ToolbarGroup, ToolbarSeparator } from '../design/index.js';
+import { useT } from '../i18n/index.js';
 import { errorCount } from '../state/app.js';
 import { useApp, useSession } from '../state/context.js';
 import { parseRefKey, type EntityRef } from '../state/doc.js';
@@ -12,10 +19,12 @@ import type { Session } from '../state/session.js';
 import { GlRenderer } from '../gl/renderer.js';
 import { drawOverlay } from '../overlay/draw.js';
 import { rigHighlight } from '../overlay/highlight.js';
+import { readCanvasTheme, type CanvasTheme } from '../overlay/theme.js';
+import { useSettings } from '../shell/settings.js';
 import { formatZoom, panBy, screenToWorld, stepZoom, wheelZoomFactor, zoomAt } from '../view/camera.js';
 import { cyclePick, pickBone, pickParts } from '../view/picking.js';
-import { Icon } from '../ui/icons.js';
 import { keyState } from '../ui/keys.js';
+import './viewport.css';
 
 /** Screen radius (CSS px) within which a click selects a bone joint. */
 const BONE_PICK_PX = 9;
@@ -24,10 +33,21 @@ const CLICK_SLOP = 4;
 
 export function Viewport() {
   const session = useSession();
+  const { resolvedAppearance } = useSettings();
   const host = useRef<HTMLDivElement>(null);
   const glCanvas = useRef<HTMLCanvasElement>(null);
   const overlayCanvas = useRef<HTMLCanvasElement>(null);
   const [panning, setPanning] = useState(false);
+  /** Colours read from the design tokens; null = read them again in the next frame. */
+  const theme = useRef<CanvasTheme | null>(null);
+  const requestRef = useRef<() => void>(() => {});
+
+  // The appearance attribute is applied by an effect above this component: read the tokens in the
+  // next frame, when it is in place.
+  useEffect(() => {
+    theme.current = null;
+    requestRef.current();
+  }, [resolvedAppearance]);
 
   useEffect(() => {
     const el = host.current!;
@@ -40,6 +60,7 @@ export function Viewport() {
     const request = (): void => {
       if (!raf && !disposed) raf = requestAnimationFrame(loop);
     };
+    requestRef.current = request;
     /** Inputs of the last drawn frame; a frame is drawn only when one of them changed. */
     const last: unknown[] = [];
     try {
@@ -60,7 +81,10 @@ export function Viewport() {
       const frame = session.evaluate();
       const s = session.get();
       const dpr = window.devicePixelRatio || 1;
-      const inputs = [frame, s.model, s.camera, s.viewport, dpr, s.overlays, s.background, s.hidden, s.selection, s.hover, session.textureVersion];
+      theme.current ??= readCanvasTheme();
+      const colors = theme.current;
+      const insets = session.getInsets();
+      const inputs = [frame, s.model, s.camera, s.viewport, dpr, s.overlays, s.background, s.hidden, s.selection, s.hover, session.textureVersion, colors, insets];
       const dirty = inputs.length !== last.length || inputs.some((v, i) => !Object.is(v, last[i]));
       if (dirty && s.viewport.width > 0 && s.viewport.height > 0) {
         last.splice(0, last.length, ...inputs);
@@ -74,6 +98,7 @@ export function Viewport() {
             dpr,
             background: s.background,
             hidden,
+            colors: colors.gl,
           });
           session.renderStats.draws = stats.draws;
           session.renderStats.triangles = stats.triangles;
@@ -95,6 +120,8 @@ export function Viewport() {
             selection: s.selection.map(parseRefKey).filter((r): r is EntityRef => r !== null),
             hover: s.hover ? parseRefKey(s.hover) : null,
             hidden,
+            theme: colors.overlay,
+            insets,
           });
         }
         session.renderStats.frames++;
@@ -128,6 +155,7 @@ export function Viewport() {
       ro.disconnect();
       media.removeEventListener('change', request);
       session.setFrameRequester(() => {});
+      requestRef.current = () => {};
       renderer?.dispose();
     };
   }, [session]);
@@ -148,7 +176,7 @@ export function Viewport() {
   const drag = useRef<{ id: number; mode: 'pan' | 'click'; x: number; y: number; moved: boolean } | null>(null);
   const lastClick = useRef<{ x: number; y: number } | null>(null);
 
-  const localPoint = (e: React.PointerEvent): [number, number] => {
+  const localPoint = (e: { clientX: number; clientY: number }): [number, number] => {
     const r = host.current!.getBoundingClientRect();
     return [e.clientX - r.left, e.clientY - r.top];
   };
@@ -218,19 +246,23 @@ export function Viewport() {
   return (
     <div
       ref={host}
-      className={`viewport${panning ? ' is-panning' : ''}`}
+      className="ed-viewport"
+      data-panning={panning ? '' : undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onPointerLeave={onPointerLeave}
+      // A second click on what the first one selected: show it in the inspector.
+      onDoubleClick={() => {
+        const selection = session.get().selection;
+        if (selection.length) session.inspect(selection);
+      }}
       onContextMenu={(e) => e.preventDefault()}
       data-testid="viewport"
     >
-      <canvas ref={glCanvas} className="viewport-gl" data-testid="viewport-gl" />
-      <canvas ref={overlayCanvas} className="viewport-overlay" />
-      <ViewportBanners />
-      <ViewportEmptyState />
+      <canvas ref={glCanvas} className="ed-viewport-gl" data-testid="viewport-gl" />
+      <canvas ref={overlayCanvas} className="ed-viewport-overlay" />
     </div>
   );
 }
@@ -259,146 +291,60 @@ function hitAt(session: Session, wx: number, wy: number): string | null {
   return top ? `part:${top}` : null;
 }
 
-function ViewportBanners() {
+/** What the viewport says when it has nothing to draw: centred in the free area. */
+export function ViewportMessages() {
   const session = useSession();
-  const stale = useApp((s) => s.stale);
-  const errors = useApp((s) => errorCount(s.diagnostics));
-  const validAt = useApp((s) => s.validAt);
-  const evalError = useApp((s) => s.evalError);
-  const conflict = useApp((s) => s.conflict);
-  return (
-    <div className="viewport-banners" onPointerDown={(e) => e.stopPropagation()}>
-      {conflict && (
-        <div className="banner banner-warning" role="alert" data-testid="conflict-banner">
-          <Icon name="warning" />
-          <span title="Someone else (a text editor, an AI tool) saved the file after this version was loaded, so your edit was not written. Reload shows their version (your edit stays in the undo history); Overwrite replaces their change with your version.">
-            The file changed on disk — your last edit is <b>not saved</b>.
-          </span>
-          <span className="banner-actions">
-            <button className="button button-small" onClick={() => void session.resolveConflict('reload')} data-testid="conflict-reload">
-              Reload from disk
-            </button>
-            <button className="button button-small button-danger" onClick={() => void session.resolveConflict('overwrite')} data-testid="conflict-overwrite">
-              Overwrite
-            </button>
-          </span>
-        </div>
-      )}
-      {stale && (
-        <div className="banner banner-error" role="alert" data-testid="stale-banner">
-          <Icon name="error" />
-          <span>
-            The file has {errors} error{errors === 1 ? '' : 's'} — showing the last valid version
-            {validAt ? ` (${new Date(validAt).toLocaleTimeString()})` : ''}.
-          </span>
-          <button className="link-button" onClick={() => session.showDock('problems')}>
-            Show problems
-          </button>
-        </div>
-      )}
-      {evalError && (
-        <div className="banner banner-error" role="alert">
-          <Icon name="error" />
-          <span>{evalError}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ViewportEmptyState() {
-  const session = useSession();
+  const t = useT();
   const status = useApp((s) => s.status);
   const hasModel = useApp((s) => s.model !== null);
   const errors = useApp((s) => errorCount(s.diagnostics));
   const glError = useApp((s) => s.glError);
+  let content: React.ReactNode = null;
   if (glError) {
-    return (
-      <div className="viewport-empty">
-        <div className="empty-card">
-          <Icon name="error" size={22} />
-          <h3>Viewport unavailable</h3>
-          <p>{glError}</p>
-          <p className="muted">Everything else (parameters, inspector, diagnostics) still works.</p>
-        </div>
-      </div>
+    content = <EmptyState icon="error" title={t('viewport.unavailable.title')} description={`${glError} ${t('viewport.unavailable.text')}`} />;
+  } else if (status === 'loading' && !hasModel) {
+    content = <Spinner size={24} aria-label={t('common.loading')} />;
+  } else if (status === 'ready' && !hasModel) {
+    content = (
+      <EmptyState
+        icon="warning"
+        title={t('viewport.nothing.title')}
+        description={t('viewport.nothing.text', { n: errors })}
+        actions={
+          <Button variant="tinted" onClick={() => session.showProblems()}>
+            {t('viewport.showProblems')}
+          </Button>
+        }
+      />
     );
   }
-  if (status === 'loading' && !hasModel) {
-    return (
-      <div className="viewport-empty">
-        <div className="spinner" aria-label="Loading" />
-      </div>
-    );
-  }
-  if (status === 'ready' && !hasModel) {
-    return (
-      <div className="viewport-empty">
-        <div className="empty-card">
-          <Icon name="warning" size={22} />
-          <h3>Nothing to show yet</h3>
-          <p>
-            The model has {errors} error{errors === 1 ? '' : 's'} and no earlier valid version was loaded. Fix the
-            problems below; the viewport updates as soon as the file validates.
-          </p>
-          <button className="button" onClick={() => session.showDock('problems')}>
-            Show problems
-          </button>
-        </div>
-      </div>
-    );
-  }
-  return null;
+  if (!content) return null;
+  return (
+    <div className="ed-viewport-message" onPointerDown={(e) => e.stopPropagation()}>
+      {content}
+    </div>
+  );
 }
 
-/** Bar under the viewport: side panel toggles at its edges, zoom and framing controls. */
-export function ViewBar() {
+/** Zoom and framing controls: a small glass group at the trailing bottom corner of the free area. */
+export function ViewControls() {
   const session = useSession();
+  const t = useT();
   const zoom = useApp((s) => s.camera.zoom);
   const hasModel = useApp((s) => s.model !== null);
-  const panels = useApp((s) => s.panels);
+  if (!hasModel) return null;
   return (
-    <div className="view-bar" data-testid="view-bar">
-      <button
-        className="icon-button"
-        title={panels.outliner ? 'Hide the outliner' : 'Show the outliner'}
-        aria-pressed={panels.outliner}
-        onClick={() => session.togglePanel('outliner')}
-        data-testid="toggle-outliner"
-      >
-        <Icon name="sidebarLeft" />
-      </button>
-      <span className="view-bar-spacer" />
-      {hasModel && (
-        <div className="view-controls" role="group" aria-label="View">
-          <button className="icon-button" title="Zoom out (-)" onClick={() => session.zoomTo(stepZoom(zoom, -1))}>
-            <span className="glyph">−</span>
-          </button>
-          <button className="zoom-readout" title="Reset zoom to 100% (1)" onClick={() => session.zoomTo(1)} data-testid="zoom">
-            {formatZoom(zoom)}
-          </button>
-          <button className="icon-button" title="Zoom in (+)" onClick={() => session.zoomTo(stepZoom(zoom, 1))}>
-            <span className="glyph">+</span>
-          </button>
-          <span className="sep" />
-          <button className="icon-button" title="Frame selection or model (F)" onClick={() => session.focus(session.get().selection.length ? 'selection' : 'fit')}>
-            <Icon name="fit" />
-          </button>
-          <button className="icon-button" title="Frame canvas (Shift+F)" onClick={() => session.focus('canvas')}>
-            <Icon name="model" />
-          </button>
-        </div>
-      )}
-      <span className="sep" />
-      <button
-        className="icon-button"
-        title={panels.inspector ? 'Hide parameters and inspector' : 'Show parameters and inspector'}
-        aria-pressed={panels.inspector}
-        onClick={() => session.togglePanel('inspector')}
-        data-testid="toggle-inspector"
-      >
-        <Icon name="sidebarRight" />
-      </button>
-    </div>
+    <Toolbar size="md" aria-label={t('view.label')} className="ed-view-controls" data-testid="view-bar">
+      <ToolbarGroup>
+        <IconButton icon="zoomOut" label={t('view.zoomOut')} shortcut="-" tooltip="top" onClick={() => session.zoomTo(stepZoom(zoom, -1))} />
+        <button type="button" className="ed-zoom-value r2-num" title={t('view.zoomReset')} aria-label={t('view.zoomReset')} onClick={() => session.zoomTo(1)} data-testid="zoom">
+          {formatZoom(zoom)}
+        </button>
+        <IconButton icon="zoomIn" label={t('view.zoomIn')} shortcut="+" tooltip="top" onClick={() => session.zoomTo(stepZoom(zoom, 1))} />
+        <ToolbarSeparator />
+        <IconButton icon="fit" label={t('view.fit')} shortcut="F" tooltip="top" onClick={() => session.focus(session.get().selection.length ? 'selection' : 'fit')} />
+        <IconButton icon="model" label={t('view.frameCanvas')} shortcut="Shift+F" tooltip="top" onClick={() => session.focus('canvas')} />
+      </ToolbarGroup>
+    </Toolbar>
   );
 }

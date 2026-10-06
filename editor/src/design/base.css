@@ -1,0 +1,363 @@
+/*
+ * Base layer of the Rev2D design system: page defaults (scoped to .r2-app and to the portaled
+ * .r2-layer, so it can live next to the legacy editor styles), materials and glass, text styles,
+ * focus, scrollbars, shared keyframes, forced-colours fallbacks.
+ */
+
+/* ------------------------------------------------------------------------------------------- scope */
+.r2-app,
+.r2-layer {
+  font: var(--r2-text-body);
+  letter-spacing: var(--r2-tracking-body);
+  color: var(--r2-label);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
+  overflow-wrap: break-word;
+  line-break: strict;
+}
+
+/* Korean breaks between words, not between syllables. */
+.r2-app:lang(ko),
+.r2-layer:lang(ko),
+.r2-app :lang(ko),
+.r2-layer :lang(ko) {
+  word-break: keep-all;
+}
+
+.r2-app {
+  background: var(--r2-bg-grouped);
+  /* The plate behind grouped content (list groups, wells): white cards on the grouped background,
+     a translucent lighter plate on materials and glass. */
+  --r2-plate: var(--r2-bg-grouped-2);
+}
+
+.r2-layer,
+.r2-glass,
+.r2-glass-panel,
+.r2-glass-clear,
+.r2-material-ultrathin,
+.r2-material-thin,
+.r2-material-regular,
+.r2-material-thick {
+  --r2-plate: var(--r2-fill-raised);
+}
+
+.r2-app *,
+.r2-app *::before,
+.r2-app *::after,
+.r2-layer,
+.r2-layer *,
+.r2-layer *::before,
+.r2-layer *::after {
+  box-sizing: border-box;
+}
+
+/* A nested appearance scope: inherited `color` was computed in the outer scheme, so restate it. */
+[data-appearance] {
+  color: var(--r2-label);
+}
+
+.r2-app :where(button, input, select, textarea),
+.r2-layer :where(button, input, select, textarea) {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+.r2-app ::selection,
+.r2-layer ::selection {
+  background: var(--r2-selection-text);
+}
+
+/* --------------------------------------------------------------------------------------------- focus */
+.r2-app :focus-visible,
+.r2-layer :focus-visible {
+  outline: var(--r2-focus-width) solid var(--r2-focus-color);
+  outline-offset: var(--r2-focus-offset);
+}
+
+.r2-app :focus:not(:focus-visible),
+.r2-layer :focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ----------------------------------------------------------------------------------------- materials */
+.r2-material-ultrathin {
+  background: var(--r2-material-ultrathin);
+  -webkit-backdrop-filter: var(--r2-material-filter-ultrathin);
+  backdrop-filter: var(--r2-material-filter-ultrathin);
+}
+
+.r2-material-thin {
+  background: var(--r2-material-thin);
+  -webkit-backdrop-filter: var(--r2-material-filter-thin);
+  backdrop-filter: var(--r2-material-filter-thin);
+}
+
+.r2-material-regular {
+  background: var(--r2-material-regular);
+  -webkit-backdrop-filter: var(--r2-material-filter-regular);
+  backdrop-filter: var(--r2-material-filter-regular);
+}
+
+.r2-material-thick {
+  background: var(--r2-material-thick);
+  -webkit-backdrop-filter: var(--r2-material-filter-thick);
+  backdrop-filter: var(--r2-material-filter-thick);
+}
+
+/*
+ * Glass: plate + backdrop filter + hairline and soft shadow (box-shadow) + rim highlight (::before,
+ * a 1 px gradient stroke that follows the radius). The element keeps its ::after and its children;
+ * do not put a second glass inside it (use fills on top of glass).
+ */
+:where(.r2-glass, .r2-glass-panel, .r2-glass-clear) {
+  position: relative;
+}
+
+.r2-glass,
+.r2-glass-panel,
+.r2-glass-clear {
+  isolation: isolate;
+  background: var(--r2-glass-plate);
+  -webkit-backdrop-filter: var(--r2-glass-filter);
+  backdrop-filter: var(--r2-glass-filter);
+  box-shadow: var(--r2-glass-shadow);
+}
+
+.r2-glass-panel {
+  background: var(--r2-glass-panel-plate);
+  -webkit-backdrop-filter: var(--r2-glass-panel-filter);
+  backdrop-filter: var(--r2-glass-panel-filter);
+  box-shadow: var(--r2-glass-panel-shadow);
+}
+
+.r2-glass-clear {
+  background: var(--r2-glass-clear-plate);
+  -webkit-backdrop-filter: var(--r2-glass-clear-filter);
+  backdrop-filter: var(--r2-glass-clear-filter);
+}
+
+.r2-glass::before,
+.r2-glass-panel::before,
+.r2-glass-clear::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 1px;
+  border-radius: inherit;
+  background: var(--r2-glass-rim);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------------------- text styles */
+.r2-text-large-title {
+  font: var(--r2-text-large-title);
+  letter-spacing: var(--r2-tracking-display);
+}
+
+.r2-text-title-1 {
+  font: var(--r2-text-title-1);
+  letter-spacing: var(--r2-tracking-display);
+}
+
+.r2-text-title-2 {
+  font: var(--r2-text-title-2);
+  letter-spacing: var(--r2-tracking-display);
+}
+
+.r2-text-title-3 {
+  font: var(--r2-text-title-3);
+}
+
+.r2-text-headline {
+  font: var(--r2-text-headline);
+}
+
+.r2-text-body {
+  font: var(--r2-text-body);
+}
+
+.r2-text-callout {
+  font: var(--r2-text-callout);
+}
+
+.r2-text-subhead {
+  font: var(--r2-text-subhead);
+}
+
+.r2-text-footnote {
+  font: var(--r2-text-footnote);
+}
+
+.r2-text-caption {
+  font: var(--r2-text-caption);
+  letter-spacing: var(--r2-tracking-caption);
+}
+
+.r2-text-mono {
+  font: var(--r2-text-mono);
+}
+
+.r2-text-mono-small {
+  font: var(--r2-text-mono-small);
+}
+
+/* Numbers that change in place (values, timecodes) keep their width. */
+.r2-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.r2-label-2 {
+  color: var(--r2-label-2);
+}
+
+.r2-label-3 {
+  color: var(--r2-label-3);
+}
+
+.r2-tint {
+  color: var(--r2-tint);
+}
+
+.r2-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.r2-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --------------------------------------------------------------------------------------------- icons */
+.r2-icon {
+  display: block;
+  flex: none;
+}
+
+/* ---------------------------------------------------------------------------------------- hit targets */
+/* On touch screens a control keeps its visual size and grows an invisible 44 px target around it. */
+@media (pointer: coarse) {
+  .r2-hit {
+    position: relative;
+  }
+
+  .r2-hit::after {
+    content: '';
+    position: absolute;
+    top: min(0px, calc((100% - var(--r2-hit-touch)) / 2));
+    bottom: min(0px, calc((100% - var(--r2-hit-touch)) / 2));
+    left: min(0px, calc((100% - var(--r2-hit-touch)) / 2));
+    right: min(0px, calc((100% - var(--r2-hit-touch)) / 2));
+  }
+}
+
+/* ----------------------------------------------------------------------------------------- scrolling */
+.r2-scroll {
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--r2-label-4) transparent;
+}
+
+.r2-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.r2-scroll::-webkit-scrollbar-thumb {
+  background: var(--r2-label-4);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: var(--r2-radius-capsule);
+}
+
+.r2-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--r2-label-3);
+}
+
+.r2-scroll::-webkit-scrollbar-track,
+.r2-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ----------------------------------------------------------------------------------------- keyframes */
+@keyframes r2-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes r2-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Surfaces "materialize": they scale up a few percent from their origin while fading in. */
+@keyframes r2-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(var(--r2-motion-scale));
+  }
+}
+
+@keyframes r2-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--r2-motion-distance));
+  }
+}
+
+@keyframes r2-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ------------------------------------------------------------------------------------- forced colours */
+@media (forced-colors: active) {
+  .r2-glass,
+  .r2-glass-panel,
+  .r2-glass-clear,
+  .r2-material-ultrathin,
+  .r2-material-thin,
+  .r2-material-regular,
+  .r2-material-thick {
+    background: Canvas;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border: 1px solid CanvasText;
+  }
+
+  .r2-glass::before,
+  .r2-glass-panel::before,
+  .r2-glass-clear::before {
+    display: none;
+  }
+
+  .r2-app :focus-visible,
+  .r2-layer :focus-visible {
+    outline-color: Highlight;
+  }
+}

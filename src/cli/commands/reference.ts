@@ -63,6 +63,10 @@ export const DOC_TOPICS: Record<string, DocTopic> = {
     files: ['docs/INTEROP.md'],
     description: 'Spine and Live2D import / export: support matrix, coordinate conversion, parameter map, limitations (.moc3 is not supported), workflows',
   },
+  avatar: {
+    files: ['docs/AVATAR.md'],
+    description: 'an animated avatar from one illustration: the "rev2d avatar" workflow (landmarks, build, review, fixes), the generated model, drawn variants, lip sync, the editor\'s Avatar mode',
+  },
   architecture: { files: ['docs/ARCHITECTURE.md'], description: 'how Rev2D is built: modules, evaluation pipeline, renderer, editor, MCP' },
   examples: {
     files: ['examples/README.md'],
@@ -150,7 +154,7 @@ async function readTopic(topic: DocTopic): Promise<{ text: string; path: string 
 export const docs: Command = {
   name: 'docs',
   group: 'reference',
-  summary: 'print bundled documentation (spec, ops, cli, mcp, agents, recipes, interop, architecture, examples)',
+  summary: 'print bundled documentation (spec, ops, cli, mcp, agents, recipes, interop, avatar, architecture, examples)',
   usage: 'docs [topic] [--json]',
   args: ['[topic]'],
   flags: [],
@@ -158,7 +162,7 @@ export const docs: Command = {
   description: [
     'Without a topic, lists the topics with their installed file and a description ("recipes" lists every recipe heading of docs/RECIPES.md). The text is printed verbatim (Markdown). "ops" falls back to the op catalogue built into rev2d, and "examples" always ends with the list of templates.',
   ],
-  examples: ['rev2d docs', 'rev2d docs spec', 'rev2d docs ops', 'rev2d docs recipes', 'rev2d docs interop'],
+  examples: ['rev2d docs', 'rev2d docs spec', 'rev2d docs ops', 'rev2d docs recipes', 'rev2d docs interop', 'rev2d docs avatar'],
   async run(ctx) {
     const topic = ctx.args.positionals[0];
     const names = Object.keys(DOC_TOPICS);

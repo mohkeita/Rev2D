@@ -1,13 +1,30 @@
 /**
  * Validation of editor-protocol payloads: view state (POST /api/state), commands (POST /api/command),
  * workspace requests (POST /api/open|new|save-as|import), interop requests (POST /api/live2d-import,
- * /api/export) and screenshot query parameters. Errors are HttpErrors naming the offending field and
- * the fix.
+ * /api/export), avatar requests (PUT /api/avatar, POST /api/avatar/build|new|variants/import|variants/request), agent requests (POST
+ * /api/agent/jobs, .../message, PUT /api/agent/settings) and screenshot query parameters.
+ * Errors are HttpErrors naming the offending field and the fix.
  */
 import { z } from 'zod';
-import type { EditorCommand, EditorState, ImportRequest, NewRequest, OpenRequest, SaveAsRequest } from '../node/editor-registry.js';
+import type {
+  AgentMessageRequest,
+  AgentSettingsRequest,
+  AgentStartRequest,
+  AvatarBuildRequest,
+  AvatarNewRequest,
+  AvatarSaveRequest,
+  AvatarVariantRequestsRequest,
+  AvatarVariantsImportRequest,
+  EditorCommand,
+  EditorState,
+  ImportRequest,
+  NewRequest,
+  OpenRequest,
+  SaveAsRequest,
+} from '../node/editor-registry.js';
 import type { ExportRequest, Live2dImportRequest } from '../node/interop.js';
 import { OVERLAY_LAYERS } from '../api/index.js';
+import { VARIANT_IDS } from '../avatar/types.js';
 import type { OverlayLayer } from '../render/index.js';
 import { HttpError } from './http.js';
 
@@ -45,6 +62,7 @@ const StateSchema = z.looseObject({
   physics: z.boolean().optional(),
   hidden: z.array(z.string()).optional(),
   pinned: z.array(z.string()).optional(),
+  avatar: z.looseObject({ part: z.string().nullable().optional() }).optional(),
   updatedAt: z.string().optional(),
 });
 
@@ -54,7 +72,7 @@ export function parseEditorState(body: unknown, file: string): EditorState {
     throw new HttpError(
       400,
       `invalid editor state: ${issuesText(r.error)}`,
-      `expected {params: {<id>: number}, time: seconds, animations: [${LAYER_SHAPE}], playing, selection: [ids], overlay: [layers], viewBox: [x, y, w > 0, h > 0] | null, physics?: boolean, hidden?: [part ids], pinned?: [param ids], updatedAt}`,
+      `expected {params: {<id>: number}, time: seconds, animations: [${LAYER_SHAPE}], playing, selection: [ids], overlay: [layers], viewBox: [x, y, w > 0, h > 0] | null, physics?: boolean, hidden?: [part ids], pinned?: [param ids], avatar?: {part?: "<avatar part id>" | null}, updatedAt}`,
     );
   }
   return { ...r.data, file, updatedAt: r.data.updatedAt ?? new Date().toISOString() };
@@ -180,6 +198,115 @@ export function parseImportRequest(body: unknown): ImportRequest {
     }
   });
   return req;
+}
+
+// ----------------------------------------------------------------------------- avatar requests
+
+/** PUT /api/avatar: exactly one of `text` / `doc`, the version it is based on and whether to recompile. */
+export function parseAvatarSaveRequest(body: unknown): AvatarSaveRequest {
+  const shape = '{"text": "<avatar.json as text>"} or {"doc": {<avatar spec>}}, plus "baseMtimeMs"?: <mtimeMs of the version the edit is based on>, "compile"?: <boolean, default true>';
+  const req = parseRequest(
+    'avatar save',
+    z.strictObject({ text: z.string().optional(), doc: z.unknown().optional(), baseMtimeMs: Finite.nullable().optional(), compile: z.boolean().optional() }),
+    body,
+    shape,
+  );
+  if ((req.text === undefined) === (req.doc === undefined)) {
+    throw new HttpError(400, 'invalid avatar save request: send exactly one of "text" (the raw avatar.json) or "doc" (the spec object)', `expected ${shape}`);
+  }
+  if (req.doc !== undefined && (typeof req.doc !== 'object' || req.doc === null || Array.isArray(req.doc))) {
+    throw new HttpError(400, 'invalid avatar save request: "doc" must be a JSON object (the whole avatar spec)', 'or send the raw file contents as "text"');
+  }
+  return {
+    ...(req.text !== undefined ? { text: req.text } : { doc: req.doc }),
+    ...(req.baseMtimeMs !== undefined && req.baseMtimeMs !== null ? { baseMtimeMs: req.baseMtimeMs } : {}),
+    ...(req.compile !== undefined ? { compile: req.compile } : {}),
+  };
+}
+
+/** POST /api/avatar/build: `body` is undefined for an empty request body (the defaults). */
+export function parseAvatarBuildRequest(body: unknown): AvatarBuildRequest {
+  if (body === undefined) return {};
+  return parseRequest('avatar build', z.strictObject({ layers: z.boolean().optional() }), body, '{"layers"?: <boolean, default true: rebuild the layer images; false: only recompile the model>} (or no body)');
+}
+
+const VariantIds = z.array(z.enum(VARIANT_IDS)).max(VARIANT_IDS.length * 2);
+const VARIANT_LIST = `[${VARIANT_IDS.map((id) => `"${id}"`).join(', ')}]`;
+
+export function parseAvatarVariantsImportRequest(body: unknown): AvatarVariantsImportRequest {
+  if (body === undefined) return {};
+  return parseRequest(
+    'avatar variants import',
+    z.strictObject({ ids: VariantIds.optional(), remove: VariantIds.optional() }),
+    body,
+    `{"ids"?: <variant ids to import, default every drawing in variants/>, "remove"?: <variant ids whose drawings are deleted first>} with ids out of ${VARIANT_LIST} (or no body)`,
+  );
+}
+
+export function parseAvatarVariantRequestsRequest(body: unknown): AvatarVariantRequestsRequest {
+  if (body === undefined) return {};
+  return parseRequest('avatar variants request', z.strictObject({ ids: VariantIds.optional() }), body, `{"ids"?: <variant ids, default the recommended ones>} with ids out of ${VARIANT_LIST} (or no body)`);
+}
+
+export function parseAvatarNewRequest(body: unknown): AvatarNewRequest {
+  return parseRequest(
+    'avatar new',
+    z.strictObject({
+      name: z.string().min(1, 'expected a non-empty name').max(80, 'expected at most 80 characters').optional(),
+      dir: FilePath.optional(),
+      image: z.strictObject({ name: z.string().min(1, 'expected the file name of the picture').max(255, 'expected at most 255 characters'), base64: z.string().min(1, 'expected the PNG bytes, base64-encoded') }),
+      unique: z.boolean().optional(),
+    }),
+    body,
+    '{"image": {"name": "<file name>.png", "base64": "<PNG bytes>"}, "name"?: "<avatar name: letters, digits, _ and ->", "dir"?: "<folder relative to the workspace root, default: the name>", "unique"?: <boolean: use "<dir>-2", ... when the folder exists>}',
+  );
+}
+
+// ----------------------------------------------------------------------------- agent requests
+
+const AgentImages = z.array(FilePath).max(8, 'expected at most 8 images');
+const AGENT_START_SHAPE =
+  '{"provider": "codex"|"claude", "kind"?: "<task kind, default freeform>", "prompt"?: "<the request>", "context"?: {"project"?: "<folder relative to the workspace root>", "file"?: "<model path>", ...}, ' +
+  '"images"?: ["<image path relative to the workspace root>"], "model"?: "<name>", "effort"?: "minimal"|"low"|"medium"|"high"|"xhigh"|"max", "sandbox"?: "read-only"|"workspace-write", "allowImageGeneration"?: <boolean>}';
+
+export function parseAgentStartRequest(body: unknown): AgentStartRequest {
+  return parseRequest(
+    'agent job',
+    z.strictObject({
+      provider: z.enum(['codex', 'claude']),
+      kind: z.string().min(1).max(40).optional(),
+      prompt: z.string().optional(),
+      context: z.record(z.string(), z.unknown()).optional(),
+      images: AgentImages.optional(),
+      model: z.string().min(1).max(80).optional(),
+      effort: z.enum(['minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+      sandbox: z.enum(['read-only', 'workspace-write']).optional(),
+      allowImageGeneration: z.boolean().optional(),
+    }),
+    body,
+    AGENT_START_SHAPE,
+  );
+}
+
+export function parseAgentMessageRequest(body: unknown): AgentMessageRequest {
+  return parseRequest(
+    'agent message',
+    z.strictObject({
+      prompt: z.string().refine((s) => s.trim() !== '', 'expected a non-empty message'),
+      images: AgentImages.optional(),
+      allowImageGeneration: z.boolean().optional(),
+    }),
+    body,
+    '{"prompt": "<the follow-up message>", "images"?: ["<image path relative to the workspace root>"], "allowImageGeneration"?: <boolean>}',
+  );
+}
+
+/** PUT /api/agent/settings: the settings a person may save (at least one). */
+export function parseAgentSettingsRequest(body: unknown): AgentSettingsRequest {
+  const shape = '{"codexWindowsSandbox": "config"|"unelevated"}';
+  const req = parseRequest('agent settings', z.strictObject({ codexWindowsSandbox: z.enum(['config', 'unelevated']).optional() }), body, shape);
+  if (req.codexWindowsSandbox === undefined) throw new HttpError(400, 'invalid agent settings request: nothing to save', `expected ${shape}`);
+  return { codexWindowsSandbox: req.codexWindowsSandbox };
 }
 
 // ----------------------------------------------------------------------------- screenshots

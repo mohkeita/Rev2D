@@ -1,7 +1,8 @@
 /**
  * Workspace endpoints of the editor protocol (file management; see the "workspace" section of
  * src/node/editor-registry.ts): list, open, new, save as, close, import (Rev2D models, and Spine exports
- * converted on the way), download and templates.
+ * converted on the way), download and templates. Open also takes an avatar project (its avatar.json or
+ * its folder; avatar-routes.ts), and the listing marks the avatar projects.
  * Every request path goes through WorkspaceRoot, so nothing outside the workspace root is read or
  * written. Operations that switch the open model run one at a time (ApiContext.exclusive).
  */
@@ -12,11 +13,12 @@ import type { Diagnostic } from '../core/types.js';
 import { suggest } from '../core/address.js';
 import { formatModelJson } from '../core/format.js';
 import { parseJsonc, parseModelText } from '../core/validate.js';
-import type { OpenResult, WorkspaceInfo } from '../node/editor-registry.js';
+import type { AvatarOpenResult, OpenResult, WorkspaceInfo } from '../node/editor-registry.js';
 import { BUILTIN_TEMPLATES, EXAMPLES_DIR, listTemplates, loadTemplate } from '../api/templates.js';
 import { isAtlasName, looksLikeSpineSkeleton } from '../interop/detect.js';
 import type { InteropReport } from '../interop/types.js';
 import { InteropError, countsText, importSpineUpload, issueLine, spineModelText } from '../node/interop.js';
+import { avatarOpenTarget, avatarProjectAt, markAvatarProjects, openAvatarAlone } from './avatar-routes.js';
 import { HttpError, readJson, sendJson } from './http.js';
 import { ModelStore } from './model-store.js';
 import { parseImportRequest, parseNewRequest, parseOpenRequest, parseSaveAsRequest } from './protocol.js';
@@ -38,10 +40,12 @@ export function requireStore(ctx: ApiContext): ModelStore {
 }
 
 export function workspaceInfo(ctx: ApiContext): WorkspaceInfo {
+  const avatar = ctx.avatar.ref();
   return {
     root: ctx.root.dir,
     current: ctx.store?.file ?? null,
     recent: ctx.recent.list().filter((f) => ctx.root.containsSync(f)),
+    ...(avatar ? { avatar } : {}),
   };
 }
 
@@ -82,7 +86,7 @@ export function getWorkspace(ctx: ApiContext, _req: IncomingMessage, res: Server
 }
 
 export async function getFiles(ctx: ApiContext, _req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
-  sendJson(res, 200, await listDirectory(ctx.root, url.searchParams.get('dir') ?? ''));
+  sendJson(res, 200, await markAvatarProjects(ctx.root, await listDirectory(ctx.root, url.searchParams.get('dir') ?? '')));
 }
 
 export function getTemplates(_ctx: ApiContext, _req: IncomingMessage, res: ServerResponse): void {
@@ -145,18 +149,35 @@ async function openModel(ctx: ApiContext, requested: string, origin: FileOrigin,
   }
   const { text, mtimeMs } = await store.read();
   const delivered = await ctx.switchTo(store, origin);
-  return { result: { file: store.file, text, mtimeMs, notes: [...notes, ...errorNote(shown, text)] }, delivered };
+  // A model in an avatar project's folder opens that project with it (avatar mode).
+  const avatar = ctx.avatar.ref();
+  return { result: { file: store.file, text, mtimeMs, notes: [...notes, ...errorNote(shown, text)], ...(avatar ? { avatar } : {}) }, delivered };
+}
+
+/**
+ * What POST /api/open and the "open" command open: a model file, or an avatar project named by its
+ * avatar.json or its folder. A project opens with its built model; while it has none, the project
+ * is open without a model (AvatarOpenResult). The caller holds ctx.exclusive.
+ */
+async function openTarget(ctx: ApiContext, requested: string, origin: FileOrigin): Promise<{ result: OpenResult | AvatarOpenResult; delivered: number }> {
+  const abs = await ctx.root.resolve(requested, 'file');
+  const st = await stat(abs).catch(() => null);
+  const project = st ? await avatarProjectAt(abs, st) : null;
+  if (!project) return openModel(ctx, requested, origin);
+  const target = await avatarOpenTarget(ctx.root, project);
+  if (target.model === null) return openAvatarAlone(ctx, target.ref, origin, target.note ? [target.note] : []);
+  return openModel(ctx, target.model, origin, [`opened the built model of the avatar project ${ctx.root.rel(project) || '.'}`]);
 }
 
 export async function postOpen(ctx: ApiContext, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const { file } = parseOpenRequest(await readJson(req, ctx.maxBodyBytes));
-  const { result } = await ctx.exclusive(() => openModel(ctx, file, 'editor'));
+  const { result } = await ctx.exclusive(() => openTarget(ctx, file, 'editor'));
   sendJson(res, 200, result);
 }
 
 /** EditorCommand {type: "open"}: open on behalf of an AI; the tabs follow through "file-changed". */
-export function openCommand(ctx: ApiContext, file: string): Promise<{ result: OpenResult; delivered: number }> {
-  return ctx.exclusive(() => openModel(ctx, file, 'ai'));
+export function openCommand(ctx: ApiContext, file: string): Promise<{ result: OpenResult | AvatarOpenResult; delivered: number }> {
+  return ctx.exclusive(() => openTarget(ctx, file, 'ai'));
 }
 
 export async function postClose(ctx: ApiContext, _req: IncomingMessage, res: ServerResponse): Promise<void> {

@@ -18,7 +18,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Node >= 22](https://img.shields.io/badge/node-%3E%3D22-339933?logo=nodedotjs&logoColor=white)
 ![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Tests: 1600+ passing](https://img.shields.io/badge/tests-1600%2B%20passing-brightgreen)
+![Tests: 2600+ passing](https://img.shields.io/badge/tests-2600%2B%20passing-brightgreen)
 [![MCP: 18 tools](https://img.shields.io/badge/MCP-18%20tools-6E56CF)](docs/MCP.md)
 
 <img src="docs/media/hero.gif" width="720" alt="Four Rev2D example models animating in a 2x2 grid: hana, an anime bust, idling and blinking; a slime jumping; a robot arm reaching with IK; textured koinobori fluttering on a pole">
@@ -37,14 +37,18 @@
 - **A deterministic, headless renderer.** Pure TypeScript with no GPU and no browser: the same
   model and inputs always give the same pixels. It renders debug overlays, contact sheets, GIFs and
   PNG sequences.
-- **Tools an agent can drive.** A 21-command CLI with `--json` output, atomic and validated edit
+- **Tools an agent can drive.** A 35-command CLI with `--json` output, atomic and validated edit
   operations, and an MCP server with 18 tools that return renders as images. The whole workflow is
   in [How AI agents use Rev2D](#how-ai-agents-use-rev2d).
+- **An avatar from one illustration.** Give it one picture: landmarks placed by an agent (or by
+  you, with handles) turn it into a model that blinks, talks, turns its head, breathes and sways its
+  hair. See [Avatar from one illustration](#avatar-from-one-illustration).
 - **Spine and Live2D files in and out.** Spine skeletons import as models and models export to
   Spine runtimes; Live2D motions, expressions and physics move both ways. See
   [Spine and Live2D interop](#spine-and-live2d-interop).
 - **A live editor for the human.** A React + WebGL2 [editor](#the-editor) reloads every change the
-  AI writes, and the AI can see and drive the view you are looking at.
+  AI writes, and the AI can see and drive the view you are looking at. It can also run Codex or
+  Claude Code itself, in its [AI panel](#the-ai-panel).
 
 ## How AI agents use Rev2D
 
@@ -174,7 +178,7 @@ command has `--json`, and [AGENTS.md](AGENTS.md) is the agent's guide.
 | --- | --- | --- |
 | Learn | `rev2d_guide` | Quickstart for AI authors: conventions, workflow, address grammar, recipes. **Call first.** |
 | | `rev2d_schema` | JSON Schema of the model, or of one part of it (`Part`, `Binding`, `Physics`, ...) |
-| | `rev2d_docs` | The bundled docs: spec, ops, cli, mcp, recipes, architecture, examples, agents |
+| | `rev2d_docs` | The bundled docs: spec, ops, cli, mcp, recipes, interop, avatar, architecture, examples, agents |
 | Check | `rev2d_validate` | Diagnostics with JSON pointers, stable codes and fix hints |
 | | `rev2d_info` | Outline: parameters and what they drive, bone tree, warps, parts, bindings, IK, physics, animations |
 | See | `rev2d_render` | One pose as an inline PNG, with overlays, IK reach and warning notes |
@@ -238,6 +242,9 @@ rev2d editor command --open models/cat.r2d.json   # switch the editor to another
 > Analyze every animation in `robot-arm.r2d.json` for IK reach, physics clamping and loop seams.
 > Fix what you find with ops, and show me before/after sheets.
 
+> Turn `my-character.png` into an avatar with the `rev2d avatar ...` commands (read `rev2d docs avatar` first).
+> Show me the review sheets and tell me which landmarks you are least sure about.
+
 ### Why it works
 
 **Diagnostics an agent can act on.** Each problem names the exact place in the file, a stable code
@@ -264,25 +271,97 @@ parts leave the canvas.
 
 <img src="docs/media/verify.png" width="800" alt="How the AI checks its own work: a render of hana with bone, warp, label and grid overlays; a 3x3 AngleX by AngleY head-turn contact sheet; and the text report of rev2d analyze on the idle animation (physics never clamped, loop seam closes)">
 
+## Avatar from one illustration
+
+Rigging a character usually starts with a layered drawing. Rev2D can also start from **one flat
+picture**, ideally a front-facing bust on a transparent background. Someone places landmarks on it
+(the head, the eyes, the mouth, the hair strands, the body), and Rev2D cuts the picture into layers
+along them, fills in what was behind each layer, and generates an ordinary Rev2D model. The model
+blinks, talks, turns and tilts its head, breathes and sways its hair, and it comes with physics,
+six animations (`idle`, `blink`, `talk`, `nod`, `look_around`, `sweep`) and review sheets.
+
+<p align="center"><img src="docs/images/avatar-landmarks.png" width="300" alt="The hana test illustration with every avatar landmark drawn over it in group colours"> <img src="docs/images/avatar-turn.png" width="300" alt="3x3 grid of the generated avatar turning its head: AngleX -30, 0, 30 across and AngleY 30, 0, -30 down"></p>
+
+```sh
+rev2d avatar new picture.png avatars/hana          # project: source.png + a draft avatar.json
+rev2d avatar vision-check make avatars/hana/work/vision   # can the agent read coordinates? (then: score)
+rev2d avatar grid avatars/hana --region 180,220,260,280   # source-pixel grids to read landmarks from
+rev2d avatar validate avatars/hana                 # what is missing or wrong, with hints
+rev2d avatar overlay avatars/hana --part eyes.imageLeft --zoom   # the landmarks on the picture
+rev2d avatar build avatars/hana                    # layers + avatars/hana/hana.r2d.json, checked for folds
+rev2d avatar poses avatars/hana                    # review sheets: poses, turn, eyes, mouth
+```
+
+An agent repeats validate, overlay, build and poses until the sheets look right: closed eyes
+without a trace of the iris, a turn and a tilt that neither tear the picture nor cut the chin, hair
+that sways while the face stays still. Closed eyes and mouth shapes can also be **drawn** by an
+image generator (`rev2d avatar variants request|import|status`, only with the owner's consent);
+Rev2D checks each drawing and uses it in place of the mesh deformation. Text in kana, Hangul or romaji
+becomes lip-sync motion on `MouthOpen` / `MouthForm`. Projects from Mesh Avatar Studio, the
+open-source (MIT) tool that inspired this workflow, import with `rev2d avatar import-mas`; Rev2D's
+builder is its own implementation. Only use pictures you made or may use. Rev2D itself uploads
+nothing; an AI task you start sends the picture to that AI provider (and, for drawn variants, to its
+image generator).
+
+In the editor, `rev2d edit avatars/hana` opens the project in **Avatar mode**: the illustration
+with a handle on every landmark, a list of the parts with their problems, and a live preview with
+Pose, Lip Sync and Selected pages that follows every drag. A new avatar starts from the start
+screen or File > New Avatar from Illustration…: drop a PNG, then let the AI place the landmarks or
+place them yourself. Save writes `avatar.json` and recompiles the preview; when an outline that cuts
+the layers moved, a banner offers Save and Rebuild Layers. The Drawn Variants section lists every
+closed-eye and mouth variant with a thumbnail and its state, lets an AI draw them (Draw with AI…,
+after it says that the illustration goes to the provider's image generator) and imports drawings
+you made yourself. The full guide (every landmark, the
+generated parameters, drawn variants, lip sync, common problems) is
+[docs/AVATAR.md](docs/AVATAR.md), also as `rev2d docs avatar`.
+
 ## The editor
 
 `rev2d edit` opens a web editor (React 19 + WebGL2) at `http://127.0.0.1:4777`. It evaluates models
-with the same core as the CLI.
+with the same core as the CLI. Its look follows iOS and iPadOS: the canvas fills the window, the
+controls float above it on translucent rounded panels, there is one blue tint, and it comes in light
+and dark (or follows the system). The interface speaks English, Korean and Japanese, following the
+browser language ([docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md)).
 
 | | |
 | --- | --- |
+| **Modes** | **Rig** for models (below) and **Avatar** for avatar projects ([above](#avatar-from-one-illustration)); the toolbar switches between them once a project has a built model. |
+| **AI panel** | The sparkles button: Codex or Claude Code works on the open model or avatar while you watch ([below](#the-ai-panel)). |
 | **Live reload** | Changes on disk from the AI, the CLI or a text editor show up at once. Edits made in the editor are written back to the same file. |
 | **Parameters** | Sliders by group (the outliner search filters them too). Pin a physics output to hold it; double-click a slider to reset it. |
 | **Viewport** | Zoom and pan, click to select parts and bone joints, overlays for bones, mesh, warps, bounds, labels and grid (`B` `M` `W` `X` `L` `G`), and hide parts in the preview (`H`). |
 | **Timeline & layers** | Play, loop, speed, physics on/off, keys per track, and extra animation layers with weight, `add`, `start` and `once`. |
 | **Outliner & inspector** | Rig tree, parts in draw order, warps, parameters, animations, bindings, IK and physics. Edit any object as JSON (`Ctrl+Enter` applies it), and watch live IK and physics diagnostics. |
 | **Problems & undo** | Validation diagnostics as you edit; undo and redo for inspector edits. |
-| **File menu** | New… (`Alt+N`), Open… (`Ctrl+O`), Open Recent, Save (`Ctrl+S`), Save As… (`Ctrl+Shift+S`), Import from computer… (or drop a model `.json` with its PNGs, or a Spine export), Import Live2D motions…, Download copy, Export PNG of the view, Export to ▸ Spine… / Live2D motions…, Reload from disk, Close. |
-| **Start screen** | New model, Open, Import, recent files, and example cards (hana, robot arm, slime, textured, minimal) that copy an example into your workspace and leave the original untouched. |
+| **File menu** | New… (`Alt+N`), New Avatar from Illustration…, Open… (`Ctrl+O`), Open Recent, Save (`Ctrl+S`), Save As… (`Ctrl+Shift+S`), Import from computer… (or drop a model `.json` with its PNGs, or a Spine export), Import Live2D motions…, Download copy, Export PNG of the view, Export to ▸ Spine… / Live2D motions…, Reload from disk, Close. |
+| **Start screen** | New model, Avatar from an Illustration, Open, Import, recent files, and example cards (hana, robot arm, slime, textured, minimal) that copy an example into your workspace and leave the original untouched. |
 | **Safety** | An edit is saved as you make it. If a write fails (an invalid model, a conflict, a deleted file), the editor keeps your version and asks Save / Don't save / Cancel before New, Open, Import, Close or Reload replaces it. |
 | **Workspace** | The editor works inside one folder: `rev2d edit [model or dir] --root <dir>` (default: the model's folder, else the current one). It opens, creates, saves and imports only there and refuses paths outside it, including through symlinks. Without a model it starts on the start screen. |
 
 Press `?` in the editor for every shortcut.
+
+### The AI panel
+
+The editor can run a coding agent itself. Open the AI panel (the sparkles button), pick **Codex**
+or **Claude Code**, and type a request or pick a suggestion: the agent works in the workspace, and
+the panel shows its messages, the commands it runs, the files it changes and its to-do list, with
+Stop and follow-up messages. The model or avatar it writes reloads at once. Avatar mode uses the
+same panel for "Let AI Place Them" and "Ask AI to Fix This Part".
+
+- **Requirements**: the Codex CLI (`npm install -g @openai/codex`, then `codex login`) or Claude Code
+  (run `claude` once and sign in), installed and logged in on this computer. The agent runs with
+  **your** login of that CLI.
+- **Local only**: the agent endpoints exist only while the editor listens on a loopback address (the
+  default). With `--host` they are off unless you add `--allow-agent`, which lets every machine that
+  reaches the port start runs with your login.
+- **Protected**: every request needs a per-server token that a foreign web page cannot send; the
+  agent works inside the workspace with a read-only or workspace-write sandbox, and image generation
+  (Codex) stays off unless you switch on Allow Image Generation.
+- **Windows and Codex**: if Codex cannot start commands (its "elevated" sandbox is not set up), the
+  panel offers a one-click switch to the unelevated sandbox; the same setting is
+  `rev2d edit --agent-codex-sandbox unelevated`.
+
+Protocol, security model and troubleshooting: [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md).
 
 ## Live2D and Spine concepts in Rev2D
 
@@ -391,26 +470,35 @@ UVs and a texture-alpha mask. Details and a feature matrix: [examples/README.md]
 | [docs/OPS.md](docs/OPS.md) | The 16 edit operations, reference handling and the `bind_warp` math |
 | [docs/MCP.md](docs/MCP.md) | MCP setup, the 18 tools, the editor bridge and troubleshooting |
 | [docs/INTEROP.md](docs/INTEROP.md) | Spine and Live2D import / export: support matrix, coordinates, parameter map, workflows, limitations |
-| [docs/RECIPES.md](docs/RECIPES.md) | 21 copy-paste rig recipes with the commands that verify them, all run by the test suite |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, modules, data contracts, determinism and the editor protocol |
+| [docs/AVATAR.md](docs/AVATAR.md) | An avatar from one illustration: the workflow step by step, every landmark, the generated model, drawn variants, lip sync, Avatar mode, common problems |
+| [docs/RECIPES.md](docs/RECIPES.md) | 22 copy-paste rig recipes with the commands that verify them, all run by the test suite |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, modules, data contracts, determinism, the editor protocol and UI, the avatar builder |
+| [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md) | Codex and Claude Code inside the editor: protocol, security model, task templates, troubleshooting |
+| [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) | The editor's iOS-inspired design language: principles, tokens, components, accessibility |
 | [examples/README.md](examples/README.md) | The five example models and the techniques each one shows |
 | [llms.txt](llms.txt) | An index for LLM tools |
 
-The tool serves the same docs offline: `rev2d docs <spec|ops|cli|mcp|agents|recipes|interop|architecture|examples>`,
+The tool serves the same docs offline: `rev2d docs <spec|ops|cli|mcp|agents|recipes|interop|avatar|architecture|examples>`,
 or MCP `rev2d_docs`.
 
 ## Status and roadmap
 
 Rev2D is at **v0.1**. The format (version 1), the CLI, the MCP tools and the editor work and are
-covered by 1,600+ tests, but they may still change before 1.0. There is no npm release yet: run it
+covered by 2,600+ tests, but they may still change before 1.0. There is no npm release yet: run it
 from a checkout.
+
+New since the first release: avatars from one illustration (with drawn variants, lip sync from text
+and Avatar mode in the editor), the in-app AI panel, and the redesigned editor in English, Korean and
+Japanese. The avatar builder works best on front-facing busts; how well it does on a given picture
+is decided by the review sheets, and it is still being tuned.
 
 Rev2D does not replace Live2D Cubism or Spine for production pipelines. It is a text-first toolkit
 for AI-assisted authoring and experiments. Some ideas we may explore (not promises):
 
 - Importing layered artwork (PSD / Photoshop) as parts
 - Runtimes for game engines and the web (Unity, Godot, a small web player)
-- Audio-driven lip-sync for mouth parameters
+- Lip sync in the CLI and the editor from audio files (the library already reads WAV loudness)
+- MCP tools for the avatar workflow
 - More constraints: longer IK chains, transform and path constraints
 
 Ideas and use cases are welcome in the issues.
@@ -418,7 +506,7 @@ Ideas and use cases are welcome in the issues.
 ## Development
 
 ```sh
-npm test                    # the full vitest suite (1,600+ tests)
+npm test                    # the full vitest suite (2,600+ tests)
 npm run typecheck           # tsc --noEmit -p tsconfig.json
 npm run editor:dev          # editor UI with hot reload; proxies /api to rev2d edit on :4777
 npm run editor:build        # build the editor UI into dist/editor (served by rev2d edit)

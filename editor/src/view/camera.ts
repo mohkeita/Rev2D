@@ -70,6 +70,37 @@ export function visibleRect(cam: Camera, vp: ViewportSize): Rect {
 }
 
 /**
+ * CSS px of the viewport covered by floating chrome on each side (toolbar, sidebars, drawer). The
+ * canvas is full-bleed; what is not covered is the "free area" the model is framed in.
+ */
+export interface ViewInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export const NO_INSETS: ViewInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/** Size of the free area (at least 1 px, so that a tiny window never divides by zero). */
+export function freeSize(vp: ViewportSize, insets: ViewInsets): ViewportSize {
+  return { width: Math.max(1, vp.width - insets.left - insets.right), height: Math.max(1, vp.height - insets.top - insets.bottom) };
+}
+
+/** Centre of the free area in viewport (CSS px) coordinates. */
+export function freeCenter(vp: ViewportSize, insets: ViewInsets): [number, number] {
+  const size = freeSize(vp, insets);
+  return [insets.left + size.width / 2, insets.top + size.height / 2];
+}
+
+/** Model-space rectangle visible in the free area (the whole viewport when nothing covers it). */
+export function visibleFreeRect(cam: Camera, vp: ViewportSize, insets: ViewInsets): Rect {
+  const size = freeSize(vp, insets);
+  const [x, y] = screenToWorld(cam, vp, insets.left, insets.top);
+  return [x, y, size.width / cam.zoom, size.height / cam.zoom];
+}
+
+/**
  * Wheel delta -> multiplicative zoom factor. Pixel-mode trackpads send small deltas, line/page-mode
  * mice send units of lines; both map to a smooth exponential curve (one mouse notch ~ 1.2x).
  */

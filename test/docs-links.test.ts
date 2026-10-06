@@ -8,7 +8,7 @@ import path from 'node:path';
 import { PACKAGE_ROOT } from '../src/api/templates.js';
 
 /** The guides owned by the docs: README, agent guides, recipes, architecture, examples guide. */
-export const GUIDE_FILES = ['README.md', 'README.ko.md', 'AGENTS.md', 'CLAUDE.md', 'llms.txt', 'docs/RECIPES.md', 'docs/ARCHITECTURE.md', 'docs/INTEROP.md', 'examples/README.md'];
+export const GUIDE_FILES = ['README.md', 'README.ko.md', 'AGENTS.md', 'CLAUDE.md', 'llms.txt', 'docs/RECIPES.md', 'docs/ARCHITECTURE.md', 'docs/INTEROP.md', 'docs/AVATAR.md', 'examples/README.md'];
 
 /** Text outside fenced code blocks (links inside code are examples, not links). */
 function prose(text: string): string {

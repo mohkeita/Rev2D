@@ -1,0 +1,32 @@
+/* Layer (portal root) and Floating (anchored surface). */
+
+.r2-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--r2-z-overlay);
+  width: 0;
+  height: 0;
+}
+
+.r2-layer[data-level='toast'] {
+  z-index: var(--r2-z-toast);
+}
+
+.r2-layer[data-level='tooltip'] {
+  z-index: var(--r2-z-tooltip);
+  pointer-events: none;
+}
+
+.r2-floating {
+  position: fixed;
+  top: 0;
+  left: 0;
+  max-width: calc(100vw - 16px);
+  transform-origin: var(--r2-floating-origin, 50% 0);
+}
+
+/* Hidden until the first layout pass placed it (set by Floating before the first paint). */
+.r2-floating:not([data-positioned]) {
+  visibility: hidden;
+}

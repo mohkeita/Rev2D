@@ -1,0 +1,128 @@
+/* MenuList (Menu, ContextMenu, Select list): a glass panel of rows, concentric with its corners. */
+
+.r2-menu {
+  --_pad: 5px;
+  --_item-radius: calc(var(--r2-radius-menu) - var(--_pad));
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-width: min(360px, calc(100vw - 16px));
+  max-height: min(var(--r2-floating-available, 80vh), 70vh);
+  padding: var(--_pad);
+  border-radius: var(--r2-radius-menu);
+  outline: none;
+  color: var(--r2-label);
+  font: var(--r2-text-body);
+  animation: r2-pop-in var(--r2-duration-base) var(--r2-spring-snappy);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.r2-menu-item {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--r2-control-md);
+  padding: 4px 10px 4px 8px;
+  border-radius: var(--_item-radius);
+  cursor: default;
+}
+
+/* The highlight is the focus indicator of a menu item: no ring on top of it. */
+.r2-menu .r2-menu-item:focus,
+.r2-menu .r2-menu-item:focus-visible {
+  outline: none;
+}
+
+.r2-menu-item[data-active] {
+  background: var(--r2-fill-2);
+}
+
+.r2-menu-item:active:not([aria-disabled]) {
+  background: var(--r2-fill);
+}
+
+.r2-menu-item[aria-disabled] {
+  color: var(--r2-label-4);
+}
+
+.r2-menu-item[data-destructive]:not([aria-disabled]) {
+  color: var(--r2-danger-text);
+}
+
+.r2-menu-check {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 14px;
+  color: var(--r2-tint);
+}
+
+.r2-menu-icon {
+  color: var(--r2-label-2);
+}
+
+.r2-menu-item[data-destructive] .r2-menu-icon,
+.r2-menu-item[aria-disabled] .r2-menu-icon {
+  color: inherit;
+}
+
+.r2-menu-text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.r2-menu-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.r2-menu-description {
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+}
+
+.r2-menu-shortcut {
+  flex: none;
+  margin-inline-start: var(--r2-space-4);
+  color: var(--r2-label-3);
+  font: var(--r2-text-callout);
+  font-family: var(--r2-font);
+  white-space: nowrap;
+}
+
+.r2-menu-separator {
+  flex: none;
+  height: 1px;
+  margin: 5px 8px;
+  background: var(--r2-separator);
+}
+
+.r2-menu-label {
+  flex: none;
+  padding: 6px 8px 3px;
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+  font-weight: var(--r2-weight-semibold);
+}
+
+.r2-context-target {
+  display: contents;
+}
+
+@media (pointer: coarse) {
+  .r2-menu-item {
+    min-height: var(--r2-hit-touch);
+  }
+}
+
+@media (forced-colors: active) {
+  .r2-menu-item[data-active] {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+}

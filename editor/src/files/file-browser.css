@@ -1,0 +1,270 @@
+/* FileBrowser: breadcrumb bar + an inset list of folders and model files. Design tokens only. */
+
+.ed-fb {
+  --_cols: minmax(0, 1fr) 124px 68px;
+  --_px: var(--r2-space-3);
+  --_icon: 16px;
+  --_gap: var(--r2-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--r2-space-2);
+  min-width: 0;
+  min-height: 0;
+  /* A stand-alone browser (Save As): tall enough to browse, short enough for a 640 px window. */
+  height: min(320px, calc(100vh - 360px));
+  min-height: 168px;
+}
+
+/* Takes the height its container gives it (the Open dialog). */
+.ed-fb[data-variant='fill'] {
+  height: 100%;
+  min-height: 0;
+}
+
+/* A short list inside a form: no modification time. */
+.ed-fb[data-variant='compact'] {
+  --_cols: minmax(0, 1fr) 68px;
+  height: min(208px, calc(100vh - 456px));
+  min-height: 128px;
+}
+
+.ed-fb[data-variant='compact'] .ed-fb-when {
+  display: none;
+}
+
+/* ------------------------------------------------------------------------------------------ bar */
+.ed-fb-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--r2-space-1);
+  min-width: 0;
+}
+
+.ed-fb-crumbs {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ed-fb-crumb-wrap {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+}
+
+/* The folder you are in never gives way to its ancestors. */
+.ed-fb-crumb-wrap:last-child {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.ed-fb-crumb-sep {
+  flex: none;
+  color: var(--r2-label-3);
+}
+
+.ed-fb-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--r2-space-1);
+  min-width: 0;
+  height: var(--r2-control-sm);
+  margin: 0;
+  padding: 0 var(--r2-space-1-5);
+  border: 0;
+  border-radius: var(--r2-radius-control-sm);
+  background: none;
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+  font-weight: var(--r2-weight-medium);
+  cursor: default;
+}
+
+.ed-fb-crumb > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-fb-crumb > .r2-icon {
+  flex: none;
+}
+
+.ed-fb-crumb:hover {
+  background: var(--r2-fill-4);
+  color: var(--r2-label);
+}
+
+.ed-fb-crumb[aria-current] {
+  color: var(--r2-label);
+  font-weight: var(--r2-weight-semibold);
+}
+
+.r2-field.ed-fb-filter {
+  flex: 0 1 148px;
+  width: 148px;
+  min-width: 96px;
+}
+
+/* ----------------------------------------------------------------------------------------- list */
+.ed-fb-list {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: var(--r2-radius-concentric, var(--r2-radius-group));
+  background: var(--r2-plate);
+  outline-offset: -2px;
+}
+
+.ed-fb-head,
+.ed-fb-row {
+  display: grid;
+  grid-template-columns: var(--_cols);
+  align-items: center;
+  column-gap: var(--r2-space-3);
+  padding: 0 var(--_px);
+}
+
+.ed-fb-head {
+  height: var(--r2-control-md);
+  border-bottom: var(--r2-hairline) solid var(--r2-separator);
+  color: var(--r2-label-2);
+  font: var(--r2-text-footnote);
+  font-weight: var(--r2-weight-medium);
+}
+
+.ed-fb-head > :first-child {
+  padding-inline-start: calc(var(--_icon) + var(--_gap));
+}
+
+.ed-fb-row {
+  position: relative;
+  min-height: var(--r2-row-height);
+  color: var(--r2-label);
+  font: var(--r2-text-body);
+  cursor: default;
+}
+
+/* Hairline between rows, starting where the text starts. */
+.ed-fb-row + .ed-fb-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: calc(var(--_px) + var(--_icon) + var(--_gap));
+  height: var(--r2-hairline);
+  background: var(--r2-separator);
+}
+
+.ed-fb-row:hover {
+  background: var(--r2-fill-4);
+}
+
+.ed-fb-row[aria-selected='true'] {
+  background: var(--r2-selection);
+}
+
+/* The selection has no hairline above it or under it. */
+.ed-fb-row[aria-selected='true']::before,
+.ed-fb-row[aria-selected='true'] + .ed-fb-row::before {
+  display: none;
+}
+
+.ed-fb-name {
+  display: flex;
+  align-items: center;
+  gap: var(--_gap);
+  min-width: 0;
+}
+
+.ed-fb-icon {
+  flex: none;
+  color: var(--r2-kind-part);
+}
+
+.ed-fb-row[data-type='dir'] .ed-fb-icon {
+  color: var(--r2-tint);
+}
+
+.ed-fb-row[data-type='other'] .ed-fb-icon {
+  color: var(--r2-label-3);
+}
+
+.ed-fb-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-fb-row[aria-selected='true'] .ed-fb-label {
+  font-weight: var(--r2-weight-semibold);
+}
+
+.ed-fb-when,
+.ed-fb-size {
+  overflow: hidden;
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-fb-head .ed-fb-when,
+.ed-fb-head .ed-fb-size {
+  font: inherit;
+}
+
+.ed-fb-size {
+  text-align: end;
+}
+
+/* Folder pickers list the model files for reference only. */
+.ed-fb-row[data-reference] .ed-fb-name,
+.ed-fb-row[data-reference] .ed-fb-when,
+.ed-fb-row[data-reference] .ed-fb-size {
+  opacity: 0.56;
+}
+
+.ed-fb-row[data-reference][aria-selected='true'] .ed-fb-name {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------------------- states */
+.ed-fb-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--r2-space-2);
+  padding: var(--r2-space-6) var(--r2-space-4);
+  color: var(--r2-label-2);
+  font: var(--r2-text-callout);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.ed-fb-error {
+  flex-direction: column;
+  color: var(--r2-label);
+}
+
+.ed-fb-error-icon {
+  color: var(--r2-danger);
+}
+
+@media (forced-colors: active) {
+  .ed-fb-list {
+    border: 1px solid CanvasText;
+  }
+
+  .ed-fb-row[aria-selected='true'] {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+}

@@ -1,11 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import './design/index.js';
 import { App } from './App.js';
+import { initLanguage } from './i18n/index.js';
+import { COMPACT_WIDTH, loadLayout } from './shell/layout.js';
+import { initMaterials } from './shell/settings.js';
 import type { AppState } from './state/app.js';
 import { SessionContext } from './state/context.js';
 import { Session } from './state/session.js';
-import './styles.css';
-import './files/files.css';
 
 /**
  * Automation hook for tests and AI-driven browsers: read-only state and render counters. Not a
@@ -36,7 +38,14 @@ declare global {
   }
 }
 
+// Before the first paint: the language (stored choice, else the browser's), solid materials when
+// there is no GPU, and the remembered panes, so nothing flips right after it appears.
+initLanguage();
+initMaterials();
+
 const session = new Session();
+session.store.set({ panels: loadLayout().panels });
+session.setCompact(window.innerWidth < COMPACT_WIDTH);
 
 window.__rev2d = {
   session,

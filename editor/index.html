@@ -1,16 +1,26 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-appearance="auto">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <title>Rev2D Editor</title>
+    <meta name="color-scheme" content="light dark" />
+    <title>Rev2D</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%234c9dff'/%3E%3Cpath d='M5 11l6-6M4.2 9.8a1.4 1.4 0 1 0 2 2M11.8 6.2a1.4 1.4 0 1 0-2-2' stroke='%23fff' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4.5' fill='%230071e3'/%3E%3Cpath d='M5 11l6-6M4.2 9.8a1.4 1.4 0 1 0 2 2M11.8 6.2a1.4 1.4 0 1 0-2-2' stroke='%23fff' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"
     />
+    <script>
+      // The remembered appearance, before the first paint (the app applies it again once it runs).
+      try {
+        var a = new URLSearchParams(location.search).get('appearance') || localStorage.getItem('rev2d.appearance');
+        if (a === 'light' || a === 'dark') {
+          document.documentElement.setAttribute('data-appearance', a);
+          document.querySelector('meta[name="color-scheme"]').setAttribute('content', a);
+        }
+      } catch (e) {}
+    </script>
   </head>
-  <body>
+  <body class="r2-app">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -5,7 +5,8 @@ an AI agent can **author a rigged model as text, render it headlessly, measure i
 without a human in the loop. This file is the working guide for agents. It has two parts:
 
 - **[Part 1: Using Rev2D to build models](#part-1-using-rev2d-to-build-models)**: mental model,
-  the verify loop, diagnostics, addresses, common mistakes, MCP tools.
+  the verify loop, diagnostics, addresses, common mistakes, MCP tools, the live editor, Spine and
+  Live2D files, avatars from one illustration.
 - **[Part 2: Developing Rev2D](#part-2-developing-rev2d)**: architecture, module boundaries,
   commands, conventions, where to add features.
 
@@ -14,8 +15,11 @@ Reference docs: [docs/SPEC.md](docs/SPEC.md) (format and semantics, authoritativ
 shape), [docs/MCP.md](docs/MCP.md) (MCP server), [docs/RECIPES.md](docs/RECIPES.md) (copy-paste
 rig recipes), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (pipeline and modules),
 [examples/README.md](examples/README.md) (five annotated example models),
-[docs/INTEROP.md](docs/INTEROP.md) (Spine and Live2D import / export). The same docs are
-available offline: `rev2d docs <spec|ops|cli|mcp|agents|recipes|interop|architecture|examples>` and MCP
+[docs/INTEROP.md](docs/INTEROP.md) (Spine and Live2D import / export),
+[docs/AVATAR.md](docs/AVATAR.md) (an animated avatar from one illustration),
+[docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md) (coding agents inside the editor),
+[docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) (the editor's design language). The same docs are
+available offline: `rev2d docs <spec|ops|cli|mcp|agents|recipes|interop|avatar|architecture|examples>` and MCP
 `rev2d_docs {topic}`.
 
 ---
@@ -371,7 +375,7 @@ with a hint and diagnostics, never as a crash.
 | --- | --- |
 | `rev2d_guide` | The **Rev2D quickstart for AI authors**: conventions, workflow, addresses, recipes. Call first. |
 | `rev2d_schema {name?}` | JSON Schema of the model or one sub-schema (`Part`, `Binding`, `Physics`, ...) |
-| `rev2d_docs {topic}` | `spec`, `ops`, `cli`, `mcp`, `recipes`, `interop`, `architecture`, `examples`, `agents` (this file) |
+| `rev2d_docs {topic}` | `spec`, `ops`, `cli`, `mcp`, `recipes`, `interop`, `avatar`, `architecture`, `examples`, `agents` (this file) |
 | `rev2d_create_model {path, template?, width?, height?}` | new model from `blank`, `empty` or an example |
 | `rev2d_validate {path}` | diagnostics |
 | `rev2d_info {path}` | outline: parameters and what they drive, bone tree, warps, parts, ... |
@@ -391,7 +395,7 @@ strings (`["look_around", "talk@0.8,add", "wink,once,start=2.5"]`) or objects
 `{id, weight?, mode?, start?, hold?, time?}`, `time`, `physics`.
 
 Resources: `rev2d://guide`, `rev2d://docs/spec`, `rev2d://docs/ops`, `rev2d://docs/recipes`,
-`rev2d://docs/interop`, `rev2d://schema`. Relative paths resolve against the server's working directory; models are
+`rev2d://docs/interop`, `rev2d://docs/avatar`, `rev2d://schema`. Relative paths resolve against the server's working directory; models are
 re-read from disk on every call.
 
 ## 1.10 Working with a human: the live editor
@@ -462,6 +466,37 @@ rev2d edit models/hero.r2d.json --root .     # a model, with the whole project a
   to open one. If the open model's file is deleted or moved away on disk, the editor keeps it open
   as unsaved (Save writes it back).
 
+### Avatar mode
+
+An avatar project (a folder with `avatar.json` and the illustration, `rev2d avatar new`) opens in
+**Avatar mode**: the human sees the parts of `avatar.json`, the illustration with a handle on every
+landmark, and a live preview of the avatar (pose sliders, lip sync). Before the first build there is
+no model yet; Avatar mode shows the project anyway, with a checklist of the landmarks still to place
+and a Build button. In Avatar mode the toolbar's Save / Undo / Redo and Ctrl+S / Ctrl+Z act on
+`avatar.json`; the Rig mode (once built) edits the generated model.
+
+- Show a project to the human with `rev2d editor command --open <project>/avatar.json` (or the
+  folder): its built model, or the project alone. Ask before switching away from their work: an
+  `open` cannot wait for their "Save changes?" answer, so their unsaved `avatar.json` edits are lost
+  (they are told so).
+- `rev2d editor state` names the project (`avatar project <dir> (no built model yet)` before the
+  first build) and, once built, `avatar part: <id>`: the part they selected, e.g.
+  `eyes.imageLeft.opening` (`state.avatar.part` with `--json`). Look at that part with
+  `rev2d avatar overlay <project> --part <id> --zoom`.
+- Write `avatar.json` and build with `rev2d avatar build <project>`: the editor shows every change at
+  once (their unsaved edits are kept and they choose to reload or keep theirs). The workflow itself:
+  [§1.12](#112-avatars-from-one-illustration) and `rev2d docs avatar`.
+
+### In-app AI panel
+
+The sparkles button of the editor's toolbar opens the **AI panel**: the human types a request and
+the editor itself starts the Codex CLI or Claude Code in the workspace with their login, showing
+the agent's messages, commands and file changes as it works ([docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md)).
+It needs one of those CLIs installed and signed in, and the editor on a loopback address (the
+default). Avatar mode starts it for "Let AI Place Them" (a new project) and "Ask AI to Fix This
+Part". If you are the agent in that panel, you work inside the workspace: follow this guide as
+usual, and the human sees your edits live.
+
 ## 1.11 Spine and Live2D files
 
 Rev2D converts from and to the public JSON formats of Spine and Live2D Cubism
@@ -503,6 +538,40 @@ rev2d export live2d hana.r2d.json -o out/hana-live2d --anim wave    # -> motions
   motions… (one undoable edit) and File > Export to > Spine… / Live2D motions… (into
   `exports/<model>-spine|-live2d`).
 
+## 1.12 Avatars from one illustration
+
+Given ONE picture (ideally a front-facing bust on a transparent background), you place landmarks on
+it in `avatar.json`; Rev2D cuts the picture into layers and generates an ordinary model that blinks,
+talks, turns and tilts its head, breathes and sways its hair. **The working guide is
+`rev2d docs avatar`** ([docs/AVATAR.md](docs/AVATAR.md)): read it before you start. In short:
+
+| Step | Command | |
+| --- | --- | --- |
+| 1. Start | `rev2d avatar new picture.png avatars/hana` | the project folder: `source.png` (never modified) + a draft `avatar.json` |
+| 2. Vision check | `rev2d avatar vision-check make avatars/hana/work/vision`, then `score` | prove you read pixel coordinates accurately (mean ≤ 4 px); stop if you cannot |
+| 3. Read | `rev2d avatar grid avatars/hana --region x0,y0,x1,y1` | source-pixel grids of the whole picture and each detail |
+| 4. Place | edit `avatar.json` group by group | head ellipse around ALL hair, neck pivot below the chin, face oval, eye opening (inside the lashes) and region (outside them), mouth corners and area, nose, chin, strands root → tip, attachments, body. `imageLeft` / `imageRight` are sides of the IMAGE |
+| 5. Validate | `rev2d avatar validate avatars/hana` | after every group: what is missing or wrong, with hints |
+| 6. Look | `rev2d avatar overlay avatars/hana --part eyes.imageLeft --zoom` | the landmarks on the picture, vertices numbered |
+| 7. Build | `rev2d avatar build avatars/hana` | layers + `<name>.r2d.json`; read the warnings (folds name the place) |
+| 8. Review | `rev2d avatar poses avatars/hana` | look at `review/poses.png`, `turn.png`, `eyes.png`, `mouth.png`; fix the landmark behind each problem, back to 5 |
+
+- The model is **regenerated by every build**: never edit it; customise it with edit ops in the
+  `post` list of `avatar.json`. Drawn closed eyes and mouth shapes
+  (`rev2d avatar variants request|import|status`) beat the mesh deformation; draw them with an image
+  generator **only when the human allowed it**.
+- The generated model is a normal model: check it with `rev2d sheet --sweep AngleX --sweep AngleY`,
+  `rev2d analyze --anim idle --warmup 10` and `inspect --point`, as in [§1.3](#13-the-verify-loop).
+- The avatar commands are CLI only (no MCP tools yet): run them from a shell and open the PNGs.
+
+Evidence before you report an avatar as done: `avatar validate` shows 0 errors (warnings explained);
+`avatar build` reports no folds (or each one explained); you looked at all four review sheets: the
+rest pose is the illustration, closed eyes show one clean lash line and no iris or eye white, turning
+and tilting do not tear the picture, cut the chin or ears, or bend rigid accessories, the open mouth
+does not stretch the chin, hair sways while the face stays; `summary.json` moves are plausible (the
+nose travels farther than the ears at `AngleX = 30`); and a hand-over note names the landmarks you are
+least sure about by their place in `avatar.json`.
+
 ---
 
 # Part 2: Developing Rev2D
@@ -537,6 +606,9 @@ test that launches Chrome belongs in a `*-e2e.test.ts` file. Scratch output goes
  front ends: src/cli (rev2d) · src/mcp (MCP server) · src/server (editor HTTP/SSE) · editor/ (React UI)
  shared:     src/api (render/sheet/inspect/hit/info) · src/ops (edit engine) · src/node (files, registry, interop IO)
  interop:    src/interop (Spine JSON + atlas, Live2D motion3/exp3/physics3/cdi3/model3; pure) ◄─► src/node/interop.ts
+ avatars:    avatar.json + source.png ─► src/avatar (spec, image ops, features, compileAvatar; pure) ─► .r2d.json
+             file IO src/node/avatar.ts, avatar-variants.ts · lip sync src/lipsync (pure)
+ agents:     editor AI panel ─► src/server/agent-routes.ts ─► src/node/agent (Codex CLI / Claude Code, no shell)
 ```
 
 Details, data contracts and extension points: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -552,13 +624,23 @@ Details, data contracts and extension points: [docs/ARCHITECTURE.md](docs/ARCHIT
 | `src/ops` | edit ops on the **raw** document (`applyOps`, `describeOps`); `compose` and `follow` evaluate the model through `Rig` | core |
 | `src/interop` | pure converters: Spine import / export (`spine/`), Live2D JSON files (`live2d/`), file detection (`detect.ts`); every result carries an `InteropReport` | core, render (raster, PNG); ops types only |
 | `src/node/interop.ts` | interop file IO shared by CLI, MCP and server: reading a Spine export folder, writing output files, Live2D files -> ops, atomic model-file edits, report text | interop, ops, core, render, Node |
+| `src/avatar` | the avatar builder: spec schema and checks, image operations (`image/`), agent tools (`tools/`: grid, overlay, vision check), features (`features/`), deformation fields, model builder, fold checker, `compileAvatar`, review poses, drawn variants, Mesh Avatar Studio import; `DESIGN.md` | core, ops (the op catalogue), lipsync (types), render **through its browser-safe files only** (`src/render/browser.ts` or `image.ts`, `draw.ts`, `font.ts`, `raster.ts`, `sheet.ts`; never `render/index.ts` or `png.ts`). **No Node APIs** (only tests use them): the editor compiles avatars in the browser |
+| `src/lipsync` | text (kana, Hangul, romaji) and WAV loudness -> mouth animations on `MouthOpen` / `MouthForm`; the viseme table | core (easing) only. Browser-safe |
+| `src/node/avatar.ts`, `src/node/avatar-variants.ts` | avatar project IO: create, load, build, review, vision-check files, variants request / import / status, MAS import | avatar, core, render, ops, Node |
+| `src/node/agent` | the in-app agent runner: providers (Codex CLI, Claude Code), process start without a shell, preamble and task templates, jobs, logs, settings | Node, `src/api/templates.ts` (the package root); no core. Its UI types are re-exported by `src/node/editor-registry.ts` |
 | `src/cli` | `rev2d` commands, flags, help, `--json` output | api, ops, node, render, core; server and mcp are imported lazily by `edit` / `mcp` |
 | `src/mcp` | MCP server and tools | api, ops, node, render, core |
-| `src/server` | editor HTTP server: model file API, SSE live reload, AI bridge (state/command/screenshot), file management confined to a workspace root (`workspace.ts`, `workspace-routes.ts`) | api, node, render, core |
-| `editor/` | React 19 + WebGL2 editor UI | `src/core` via relative imports (`src/render/browser.ts` is available when it needs raster code), `src/interop/detect.ts` (file detection); type-only imports from `src/node/editor-registry.ts` and `src/node/interop.ts` |
+| `src/server` | editor HTTP server: model file API, SSE live reload, AI bridge (state/command/screenshot), file management confined to a workspace root (`workspace.ts`, `workspace-routes.ts`), interop routes, avatar mode (`avatar-routes.ts`, task templates in `avatar-agent-tasks.ts`), the in-app agent endpoints (`agent-routes.ts`) | api, node (incl. `node/agent`, `node/avatar.ts`), interop, avatar (loaded on first use), render, core |
+| `editor/` | React 19 + WebGL2 editor UI (the rows below describe its main folders) | `src/core`, `src/avatar`, `src/lipsync` via relative imports (`src/render/browser.ts` is available when it needs raster code), `src/interop/detect.ts` (file detection); type-only imports from `src/node/editor-registry.ts` and `src/node/interop.ts` |
+| `editor/src/shell` | the window: SplitView layout, toolbar, status line, overlays; the registries for workspace modes, trailing panels and toolbar actions (`registry.ts`); `extensions.ts` imports the feature modules; the Rig mode (`rigMode.tsx`) | design, i18n, state, the Rig mode's panels and viewport, `files/`; never Avatar mode or the AI panel (feature modules register themselves) |
+| `editor/src/design` | the design system: tokens, base styles, components, icons, appearance (see docs/DESIGN-SYSTEM.md) | React only. No editor state, no i18n (components get their few words through `setDesignStrings`) |
+| `editor/src/i18n` | `t()` / `useT()`, languages en / ko / ja, one namespace file per feature under `locales/<lang>/` | design (`setDesignStrings`) |
+| `editor/src/ai` | the AI panel and its public API (`api.ts`: `openAiPanel`, `startAiTask`, `useAiJob`, `aiAvailability`) | shell, design, i18n, state, `editor/src/api.ts`; type-only imports from `src/node/editor-registry.ts` |
+| `editor/src/avatar` | Avatar mode: store, mode document (`avatar.json`), canvas with handles, parts list, live preview (`compileAvatar` in the browser), lip-sync page, new-avatar sheet | shell, design, i18n, state, `src/avatar`, `src/lipsync`, `src/core`; the AI panel only through `editor/src/avatar/ai.ts` (an `import.meta.glob` adapter for `editor/src/ai/api.ts`, so the mode works without it) |
 | `scripts/` | example builders, texture generator, render scripts, demo media pipeline (`scripts/video/` → `docs/media/`) | anything |
 
-Keep these boundaries: anything the editor imports must stay browser-safe, and `stdout` inside
+Keep these boundaries: anything the editor imports must stay browser-safe (`src/core`,
+`src/avatar`, `src/lipsync`: file IO goes into `src/node/avatar*.ts`), and `stdout` inside
 `src/mcp` belongs to the protocol (never `console.log` there).
 
 ## 2.4 Conventions
@@ -586,7 +668,12 @@ Keep these boundaries: anything the editor imports must stay browser-safe, and `
   command block and checks the numbers the recipes quote; `test/docs-links.test.ts` checks links
   and anchors; `test/docs-commands.test.ts` checks that every `rev2d` command line in the guides
   uses real commands and flags; `test/docs-interop.test.ts` checks that every Spine / Live2D report
-  code the guides name is one the converters use).
+  code the guides name is one the converters use; `test/docs-avatar.test.ts` does the same for
+  `avatar-*` codes and checks that docs/AVATAR.md covers every avatar subcommand, variant id and
+  standard parameter).
+- **No third-party art in the repository.** Avatar tests and docs images use Rev2D's own `hana`
+  example rendered to a PNG (`test/fixtures/avatar-hana.ts`) or synthetic images; keep evaluation
+  pictures of other people's characters in `out/` (git-ignored), never in tests, fixtures or docs.
 - **Examples are generated.** Change `scripts/examples/<name>.ts`, run
   `npx tsx scripts/build-examples.ts`; `test/examples.test.ts` checks that each shipped file equals
   its builder's output and that the examples/README.md feature matrix is true.
@@ -613,12 +700,19 @@ Keep these boundaries: anything the editor imports must stay browser-safe, and `
 | New workspace (file-management) endpoint | a handler in `src/server/workspace-routes.ts` + `ROUTES` in `src/server/routes.ts`, request/result types in `src/node/editor-registry.ts`, validation in `src/server/protocol.ts`; resolve every path through `WorkspaceRoot` (`src/server/workspace.ts`); the client in `editor/src/api.ts`, UI in `editor/src/files/`; tests in `src/server/__tests__/workspace.test.ts`; the protocol section of CLI.md and ARCHITECTURE §5 |
 | New example | `scripts/examples/<name>.ts` + `scripts/examples/index.ts`, rebuild, examples/README.md (text and feature matrix), predicates in `test/examples.test.ts` |
 | New interop feature (a Spine / Live2D field) | the converter in `src/interop/spine/` or `src/interop/live2d/` (report what it cannot convert with a stable code), its tests with hand-written fixtures (never official sample assets); file IO in `src/node/interop.ts`; front ends in `src/cli/commands/interop.ts`, `src/mcp/tools/interop.ts`, `src/server/interop-routes.ts`, `editor/src/files/InteropDialogs.tsx`; docs/INTEROP.md |
+| New avatar landmark / spec field | `src/avatar/schema.ts` (its `.describe()` text is the `rev2d avatar schema` documentation; mark fields that cut pixels "CUTS LAYERS"), checks with an `avatar-*` code and a hint in `src/avatar/spec.ts`, the editable part in `src/avatar/parts.ts` (editor handles, `avatar overlay --part`), `src/avatar/hash.ts` when it changes the layer images, labels and tips in `editor/src/i18n/locales/*/avatar.ts`, docs/AVATAR.md §4 |
+| New avatar feature | a module in `src/avatar/features/` implementing `AvatarFeature` (`layers` / `compile` / `poses`; read `features/types.ts`) and an entry in `AVATAR_FEATURES`, its `AVATAR_Z` range, its parameters in `STANDARD_PARAMETERS` (Live2D ids) when standard; claim the pixels you cut; tests on the `hana` fixture (rest pose = illustration, no folds, determinism); `src/avatar/DESIGN.md`; the parameter / structure tables and common problems of docs/AVATAR.md |
+| New drawn-variant id | `VARIANT_IDS` in `src/avatar/types.ts`, its edit area in `variants-areas.ts`, prompt in `variants-text.ts`, where it shows in `features/sprites.ts`, tests in `src/avatar/__tests__/variants*.test.ts`; the variant tables of CLI.md (`rev2d avatar variants`) and docs/AVATAR.md §7 |
+| New agent task template | `registerTaskTemplate({kind, title, description, needsPrompt, build})` in a server module that the editor server imports (avatar ones in `src/server/avatar-agent-tasks.ts`); the title in `editor/src/ai/words.ts`; test it with `buildAgentPrompt`; docs/AGENT-BRIDGE.md §5 |
+| New editor mode, trailing panel or toolbar action | `registerMode` / `registerPanel` / `registerToolbarAction` (`editor/src/shell/registry.ts`) in the feature's own folder, plus one import line in `editor/src/shell/extensions.ts`; a mode with its own file implements `ModeDocument` (Save / Undo / Redo / unsaved prompt); see `editor/src/shell/README.md`; e2e tests in a `test/*-e2e.test.ts` file |
+| New UI string | the key in `editor/src/i18n/locales/en/<namespace>.ts` and the same key in `ko/` and `ja/` (the build and `test/editor-i18n.test.ts` fail without them); a new feature adds its own namespace file and spreads it in `locales/en.ts`, `ko.ts`, `ja.ts`; components use `useT()`, other code `t()` |
 
 ## 2.6 Before you finish
 
 1. `npx vitest run <the paths you touched>` while iterating, then `npm test`.
 2. `npx tsc --noEmit -p tsconfig.json` is clean.
-3. `npm run editor:build` when you touched `editor/` or anything it imports from `src/core`.
-4. Docs updated (SPEC/CLI/OPS/MCP/RECIPES, examples/README.md) and still true: run the commands you
-   documented; `npx vitest run test/docs-recipes.test.ts test/docs-links.test.ts test/docs-commands.test.ts`
-   checks the recipes, links and command lines.
+3. `npm run editor:build` when you touched `editor/` or anything it imports (`src/core`,
+   `src/avatar`, `src/lipsync`).
+4. Docs updated (SPEC/CLI/OPS/MCP/RECIPES/AVATAR, examples/README.md) and still true: run the commands you
+   documented; `npx vitest run test/docs-recipes.test.ts test/docs-links.test.ts test/docs-commands.test.ts test/docs-avatar.test.ts`
+   checks the recipes, links, command lines and avatar codes.
