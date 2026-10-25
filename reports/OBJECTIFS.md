@@ -4,7 +4,7 @@ Le brief utilisateur complet reste local dans `out/demo-phase0/private-brief/BRI
 
 | Phase | État | Livrable |
 | --- | --- | --- |
-| 0 — Bibliothèque | Implémentée et vérifiée techniquement ; limites artistiques documentées | `reports/PHASE-0.md`, `docs/LIBRARY.md`, démos locales sous `out/demo-phase0/` |
+| 0 — Bibliothèque | Implémentée ; échecs amont corrigés ; suite complète verte (2 735 réussis, 2 ignorés) ; limites artistiques documentées | `reports/PHASE-0.md`, `reports/UPSTREAM-FIXES.md`, `docs/LIBRARY.md`, démos locales sous `out/demo-phase0/` |
 | 1 — Scènes | Prochaine étape ; non livrée | Calques, bibliothèque, caméra, narration, export vidéo |
 | 2 — Jeu d’acteur | Non implémentée | Bras, mains, gestes, expressions et idle |
 | 3 — Épisode | Non implémentée | Storyboard, cache, rendu, montage, narration et musique |

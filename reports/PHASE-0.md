@@ -1,11 +1,11 @@
 # Phase 0 — bibliothèque d’assets
 
-**Statut : critères techniques de phase 0 satisfaits, avec les échecs amont explicitement conservés.** La revue artistique reste distincte de la validation technique. Les phases 1 à 4 ne sont pas livrées par cette PR.
+**Ce rapport conserve les résultats de la livraison initiale de phase 0.** Les échecs amont décrits ci-dessous ont ensuite fait l’objet des [corrections et vérifications complémentaires](UPSTREAM-FIXES.md). La revue artistique reste distincte de la validation technique. Les phases 1 à 4 ne sont pas livrées par cette PR.
 
 ## Révisions et périmètre
 
 - Départ : `f144581cdf1f12d781379c4df90d262b8c2dfa3d`.
-- Code vérifié : `9b62370ce1a55500cc2e2a280a550e852ecfec5c`. Les commits suivants ne font qu’ajouter les rapports.
+- Code vérifié lors de cette livraison initiale : `9b62370ce1a55500cc2e2a280a550e852ecfec5c`. Les corrections ultérieures sont détaillées dans `reports/UPSTREAM-FIXES.md`.
 - Branche locale : `codex/phase-0-library-public` ; branche de PR : `phase-0-library`.
 - Fork : https://github.com/mohkeita/Rev2D ; base de PR : son `main`, au commit de départ.
 - Les prototypes antérieurs sont conservés localement ; ils ne sont pas présentés comme une phase 1 conforme.
