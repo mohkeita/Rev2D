@@ -2,7 +2,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FIGURE_POSES } from './examples/figure.js';
-import { figureFixture, figureAvatarDoc, roomFixture } from '../test/fixtures/studio.js';
+import { figureFixture, figureAvatarDoc, roomFixture, propFixtures } from '../test/fixtures/studio.js';
+import { buildPhoneUI } from './examples/phone-ui.js';
 import {
   initLibrary,
   importLibraryImage,
@@ -68,11 +69,28 @@ for (const pose of FIGURE_POSES) {
   await reviewAvatarProject(imported.directory, { scale: 0.25 });
 }
 const manifest = await readLibrary(library);
+const props = propFixtures();
+for (const [id, image] of Object.entries(props)) {
+  const file = path.join(sources, id + '.png');
+  await writeFile(file, encodePNG(image));
+  await importLibraryImage(file, library, { kind: id === 'box' ? 'prop' : 'bubble', id });
+}
+await mkdir(path.join(library, 'ui'));
+await writeFile(path.join(library, 'ui/phone.r2d.json'), formatModelJson(buildPhoneUI()));
+const complete = await readLibrary(library);
+complete.ui.push({
+  id: 'phone_progress',
+  model: 'ui/phone.r2d.json',
+  params: { Progress: '0..1' },
+  tags: ['phone', 'progress'],
+});
+complete.bubbles[0].content_rect = [15, 15, 190, 80];
 manifest.backgrounds[0].anchors = {
   sofa_left: { at: [180, 355], scale: 1, pose_tags: ['sitting'] },
   center: { at: [620, 480], scale: 1, pose_tags: ['standing'] },
 };
-await writeFile(path.join(library, 'library.json'), formatModelJson(manifest));
+complete.backgrounds[0].anchors = manifest.backgrounds[0].anchors;
+await writeFile(path.join(library, 'library.json'), formatModelJson(complete));
 const sheet = await librarySheet(library);
 await writeFile(path.join(root, 'library.png'), encodePNG(sheet.image));
 const status = await validateLibrary(library);
@@ -80,7 +98,7 @@ await writeFile(path.join(root, 'validation.json'), formatModelJson(status));
 await writeFile(path.join(root, 'key-metrics.json'), formatModelJson(metrics));
 await writeFile(
   path.join(root, 'README.md'),
-  '# Synthetic asset-library demo\n\nRegenerate into a new directory with `node --import tsx scripts/demo-library.ts <new-directory>`.\n\nContains original vector art, four authored face/avatar projects and one background. It does not demonstrate articulated arms or an episode. Inspect each character review/ folder. Key metrics compare independently rendered alpha masks.\n',
+  '# Synthetic asset-library demo\n\nRegenerate into a new directory with `node --import tsx scripts/demo-library.ts <new-directory>`.\n\nContains original vector art, four authored face/avatar projects, a background, a box, a thought bubble and a parameterized phone UI. It does not demonstrate articulated arms or an episode. Inspect each character review/ folder. Key metrics compare independently rendered alpha masks.\n',
 );
 console.log(
   JSON.stringify({

@@ -15,6 +15,8 @@ import {
 import { LibrarySchema, parseLibrary, searchLibrary, LibraryError } from '../src/library/index.js';
 import { createImage, encodePNG } from '../src/render/index.js';
 import { hanaIllustration } from './fixtures/avatar-hana.js';
+import { propFixtures } from './fixtures/studio.js';
+import { buildPhoneUI } from '../scripts/examples/phone-ui.js';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'rev2d-library-'));
 afterAll(() => rm(root, { recursive: true, force: true }));
@@ -133,4 +135,25 @@ it('refuses traversal and symlinks outside a library', async () => {
   await expect(libraryFile(dir, '../source.png')).rejects.toBeInstanceOf(LibraryError);
   await expect(libraryFile(dir, 'linked/new.png')).rejects.toBeInstanceOf(LibraryError);
   expect(parseLibrary({ version: 1, name: 'bad', props: [{ id: 'p', src: '../secret.png' }] }).library).toBeNull();
+});
+
+it('imports props/bubbles and renders a parameterized UI catalogue entry', async () => {
+  const dir = path.join(root, 'all-kinds');
+  await initLibrary(dir);
+  for (const [id, image] of Object.entries(propFixtures())) {
+    const file = path.join(root, id + '.png');
+    await writeFile(file, encodePNG(image));
+    await importLibraryImage(file, dir, { kind: id === 'box' ? 'prop' : 'bubble', id });
+  }
+  await mkdir(path.join(dir, 'ui'));
+  await writeFile(path.join(dir, 'ui/phone.r2d.json'), JSON.stringify(buildPhoneUI()));
+  const manifest = await readLibrary(dir);
+  manifest.ui.push({ id: 'phone', model: 'ui/phone.r2d.json', params: { Progress: '0..1' }, tags: ['phone'] });
+  await writeFile(path.join(dir, 'library.json'), JSON.stringify(manifest));
+  expect((await validateLibrary(dir)).ok).toBe(true);
+  expect((await librarySheet(dir)).entries).toHaveLength(3);
+  expect((await librarySheet(dir, { kind: 'ui' })).entries[0].id).toBe('phone');
+  manifest.ui[0].params = { Missing: '0..1' };
+  await writeFile(path.join(dir, 'library.json'), JSON.stringify(manifest));
+  expect((await validateLibrary(dir)).diagnostics.map((d) => d.code)).toContain('library-unknown-param');
 });

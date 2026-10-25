@@ -27,6 +27,41 @@ export function roomFixture() {
   return { doc: buildRoom(), image: renderFixture(buildRoom()) };
 }
 
+export function propFixtures() {
+  const make = (name: string, width: number, height: number, parts: unknown[]) =>
+    renderFixture({ format: 'rev2d', version: 1, meta: { name, width, height }, parts });
+  return {
+    box: make('box', 180, 160, [
+      {
+        id: 'box',
+        shape: { type: 'rect', x: 20, y: 25, w: 140, h: 115, radius: 2 },
+        fill: '#bd8b55',
+        stroke: { color: '#26313c', width: 4 },
+      },
+    ]),
+    thought: make('thought', 240, 180, [
+      {
+        id: 'cloud',
+        shape: { type: 'ellipse', cx: 120, cy: 70, rx: 105, ry: 54 },
+        fill: '#ffffff',
+        stroke: { color: '#26313c', width: 3 },
+      },
+      {
+        id: 'tail1',
+        shape: { type: 'ellipse', cx: 60, cy: 134, rx: 12, ry: 10 },
+        fill: '#ffffff',
+        stroke: { color: '#26313c', width: 3 },
+      },
+      {
+        id: 'tail2',
+        shape: { type: 'ellipse', cx: 38, cy: 157, rx: 6, ry: 6 },
+        fill: '#ffffff',
+        stroke: { color: '#26313c', width: 2 },
+      },
+    ]),
+  };
+}
+
 /** Authored face landmarks for the fixture only. User images must have their own measured landmarks. */
 export function figureAvatarDoc(name = 'figure') {
   const ellipse = (cx: number, cy: number, rx: number, ry: number) =>

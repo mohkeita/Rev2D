@@ -120,7 +120,8 @@ Diagnostics include JSON pointers and a fix hint:
 ## Reproducible synthetic demo
 
 Run `node --import tsx scripts/demo-library.ts out/demo-phase0/synthetic` to generate the original
-vector figure in four poses (standing, pointing, sitting and sitting with phone), a room, green /
+vector figure in four poses (standing, pointing, sitting and sitting with phone), a room, a box,
+a thought bubble, a parameterized phone UI, green /
 white / transparent sources, quantitative keying metrics, built avatar projects and a contact sheet.
 The builders are in `scripts/examples/figure.ts` and `scripts/examples/room.ts`; known joints and
 independent transparent alpha masks are exposed through `test/fixtures/studio.ts`. No user art is
