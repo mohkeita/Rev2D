@@ -411,8 +411,11 @@ describe.skipIf(!ready)('design-system gallery end to end (built UI + Chrome)', 
     await opener.click();
     await dialog.waitFor();
     const dragGrabber = async (distance: number): Promise<void> => {
-      const g = (await page.locator('[data-testid=sheet] .r2-sheet-grabber').boundingBox())!;
-      await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+      const grabber = page.locator('[data-testid=sheet] .r2-sheet-grabber');
+      // Wait for the spring-back to settle before pressing: stale screen coordinates can hit the
+      // title instead of the moving grabber. hover performs Playwright's stability/hit checks.
+      await grabber.hover();
+      const g = (await grabber.boundingBox())!;
       await page.mouse.down();
       await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2 + distance, { steps: 6 });
       await page.waitForTimeout(250); // not a flick

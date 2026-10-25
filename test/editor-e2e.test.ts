@@ -524,9 +524,15 @@ describe.skipIf(!ready)('editor screenshots match the WebGL viewport (hana)', ()
 
   it('scrubs the timeline, and works the outline rows: context menu, inspect, preview visibility', async () => {
     await post({ type: 'setAnimations', animations: [{ id: 'idle' }] });
-    await post({ type: 'seek', time: 0 });
-    const ruler = (await page.locator('[data-testid=tracks] .ed-tl-ruler').boundingBox())!;
-    await page.mouse.click(ruler.x + ruler.width / 2, ruler.y + ruler.height / 2);
+    // HTTP acknowledges SSE delivery, not application in the browser. A distinct seek value is a
+    // barrier: neither the previous animation nor a late setup command may overwrite the click.
+    await post({ type: 'seek', time: 0.25 });
+    await expect.poll(() => page.evaluate(() => {
+      const state = window.__rev2d!.state();
+      return { time: state.time, animation: state.animation };
+    }), { timeout: 5000 }).toEqual({ time: 0.25, animation: 'idle' });
+    await expect.poll(() => page.textContent('[data-testid=timeline] .ed-tl-duration'), { timeout: 5000 }).toContain('4.00');
+    await page.locator('[data-testid=tracks] .ed-tl-ruler').click();
     // idle lasts 4 s: the middle of the ruler is 2 s (snapped to a frame).
     await expect.poll(() => page.evaluate(() => window.__rev2d!.state().time), { timeout: 5000 }).toBeCloseTo(2, 1);
     expect(await page.textContent('[data-testid=time-readout]')).toContain('2.00');

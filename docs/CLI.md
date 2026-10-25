@@ -1750,6 +1750,8 @@ directory. Model commands sent while no model is open are refused (`409 no model
 | `--model <file>`, `--url <url>` | which editor (as for `editor state`) |
 
 Prints how many editor windows received each command (`0` = no browser has the editor open).
+Delivery is asynchronous: the HTTP reply counts SSE recipients, not completed browser updates.
+Wait for the requested state from `editor state` before measuring the result or issuing a UI gesture.
 `--json`: `{ "url": "...", "sent": [ { "command": { "type": "pause" }, "delivered": 1 } ] }`
 
 ```sh
@@ -2008,6 +2010,10 @@ their `avatar.json` with `avatar`. `rev2d edit <project>/avatar.json` starts the
 | `GET /api/avatar/variants` | | `AvatarVariantsInfo`: every drawn variant (`rev2d avatar variants status`) with its state (`missing`, `requested`, `drawn`, `accepted`, `rejected` with the reason, its stable `code` and `values`, `stale` with why), the check numbers, the edit areas in source pixels (`areas.eyes`, `areas.mouth`, for thumbnails) and the request files |
 | `POST /api/avatar/variants/request` | `{ids?}` or nothing | `AvatarVariantRequestsResult`: writes the masks, prompts, `README.md` and `preview.png` of `rev2d avatar variants request` (no ids: the recommended ones and every earlier request); **400** unknown ids |
 | `POST /api/avatar/variants/import` | `{ids?, remove?}` or nothing | **202** `AvatarJobEvent` with `kind: "variants"`: a job like a build (one job at a time, **409** while one runs) that deletes the `remove` drawings, runs `rev2d avatar variants import` and recompiles the model; the `done` event carries `variants` (`AvatarVariantsImport`: accepted, rejected with reason / hint / code, kept, removed, the variants in use, ignored files) |
+
+Avatar file paths accept forward slashes and backslashes on every host. Separators are normalized
+before checking project containment and hidden files; symbolic links are checked against the real
+project directory. Absolute paths and traversal outside it remain forbidden.
 
 SSE `avatar-changed` (`AvatarChangedEvent`) reports changes of `avatar.json`, the illustration and the
 files in `textures/`, `variants/`, `variant-requests/` and `review/` (debounced): origin `editor`
