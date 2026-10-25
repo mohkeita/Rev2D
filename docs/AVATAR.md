@@ -33,8 +33,8 @@ Contents:
 [12. For programs](#12-for-programs)
 
 Examples write `rev2d` for `node bin/rev2d.js` (or `npx rev2d` inside the checkout). The avatar
-commands are CLI commands; the MCP server has no avatar tools yet, so an MCP client runs them from a
-shell and reads the PNGs they write.
+commands also have MCP tools: `rev2d_avatar_new`, `rev2d_avatar_validate`, `rev2d_avatar_grid`,
+`rev2d_avatar_overlay`, `rev2d_avatar_build` and `rev2d_avatar_poses`. Image tools return PNGs inline.
 
 ---
 

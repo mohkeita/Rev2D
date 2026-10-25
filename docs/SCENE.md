@@ -23,7 +23,7 @@ rev2d scene render examples/scenes/room-demo/scene.json -o out/scene-frames --fo
 rev2d scene render examples/scenes/room-demo/scene.json -o out/scene.gif --scale 0.25
 ```
 
-Every output path must be new. To regenerate all synthetic inputs into a new directory:
+Every output path must be new. In a checkout, regenerate all synthetic inputs into a new directory:
 `node --import tsx scripts/build-scenes.ts out/new-scene-example`.
 
 ## Document and layers
