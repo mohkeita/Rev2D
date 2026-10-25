@@ -1484,8 +1484,11 @@ const FILE_HINT = 'give a path relative to the project folder, e.g. "source.png"
 function projectPath(ref: AvatarRef, relative: string): string {
   const outside = () => new HttpError(403, `${JSON.stringify(relative)} is not a file inside the project folder`, FILE_HINT);
   if (relative.includes('\0')) throw new HttpError(400, '"path" contains a NUL character', FILE_HINT);
-  if (path.isAbsolute(relative) || /^[A-Za-z]:/.test(relative) || /^[\\/]/.test(relative)) throw outside();
-  const abs = path.resolve(ref.project, relative);
+  // The API accepts portable paths from Windows callers on every host. Normalize before both
+  // containment and hidden-file checks, so backslash traversal cannot become an ordinary filename.
+  const portable = relative.replaceAll('\\', '/');
+  if (path.isAbsolute(portable) || /^[A-Za-z]:/.test(portable) || portable.startsWith('/')) throw outside();
+  const abs = path.resolve(ref.project, portable);
   if (!within(ref.project, abs) || samePath(abs, ref.project)) throw outside();
   const segments = path.relative(ref.project, abs).split(path.sep);
   if (segments.some((s) => s.startsWith('.'))) throw new HttpError(403, `${JSON.stringify(relative)} is a hidden file`, FILE_HINT);
