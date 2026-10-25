@@ -39,3 +39,5 @@ Start with AGENTS.md (for avatars: `rev2d docs avatar`, docs/AVATAR.md): it expl
 - [src/mcp/guide.ts](src/mcp/guide.ts): the compact quickstart served by the `rev2d_guide` MCP tool
 - [src/avatar/DESIGN.md](src/avatar/DESIGN.md): how the avatar builder works inside (pipeline, the structure of the generated model, deformation fields, drawn variants, quality bar)
 - [src/avatar/schema.ts](src/avatar/schema.ts): the zod schema of `avatar.json` (`rev2d avatar schema` prints it as JSON Schema)
+
+- [Reusable asset libraries](docs/LIBRARY.md): catalogue, uniform-background keying, generation requests, avatar build provenance, contact sheets and MCP tools.

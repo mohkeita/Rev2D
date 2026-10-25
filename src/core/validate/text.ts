@@ -83,6 +83,12 @@ function boundedDistance(a: string, b: string, limit: number): number {
   const n = a.length;
   const m = b.length;
   if (Math.abs(n - m) > limit) return Infinity;
+  // Each input code unit absent from the candidate needs a deletion or substitution.
+  // This cheap lower bound rejects unrelated ids before filling the DP band.
+  let absent = 0;
+  for (let i = 0; i < n; i++) {
+    if (!b.includes(a[i]) && ++absent > limit) return Infinity;
+  }
   if (rowPrev.length < m + 2) {
     rowPrev = new Int32Array(2 * (m + 2));
     rowCur = new Int32Array(2 * (m + 2));

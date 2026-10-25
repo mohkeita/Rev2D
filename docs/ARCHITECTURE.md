@@ -482,3 +482,7 @@ console.log(pose.physics.hairFront?.outputs, rig.mapPoint(pose, 'faceWarp', 256,
 
 The layer-string syntax of the CLI and MCP (`"talk@0.8,add"`, `"wink,once,start=2.5"`) is parsed
 by `parseLayerSpec` / `toLayer` in `src/api/layers.ts`.
+
+## Asset-library modules
+
+`src/library` provides pure, browser-safe schemas, Lab keying, tag/text search and generation prompts. `src/node/library.ts` owns filesystem IO, optional external-remover execution without a shell, avatar build provenance and contact sheets. CLI `library` and eleven library/avatar MCP wrappers share these functions. The runtime and editor model schema remain unchanged.

@@ -4,7 +4,7 @@
  * Every process started here is a fake agent from test/fixtures/fake-agents; no test calls a real CLI.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -492,6 +492,8 @@ function installFakeCli(name: 'codex' | 'claude'): string {
     writeFileSync(path.join(dir, `${name}.js`), wrapper);
     writeFileSync(path.join(bin, `${name}.cmd`), npmShim(`node_modules\\@fake\\${name}\\bin\\${name}.js`));
   } else {
+    // The isolated PATH must also provide the interpreter of this env-node script.
+    symlinkSync(process.execPath, path.join(bin, 'node'));
     const file = path.join(bin, name);
     writeFileSync(file, `#!/usr/bin/env node\n${wrapper}`);
     chmodSync(file, 0o755);

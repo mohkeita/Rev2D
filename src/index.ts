@@ -9,3 +9,5 @@ export * from './api/templates.js';
 export * from './ops/index.js';
 export * from './interop/index.js';
 export * from './node/interop.js';
+export * from './library/index.js';
+export * from './node/library.js';

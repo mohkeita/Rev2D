@@ -461,3 +461,5 @@ names only its kind (`(not a part id)`), and an unknown prefix throws `unknown p
 4. `rev2d sheet model.r2d.json --sweep AngleX` or `--anim idle` — verify motion in one image.
 5. `rev2d inspect model.r2d.json --param AngleX=30 --json` — exact numbers (bone world transforms,
    part bounds) to check geometry without looking.
+
+Reusable asset metadata uses a separate versioned `library.json` format, documented in [LIBRARY.md](LIBRARY.md). It references ordinary avatar projects and model files; it does not alter the model v1 schema.

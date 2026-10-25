@@ -701,6 +701,8 @@ describe('GET /api/avatar/file', () => {
     const layer = await get('textures\\base.png');
     expect(layer.headers.get('content-type')).toBe('image/png');
     expect(decodePNG(new Uint8Array(await layer.arrayBuffer()))).toMatchObject(SIZE);
+    expect((await get('textures/base.png')).headers.get('content-type')).toBe('image/png');
+    expect((await get('textures\\./base.png')).headers.get('content-type')).toBe('image/png');
     expect((await get('textures/layers.json')).headers.get('content-type')).toBe('application/json; charset=utf-8');
     expect(await (await get('avatar.json')).json()).toEqual(JSON.parse(JSON.stringify(hana.doc)));
     const readme = await get('variant-requests/README.md');
@@ -729,7 +731,7 @@ describe('GET /api/avatar/file', () => {
     await ok(await open(ws, 'hana'));
     const get = (p: string) => fetch(`${ws.base}/api/avatar/file?path=${encodeURIComponent(p)}`);
 
-    for (const escape of ['../neighbour.png', '..\\neighbour.png', 'textures/../../neighbour.png', path.join(dir, 'neighbour.png'), path.join(p, 'source.png'), '/etc/passwd', 'C:\\Windows\\win.ini', '\\\\server\\share\\x.png', '.', '']) {
+    for (const escape of ['../neighbour.png', '..\\neighbour.png', 'textures/../../neighbour.png', 'textures\\..\\..\\neighbour.png', 'textures/..\\..\\neighbour.png', path.join(dir, 'neighbour.png'), path.join(p, 'source.png'), '/etc/passwd', 'C:\\Windows\\win.ini', '\\\\server\\share\\x.png', '.', '']) {
       const res = await get(escape);
       const err = await fails(res, escape === '' ? 400 : 403);
       if (escape !== '') expect(err.error, escape).toContain('is not a file inside the project folder');
@@ -737,6 +739,7 @@ describe('GET /api/avatar/file', () => {
     }
     expect((await fails(await get('linked/secret.png'), 403)).error).toContain('through a symbolic link');
     expect((await fails(await get('.git/config.json'), 403)).error).toContain('hidden file');
+    expect((await fails(await get('.git\\config.json'), 403)).error).toContain('hidden file');
     for (const file of ['page.html', 'drawing.svg', 'hana.r2d.jsonx', 'textures']) {
       expect((await fails(await get(file), 415)).hint, file).toContain('.png');
     }

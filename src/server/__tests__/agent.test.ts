@@ -241,8 +241,9 @@ describe('agent bridge: who may use it', () => {
       await allowed.close();
     }
 
-    // Loopback addresses other than 127.0.0.1 keep the endpoints.
-    const loop = await startEditorServer({ ...base, host: '127.0.0.2', agent: agentOptions() });
+    // localhost is portable; extra 127/8 addresses need aliases on macOS. The predicate test above
+    // covers those addresses without requiring the operating system to assign them to an interface.
+    const loop = await startEditorServer({ ...base, host: 'localhost', agent: agentOptions() });
     try {
       expect(loop.agent).toEqual({ enabled: true });
     } finally {

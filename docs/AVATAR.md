@@ -805,3 +805,7 @@ IO is separate. Inside the checkout:
 How the builder works inside (the pipeline, the deformation fields, the quality bar):
 [src/avatar/DESIGN.md](../src/avatar/DESIGN.md). Where the modules sit:
 [ARCHITECTURE.md](ARCHITECTURE.md#6-avatar-builder-and-lip-sync).
+
+## Asset libraries and MCP
+
+Avatar projects can be registered as reusable character poses in a [library](LIBRARY.md). Use `library rig` to build/fingerprint them and `library validate` to check a consistent parameter interface. MCP now exposes `rev2d_avatar_new`, `rev2d_avatar_validate`, `rev2d_avatar_grid`, `rev2d_avatar_overlay`, `rev2d_avatar_build` and `rev2d_avatar_poses`; image tools return inline PNGs. Imported poses require measured landmarks. Whole-body articulated acting remains a later Studio phase.

@@ -1,0 +1,28 @@
+/** Original parameterized phone-screen fixture, reusable by later scene demos. */
+import type { Doc } from './common.js';
+export function buildPhoneUI(): Doc {
+  return {
+    format: 'rev2d',
+    version: 1,
+    meta: { name: 'phone_progress', width: 240, height: 400 },
+    parameters: [{ id: 'Progress', min: 0, max: 1, default: 0 }],
+    parts: [
+      { id: 'phone', shape: { type: 'rect', x: 20, y: 10, w: 200, h: 380, radius: 20 }, fill: '#26313c' },
+      { id: 'screen', shape: { type: 'rect', x: 33, y: 35, w: 174, h: 320, radius: 8 }, fill: '#ffffff', z: 1 },
+      { id: 'heading', shape: { type: 'rect', x: 50, y: 80, w: 140, h: 12, radius: 3 }, fill: '#c4d0d8', z: 2 },
+      { id: 'track', shape: { type: 'rect', x: 50, y: 160, w: 140, h: 20, radius: 3 }, fill: '#e4e8eb', z: 2 },
+      { id: 'progress', shape: { type: 'rect', x: 50, y: 160, w: 1, h: 20, radius: 0 }, fill: '#4eae73', z: 3 },
+    ],
+    bindings: [
+      {
+        id: 'fill_progress',
+        params: ['Progress'],
+        target: 'part:progress.shape.w',
+        keys: [
+          { at: [0], value: 1 },
+          { at: [1], value: 140 },
+        ],
+      },
+    ],
+  };
+}

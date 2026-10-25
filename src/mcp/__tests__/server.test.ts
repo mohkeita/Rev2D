@@ -86,6 +86,17 @@ describe('mcp server: discovery', () => {
     expect(names).toEqual(
       [
         'rev2d_analyze',
+        'rev2d_library_search',
+        'rev2d_library_validate',
+        'rev2d_library_import',
+        'rev2d_library_request',
+        'rev2d_library_sheet',
+        'rev2d_avatar_new',
+        'rev2d_avatar_validate',
+        'rev2d_avatar_grid',
+        'rev2d_avatar_overlay',
+        'rev2d_avatar_build',
+        'rev2d_avatar_poses',
         'rev2d_apply_ops',
         'rev2d_create_model',
         'rev2d_diff_images',

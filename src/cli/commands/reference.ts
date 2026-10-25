@@ -49,6 +49,7 @@ interface DocTopic {
 }
 
 export const DOC_TOPICS: Record<string, DocTopic> = {
+  library: { files: ['docs/LIBRARY.md'], description: 'reusable asset libraries, uniform-background keying, requests, avatar rigs and review' },
   spec: { files: ['docs/SPEC.md'], description: 'model format and evaluation semantics (addresses, bindings, animation, physics)' },
   ops: {
     files: ['docs/OPS.md'],
