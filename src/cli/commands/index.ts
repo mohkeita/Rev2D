@@ -8,6 +8,7 @@ import { analyze, hit, info, inspect, validate } from './model.js';
 import { docs, schema } from './reference.js';
 import { diff, frames, gif, render, sheet } from './render.js';
 import { watch } from './watch.js';
+import { LIBRARY_COMMANDS,LIBRARY_PARENT } from './library.js';
 
 export const COMMANDS: Command[] = [
   validate,
@@ -24,6 +25,7 @@ export const COMMANDS: Command[] = [
   ops,
   set,
   ...AVATAR_COMMANDS,
+  ...LIBRARY_COMMANDS,
   importSpine,
   importLive2d,
   exportSpine,
@@ -53,4 +55,5 @@ export const PARENTS: Record<string, { summary: string; subcommands: Command[] }
     subcommands: [editorState, editorCommand, editorScreenshot],
   },
   avatar: AVATAR_PARENT,
+  library: LIBRARY_PARENT,
 };
