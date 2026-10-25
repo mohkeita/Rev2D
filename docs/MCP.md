@@ -102,7 +102,7 @@ with `InMemoryTransport`). Both live in `src/mcp/server.ts`.
 | --- | --- | --- |
 | `rev2d_guide` | — | Quickstart for AI authors: conventions, workflow, address grammar, op recipes (head turn with `bind_warp`, blink, physics hair, idle), pitfalls. **Call first.** |
 | `rev2d_schema` | `name?` | JSON Schema of the model, or of one sub-schema (`Part`, `Shape`, `Binding`, `Animation`, `Physics`, ...; case-insensitive). |
-| `rev2d_docs` | `topic`: `spec` \| `ops` \| `cli` \| `mcp` \| `recipes` \| `interop` \| `avatar` \| `architecture` \| `examples` \| `agents` | The documentation file for the topic (`recipes` = docs/RECIPES.md, copy-paste op batches with their checks; the tool description lists every recipe by name; `interop` = docs/INTEROP.md, Spine and Live2D import / export; `avatar` = docs/AVATAR.md, an animated avatar from one illustration with the `rev2d avatar` CLI commands, which have no MCP tools yet; `architecture` = docs/ARCHITECTURE.md); `examples` lists every template with its parameters and animations; `agents` is AGENTS.md (the quickstart when an installation has none). |
+| `rev2d_docs` | `topic`: `library` \| `spec` \| `ops` \| `cli` \| `mcp` \| `recipes` \| `interop` \| `avatar` \| `architecture` \| `examples` \| `agents` | The documentation file for the topic (`recipes` = docs/RECIPES.md, copy-paste op batches with their checks; the tool description lists every recipe by name; `interop` = docs/INTEROP.md, Spine and Live2D import / export; `avatar` = docs/AVATAR.md, an animated avatar from one illustration with the `rev2d avatar` CLI commands, also exposed through the avatar tools below; `architecture` = docs/ARCHITECTURE.md); `examples` lists every template with its parameters and animations; `agents` is AGENTS.md (the quickstart when an installation has none). |
 | `rev2d_validate` | `path` | One line per diagnostic + JSON `{ok, file, errors, warnings, diagnostics}`; `isError` when the model has errors. |
 | `rev2d_info` | `path` | Outline (parameters and what they drive, bone tree, warps, parts, bindings, IK, physics, animations) + the same as JSON. |
 | `rev2d_render` | `path`, pose, `overlay?`, `only?` + `onlyChain?` (overlay focus on these bone/warp/part ids), `scale?`, `viewBox?` (`"fit"` or `[x,y,w,h]`), `padding?`, `background?`, `save_to?` | PNG + summary: image size, viewBox, scale, non-default params, visible and hidden parts, events, IK reach per constraint (`IK: armIk extension 1.08 (out of reach: misses the target by 12 px)`; otherwise `reaches the target`, `within reach; softness keeps the tip 2 px short` or, for a one-bone constraint, `one bone aiming at the target`) and `note:` lines for problems: IK targets out of reach or chains nearly straight (snap risk), physics outputs clamped to their parameter range, visible parts entirely outside the view (only when the view box is the canvas: an explicit crop leaves parts out on purpose) and nothing visible in the view box. |
@@ -282,3 +282,27 @@ error   /parts/1/fil  schema-unrecognized-keys  unknown key "fil"  → did you m
 - **"no running Rev2D editor found"**: ask the user to run `rev2d edit <model>`, or pass `url`.
 - **"changed on disk while the ops were being applied"**: the editor or another program saved the
   model during the call; send the same ops again.
+
+
+## Asset library and avatar tools
+
+Eleven Studio tools supplement the upstream eighteen (29 total). See [LIBRARY.md](LIBRARY.md).
+
+| Tool | Inputs | Result |
+| --- | --- | --- |
+| `rev2d_library_search` | `path`, optional `kind`, `character`, `tags`, `text` | Matching assets/poses and relative paths |
+| `rev2d_library_validate` | `path` | Readiness diagnostics; isError when invalid |
+| `rev2d_library_import` | `path`, `image`, `kind`, ids, optional key/trim settings | New PNG asset or draft avatar; never replaces a pose |
+| `rev2d_library_request` | `path`, `out`, `kind`, ids/description, optional `size` | Local prompt and copied reference attachments; no network |
+| `rev2d_library_sheet` | `path`, optional `kind`, `character`, `save_to` | Contact sheet inline and entry list |
+| `rev2d_avatar_new` | `path` (PNG), `out`, optional `name` | New project with unplaced landmarks |
+| `rev2d_avatar_validate` | `path` | Spec diagnostics, model existence and layer freshness |
+| `rev2d_avatar_grid` | `path`, optional `region`, `step`, `scale`, `save_to` | Coordinate grid PNG inline |
+| `rev2d_avatar_overlay` | `path`, optional `part`, `zoom`, `grid`, `scale`, `save_to` | Landmark overlay PNG inline and missing items |
+| `rev2d_avatar_build` | `path` | Built model, layers, fold findings and input fingerprints |
+| `rev2d_avatar_poses` | `path`, optional `scale` | Four inline review sheets and summary file |
+
+`save_to` creates new files and refuses replacement. Image previews fit within 1024 px; full-size
+saved images retain their coordinates. Inspect every pose sheet and fix landmarks before accepting a
+character. The current face/bust builder does not infer articulated arms/legs. A library character
+import is explicitly a draft, even though its cutout and avatar.json exist.

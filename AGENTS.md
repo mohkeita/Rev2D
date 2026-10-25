@@ -562,7 +562,7 @@ talks, turns and tilts its head, breathes and sways its hair. **The working guid
   generator **only when the human allowed it**.
 - The generated model is a normal model: check it with `rev2d sheet --sweep AngleX --sweep AngleY`,
   `rev2d analyze --anim idle --warmup 10` and `inspect --point`, as in [§1.3](#13-the-verify-loop).
-- The avatar commands are CLI only (no MCP tools yet): run them from a shell and open the PNGs.
+- Avatar MCP wrappers are available: `rev2d_avatar_new`, `rev2d_avatar_validate`, `rev2d_avatar_grid`, `rev2d_avatar_overlay`, `rev2d_avatar_build`, `rev2d_avatar_poses`; image tools return PNGs inline.
 
 Evidence before you report an avatar as done: `avatar validate` shows 0 errors (warnings explained);
 `avatar build` reports no folds (or each one explained); you looked at all four review sheets: the
@@ -682,6 +682,8 @@ Keep these boundaries: anything the editor imports must stay browser-safe (`src/
   tool descriptions must stay under 2048 characters (Claude Code truncates longer ones).
 
 ## 2.5 Where to add features
+
+Reusable asset libraries: read [docs/LIBRARY.md](docs/LIBRARY.md). Pure schema/keying/search/prompts live in `src/library`; files, external removers and build fingerprints live in `src/node/library.ts`. CLI and MCP share that IO. Fixtures are original vector builders in `scripts/examples/figure.ts` and `room.ts`, exposed by `test/fixtures/studio.ts`. Keep user artwork in ignored `out/`; import is not rigging or artistic approval.
 
 | Feature | Touch |
 | --- | --- |

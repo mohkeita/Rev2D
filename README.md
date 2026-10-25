@@ -19,7 +19,7 @@
 ![Node >= 22](https://img.shields.io/badge/node-%3E%3D22-339933?logo=nodedotjs&logoColor=white)
 ![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![Tests: 2600+ passing](https://img.shields.io/badge/tests-2600%2B%20passing-brightgreen)
-[![MCP: 18 tools](https://img.shields.io/badge/MCP-18%20tools-6E56CF)](docs/MCP.md)
+[![MCP: 29 tools](https://img.shields.io/badge/MCP-29%20tools-6E56CF)](docs/MCP.md)
 
 <img src="docs/media/hero.gif" width="720" alt="Four Rev2D example models animating in a 2x2 grid: hana, an anime bust, idling and blinking; a slime jumping; a robot arm reaching with IK; textured koinobori fluttering on a pole">
 
@@ -37,8 +37,8 @@
 - **A deterministic, headless renderer.** Pure TypeScript with no GPU and no browser: the same
   model and inputs always give the same pixels. It renders debug overlays, contact sheets, GIFs and
   PNG sequences.
-- **Tools an agent can drive.** A 35-command CLI with `--json` output, atomic and validated edit
-  operations, and an MCP server with 18 tools that return renders as images. The whole workflow is
+- **Tools an agent can drive.** A 43-command CLI with `--json` output, atomic and validated edit
+  operations, and an MCP server with 29 tools that return renders as images. The whole workflow is
   in [How AI agents use Rev2D](#how-ai-agents-use-rev2d).
 - **An avatar from one illustration.** Give it one picture: landmarks placed by an agent (or by
   you, with handles) turn it into a model that blinks, talks, turns its head, breathes and sways its
@@ -64,7 +64,7 @@ An agent connects in one of three ways:
 
 | Way in | Use it for | Start here |
 | --- | --- | --- |
-| **MCP server** | Claude Code, Claude Desktop and other MCP clients | [Connect Claude Code](#connect-claude-code-or-any-mcp-client), 18 tools |
+| **MCP server** | Claude Code, Claude Desktop and other MCP clients | [Connect Claude Code](#connect-claude-code-or-any-mcp-client), 29 tools |
 | **CLI** | Any agent with a shell | `--json` on every command; the guide is [AGENTS.md](AGENTS.md) |
 | **Editor bridge** | Working together while a human watches in the editor | `rev2d edit`, then `rev2d editor ...` commands or the MCP `rev2d_editor_*` tools |
 
@@ -460,6 +460,10 @@ output.
 **textured** (the koinobori in the demo) shows PNG atlas crops bent by warps, a textured mesh with
 UVs and a texture-alpha mask. Details and a feature matrix: [examples/README.md](examples/README.md).
 
+## Reusable asset libraries
+
+Use `rev2d library search <dir>` to import keyed PNG cutouts, catalogue poses and props, write generation requests, build avatar projects and review contact sheets. The library and eleven avatar/library MCP tools are documented in [docs/LIBRARY.md](docs/LIBRARY.md). Full-body articulation and episode assembly remain later Studio phases.
+
 ## Documentation
 
 | Document | What it covers |
@@ -468,7 +472,7 @@ UVs and a texture-alpha mask. Details and a feature matrix: [examples/README.md]
 | [docs/SPEC.md](docs/SPEC.md) | The model format and evaluation semantics (authoritative) |
 | [docs/CLI.md](docs/CLI.md) | Every command, flag, exit code and `--json` shape |
 | [docs/OPS.md](docs/OPS.md) | The 16 edit operations, reference handling and the `bind_warp` math |
-| [docs/MCP.md](docs/MCP.md) | MCP setup, the 18 tools, the editor bridge and troubleshooting |
+| [docs/MCP.md](docs/MCP.md) | MCP setup, the 29 tools, the editor bridge and troubleshooting |
 | [docs/INTEROP.md](docs/INTEROP.md) | Spine and Live2D import / export: support matrix, coordinates, parameter map, workflows, limitations |
 | [docs/AVATAR.md](docs/AVATAR.md) | An avatar from one illustration: the workflow step by step, every landmark, the generated model, drawn variants, lip sync, Avatar mode, common problems |
 | [docs/RECIPES.md](docs/RECIPES.md) | 22 copy-paste rig recipes with the commands that verify them, all run by the test suite |
@@ -498,7 +502,7 @@ for AI-assisted authoring and experiments. Some ideas we may explore (not promis
 - Importing layered artwork (PSD / Photoshop) as parts
 - Runtimes for game engines and the web (Unity, Godot, a small web player)
 - Lip sync in the CLI and the editor from audio files (the library already reads WAV loudness)
-- MCP tools for the avatar workflow
+- Articulated full-body acting across reusable poses
 - More constraints: longer IK chains, transform and path constraints
 
 Ideas and use cases are welcome in the issues.

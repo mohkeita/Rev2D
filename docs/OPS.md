@@ -876,3 +876,5 @@ the face, and the bottom row looks down. The outline changes only a little.
   (on the same bone) and run `follow`; rerun it whenever the head turn changes. Its residuals say
   how exact the result is at and between keyforms.
 - **Verify visually** after rig changes: render a sweep sheet of the parameters you bound.
+
+Library imports preserve existing avatar projects. Customize generated rigs through `avatar.json` post ops as described in [AVATAR.md](AVATAR.md), then rebuild with `library rig` to refresh the build fingerprints. See [LIBRARY.md](LIBRARY.md).

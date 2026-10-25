@@ -2016,3 +2016,46 @@ in-app agent bridge has two avatar task templates: `avatar-create` (`context: {p
 landmarks, build, review, hand over) and `avatar-variants` (`context: {project, variants?}`, needs
 `allowImageGeneration`: draw eye / mouth variants with the agent's own image generator); see
 [AGENT-BRIDGE.md](AGENT-BRIDGE.md#5-the-preamble-and-task-templates).
+
+
+## Asset libraries
+
+Read [LIBRARY.md](LIBRARY.md) for the catalogue, keyer and landmark workflow. Every command accepts
+`--json`: data goes to stdout, failures use exit 1, usage errors exit 2. Imports and output sheets
+refuse replacement. Character imports create draft avatar projects requiring authored landmarks.
+
+### rev2d library init
+
+`rev2d library init <dir> [--name n] [--json]` creates library.json.
+
+### rev2d library validate
+
+`rev2d library validate <dir> [--json]` returns `{ok, diagnostics}` and checks files, avatars, anchors,
+parameter consistency and input fingerprints. Validation does not approve artistic fidelity.
+
+### rev2d library list
+
+`rev2d library list <dir> [--kind character|background|prop|bubble|ui] [--character id] [--tags a,b] [--text words] [--json]` lists matching entries.
+
+### rev2d library search
+
+`rev2d library search <dir> [--kind kind] [--character id] [--tags a,b] [--text words] [--json]` requires
+all tags and all text words. Text ignores case and accents; output is a stable array of entries.
+
+### rev2d library import
+
+`rev2d library import <image> --into <dir> --kind character|background|prop|bubble [--id id] [--character id --pose pose] [--name n] [--description text] [--tags a,b] [--key auto|white|#RRGGBB] [--tolerance 18] [--trim|--no-trim] [--padding 8] [--remover executable] [--json]` imports one PNG. Backgrounds stay intact; other artwork is keyed/trimmed. The optional external executable receives input-path and output-path without a shell. `import.json` records crop offsets. New character ids get the first pose as a reference and its cutout height as an initial reference height; review/edit both. Output includes diagnostics and needsLandmarks.
+
+### rev2d library request
+
+`rev2d library request <dir> --kind character|background|prop|bubble [--character id] [--pose description] [--id description] [--size WxH] -o <new-dir> [--json]` writes prompt.txt, request.json and copied reference attachments. No network or generation is performed.
+
+### rev2d library rig
+
+`rev2d library rig <dir> --character id --pose id [--json]` builds the existing avatar project and
+records source/spec/model/layer fingerprints. Missing landmarks fail with diagnostics; they are never guessed.
+
+### rev2d library sheet
+
+`rev2d library sheet <dir> -o <new.png> [--kind kind] [--character id] [--json]` renders imported artwork
+previews. This is an asset contact sheet; avatar poses reviews the generated rig's motions.
