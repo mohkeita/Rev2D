@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "library": "./library",
+  "width": 1080,
+  "height": 1920,
+  "fps": 24,
+  "duration": 6,
+  "background": "#f4e7d5",
+  "narration": { "audio": "./voice.wav", "alignment": "./voice.alignment.json" },
+  "layers": [
+    { "id": "room", "type": "background", "ref": "room", "scale": 3.5556, "x": -1166.6667 },
+    {
+      "id": "hero",
+      "type": "character",
+      "character": "figure",
+      "at": "room.sofa_left",
+      "poses": [
+        { "t": 0, "pose": "sitting_phone" },
+        { "t": "@text:se lève", "pose": "standing" }
+      ],
+      "animations": ["idle", "blink"]
+    },
+    {
+      "id": "box",
+      "type": "prop",
+      "ref": "box",
+      "at": [717.7778, 1760],
+      "scale": 0.7,
+      "enter": { "t": "@word:5", "type": "pop", "duration": 0.35, "overshoot": 0.15 }
+    },
+    {
+      "id": "idea",
+      "type": "bubble",
+      "ref": "thought",
+      "attach": "hero.head",
+      "offset": [88.8889, -35.5556],
+      "scale": 0.7,
+      "content": { "type": "image", "src": "./library/props/box/source.png" },
+      "enter": { "t": "@text:idée", "type": "draw-on", "duration": 0.4 },
+      "exit": { "t": 5.5, "type": "fade", "duration": 0.3 }
+    },
+    {
+      "id": "phone",
+      "type": "ui",
+      "ref": "phone_progress",
+      "at": [800, 1580],
+      "scale": 0.7,
+      "enter": { "t": 0.5, "type": "fade" },
+      "tracks": [
+        {
+          "param": "Progress",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 6, "v": 1 }
+          ]
+        }
+      ]
+    }
+  ],
+  "tracks": [
+    {
+      "target": "layer:hero.x",
+      "keys": [
+        { "t": 0, "v": 380, "ease": "step" },
+        { "t": "@text:se lève", "v": 486.6667 }
+      ]
+    },
+    {
+      "target": "layer:hero.y",
+      "keys": [
+        { "t": 0, "v": 1262.2222, "ease": "step" },
+        { "t": "@text:se lève", "v": 1706.6667 }
+      ]
+    }
+  ],
+  "camera": {
+    "keys": [
+      { "t": 0, "x": 540, "y": 1150, "zoom": 1.4 },
+      { "t": 6, "x": 540, "y": 1160, "zoom": 1.46 }
+    ]
+  }
+}

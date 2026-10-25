@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "name": "scene-demo",
+  "backgrounds": [
+    {
+      "id": "room",
+      "src": "backgrounds/room/source.png",
+      "size": [960, 540],
+      "tags": [],
+      "anchors": {
+        "sofa_left": { "at": [225, 355], "scale": 1, "pose_tags": ["sitting"] },
+        "center": { "at": [500, 480], "scale": 1, "pose_tags": ["standing"] }
+      },
+      "variants": {}
+    }
+  ],
+  "characters": [
+    {
+      "id": "figure",
+      "name": "figure",
+      "description": "",
+      "references": ["characters/figure/sitting_phone/source.png"],
+      "height": 260,
+      "poses": [
+        {
+          "id": "sitting_phone",
+          "avatar": "characters/figure/sitting_phone",
+          "anchor": [180, 330],
+          "facing": "front",
+          "tags": []
+        },
+        {
+          "id": "standing",
+          "avatar": "characters/figure/standing",
+          "anchor": [180, 455],
+          "facing": "front",
+          "tags": []
+        }
+      ]
+    }
+  ],
+  "props": [
+    { "id": "box", "src": "props/box/source.png", "anchor": "bottom-center", "tags": [] }
+  ],
+  "bubbles": [
+    {
+      "id": "thought",
+      "src": "bubbles/thought/source.png",
+      "content_rect": [35, 30, 170, 75],
+      "tail": [38, 157],
+      "tags": []
+    }
+  ],
+  "ui": [
+    {
+      "id": "phone_progress",
+      "model": "ui/phone.r2d.json",
+      "params": { "Progress": "0..1" },
+      "tags": ["phone"]
+    }
+  ]
+}

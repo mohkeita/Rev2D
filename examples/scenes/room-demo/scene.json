@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "library": "./library",
+  "width": 1920,
+  "height": 1080,
+  "fps": 24,
+  "duration": 6,
+  "background": "#f4e7d5",
+  "narration": { "audio": "./voice.wav", "alignment": "./voice.alignment.json" },
+  "layers": [
+    { "id": "room", "type": "background", "ref": "room", "scale": 2, "x": 0 },
+    {
+      "id": "hero",
+      "type": "character",
+      "character": "figure",
+      "at": "room.sofa_left",
+      "poses": [
+        { "t": 0, "pose": "sitting_phone" },
+        { "t": "@text:se lève", "pose": "standing" }
+      ],
+      "animations": ["idle", "blink"]
+    },
+    {
+      "id": "box",
+      "type": "prop",
+      "ref": "box",
+      "at": [1420, 990],
+      "scale": 1,
+      "enter": { "t": "@word:5", "type": "pop", "duration": 0.35, "overshoot": 0.15 }
+    },
+    {
+      "id": "idea",
+      "type": "bubble",
+      "ref": "thought",
+      "attach": "hero.head",
+      "offset": [50, -20],
+      "scale": 1,
+      "content": { "type": "image", "src": "./library/props/box/source.png" },
+      "enter": { "t": "@text:idée", "type": "draw-on", "duration": 0.4 },
+      "exit": { "t": 5.5, "type": "fade", "duration": 0.3 }
+    },
+    {
+      "id": "phone",
+      "type": "ui",
+      "ref": "phone_progress",
+      "at": [1650, 680],
+      "scale": 1,
+      "enter": { "t": 0.5, "type": "fade" },
+      "tracks": [
+        {
+          "param": "Progress",
+          "keys": [
+            { "t": 0, "v": 0, "ease": "inOutSine" },
+            { "t": 6, "v": 1 }
+          ]
+        }
+      ]
+    }
+  ],
+  "tracks": [
+    {
+      "target": "layer:hero.x",
+      "keys": [
+        { "t": 0, "v": 450, "ease": "step" },
+        { "t": "@text:se lève", "v": 1000 }
+      ]
+    },
+    {
+      "target": "layer:hero.y",
+      "keys": [
+        { "t": 0, "v": 710, "ease": "step" },
+        { "t": "@text:se lève", "v": 960 }
+      ]
+    }
+  ],
+  "camera": "slow-push"
+}
