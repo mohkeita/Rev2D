@@ -1,5 +1,8 @@
 # Rev2D Edit Ops
 
+Scene placement, camera and appearances are authored in [scene documents](SCENE.md), not model ops.
+Rendering a scene evaluates its rigs without rewriting the models or adding baked tracks to them.
+
 Ops are small JSON edits addressed by id: "add this bone under that one", "bind this property
 to that parameter", "rename this texture everywhere". AI agents send a list of ops instead of
 rewriting the whole model file. The same ops run everywhere: `applyOps()` in `src/ops`, the

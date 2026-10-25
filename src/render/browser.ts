@@ -3,6 +3,7 @@
  * Import this from the editor/web code.
  */
 export { renderImage, type RenderOptions } from './raster.js';
+export { RasterWorkspace } from './workspace.js';
 export { drawOverlay, type OverlayLayer, type OverlayOptions, type OverlayScene } from './overlay.js';
 export {
   drawText,

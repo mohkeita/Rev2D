@@ -102,7 +102,7 @@ with `InMemoryTransport`). Both live in `src/mcp/server.ts`.
 | --- | --- | --- |
 | `rev2d_guide` | — | Quickstart for AI authors: conventions, workflow, address grammar, op recipes (head turn with `bind_warp`, blink, physics hair, idle), pitfalls. **Call first.** |
 | `rev2d_schema` | `name?` | JSON Schema of the model, or of one sub-schema (`Part`, `Shape`, `Binding`, `Animation`, `Physics`, ...; case-insensitive). |
-| `rev2d_docs` | `topic`: `library` \| `spec` \| `ops` \| `cli` \| `mcp` \| `recipes` \| `interop` \| `avatar` \| `architecture` \| `examples` \| `agents` | The documentation file for the topic (`recipes` = docs/RECIPES.md, copy-paste op batches with their checks; the tool description lists every recipe by name; `interop` = docs/INTEROP.md, Spine and Live2D import / export; `avatar` = docs/AVATAR.md, an animated avatar from one illustration with the `rev2d avatar` CLI commands, also exposed through the avatar tools below; `architecture` = docs/ARCHITECTURE.md); `examples` lists every template with its parameters and animations; `agents` is AGENTS.md (the quickstart when an installation has none). |
+| `rev2d_docs` | `topic`: `scene` \| `library` \| `spec` \| `ops` \| `cli` \| `mcp` \| `recipes` \| `interop` \| `avatar` \| `architecture` \| `examples` \| `agents` | The documentation file for the topic (`recipes` = docs/RECIPES.md, copy-paste op batches with their checks; the tool description lists every recipe by name; `interop` = docs/INTEROP.md, Spine and Live2D import / export; `avatar` = docs/AVATAR.md, an animated avatar from one illustration with the `rev2d avatar` CLI commands, also exposed through the avatar tools below; `architecture` = docs/ARCHITECTURE.md); `examples` lists every template with its parameters and animations; `agents` is AGENTS.md (the quickstart when an installation has none). |
 | `rev2d_validate` | `path` | One line per diagnostic + JSON `{ok, file, errors, warnings, diagnostics}`; `isError` when the model has errors. |
 | `rev2d_info` | `path` | Outline (parameters and what they drive, bone tree, warps, parts, bindings, IK, physics, animations) + the same as JSON. |
 | `rev2d_render` | `path`, pose, `overlay?`, `only?` + `onlyChain?` (overlay focus on these bone/warp/part ids), `scale?`, `viewBox?` (`"fit"` or `[x,y,w,h]`), `padding?`, `background?`, `save_to?` | PNG + summary: image size, viewBox, scale, non-default params, visible and hidden parts, events, IK reach per constraint (`IK: armIk extension 1.08 (out of reach: misses the target by 12 px)`; otherwise `reaches the target`, `within reach; softness keeps the tip 2 px short` or, for a one-bone constraint, `one bone aiming at the target`) and `note:` lines for problems: IK targets out of reach or chains nearly straight (snap risk), physics outputs clamped to their parameter range, visible parts entirely outside the view (only when the view box is the canvas: an explicit crop leaves parts out on purpose) and nothing visible in the view box. |
@@ -284,9 +284,25 @@ error   /parts/1/fil  schema-unrecognized-keys  unknown key "fil"  → did you m
   model during the call; send the same ops again.
 
 
-## Asset library and avatar tools
+## Scene tools
 
-Eleven Studio tools supplement the upstream eighteen (29 total). See [LIBRARY.md](LIBRARY.md).
+Read [SCENE.md](SCENE.md), also served by `rev2d_docs {topic:"scene"}`. Scene paths resolve
+against the MCP working directory; paths inside the document resolve against that document.
+
+| Tool | Inputs | Result |
+| --- | --- | --- |
+| `rev2d_scene_validate` | `path` | Read-only `{ok,diagnostics,cues}`; isError when invalid |
+| `rev2d_scene_frame` | `path`, optional `time`, `scale`, `overlay`, `save_to` | Inline PNG, size and resolved cues; optional new PNG file |
+| `rev2d_scene_sheet` | `path`, optional `frames`, `times`, `scale`, `save_to` | Inline contact sheet and sample times |
+| `rev2d_scene_analyze` | `path` | Read-only framing warnings with intervals/maxima and per-model analysis |
+| `rev2d_scene_render` | `path`, `out`, optional `format`, `from`, `to`, `scale`, `crf`, `audio` | Streaming MP4/GIF or PNG sequence with manifest; metadata and observed peak RSS |
+
+Outputs must be new. MP4/GIF use external ffmpeg; `REV2D_FFMPEG` overrides PATH discovery.
+PNG sequences need no encoder. No source files or library assets are changed by these tools.
+
+## Library and avatar reference
+
+Eleven library/avatar tools supplement the upstream eighteen; five scene tools bring the total to 34. See [LIBRARY.md](LIBRARY.md).
 
 | Tool | Inputs | Result |
 | --- | --- | --- |

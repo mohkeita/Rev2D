@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "sourceSize": [360, 480],
+  "offset": [0, 0],
+  "key": [0, 255, 0],
+  "diagnostics": [
+    {
+      "code": "library-key-fill-color-clash",
+      "path": "/image",
+      "message": "326 enclosed key-colour pixels removed; same-colour clothing is ambiguous",
+      "hint": "review the silhouette; regenerate using a background colour absent from the subject",
+      "severity": "warning"
+    }
+  ]
+}

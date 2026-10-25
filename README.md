@@ -462,7 +462,7 @@ UVs and a texture-alpha mask. Details and a feature matrix: [examples/README.md]
 
 ## Reusable asset libraries
 
-Use `rev2d library search <dir>` to import keyed PNG cutouts, catalogue poses and props, write generation requests, build avatar projects and review contact sheets. The library and eleven avatar/library MCP tools are documented in [docs/LIBRARY.md](docs/LIBRARY.md). Full-body articulation and episode assembly remain later Studio phases.
+Use `rev2d library search <dir>` to find reusable poses and props. Import keyed PNG cutouts, write generation requests, build avatar projects and review contact sheets with the commands and eleven avatar/library MCP tools in [docs/LIBRARY.md](docs/LIBRARY.md). Compose them with camera, narration cues and streaming video export using [scenes](docs/SCENE.md). Full-body articulation and episode assembly remain later Studio phases.
 
 ## Documentation
 

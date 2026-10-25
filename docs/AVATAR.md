@@ -1,5 +1,9 @@
 # Avatars from one illustration
 
+Built avatar projects can be reused as library poses in [scenes](SCENE.md). Pose changes and narration
+cues share a scene clock, while each pose retains its sequential physics player. Articulated whole-body
+acting remains separate work; scene composition does not infer new limbs or unseen artwork.
+
 Give Rev2D **one picture** (ideally a front-facing bust on a transparent background) and it turns it
 into an animated avatar: it blinks, talks, turns and tilts its head, breathes and sways its hair.
 You (an AI agent, or a person in the editor) place **landmarks** on the picture: the head, the eyes,
@@ -29,8 +33,8 @@ Contents:
 [12. For programs](#12-for-programs)
 
 Examples write `rev2d` for `node bin/rev2d.js` (or `npx rev2d` inside the checkout). The avatar
-commands are CLI commands; the MCP server has no avatar tools yet, so an MCP client runs them from a
-shell and reads the PNGs they write.
+commands also have MCP tools: `rev2d_avatar_new`, `rev2d_avatar_validate`, `rev2d_avatar_grid`,
+`rev2d_avatar_overlay`, `rev2d_avatar_build` and `rev2d_avatar_poses`. Image tools return PNGs inline.
 
 ---
 

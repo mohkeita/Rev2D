@@ -86,6 +86,11 @@ describe('mcp server: discovery', () => {
     expect(names).toEqual(
       [
         'rev2d_analyze',
+        'rev2d_scene_validate',
+        'rev2d_scene_frame',
+        'rev2d_scene_sheet',
+        'rev2d_scene_analyze',
+        'rev2d_scene_render',
         'rev2d_library_search',
         'rev2d_library_validate',
         'rev2d_library_import',

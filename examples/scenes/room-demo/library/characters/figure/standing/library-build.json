@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "files": {
+    "avatar.json": "0e59f182d5ebf9172fb58ded1bb21678270b904822a4bcf1f81e44fb020472f9",
+    "source.png": "66e1285a4242dbda3797581ffc97071964769cf1ca80901661c521b083fced13",
+    "figure_standing.r2d.json": "5fef37adb493e245ea4880726ae1483e7f8e3829f38e4e5e8c2ff3d1a452d29c",
+    "textures/layers.json": "a1a8e1668c91b932dfcde5fddcaf26afadcb9f94c22b41bb15e61fed386ee320",
+    "textures/base.png": "aa0892b70fa96359a594dec16357395c6123186554f5beb3230a782499e2664f",
+    "textures/eyeR_ball.png": "33d0a24068ec2e999efa7fe7b2fec1a1bc8c5d6eecd04b68530fb26052189a87",
+    "textures/eyeR_lower.png": "ad6bc73a166e92fd0bed17cc3fb15a4e52f9a831eab917ad93c1d981da8c9bf4",
+    "textures/eyeR_crease.png": "5a5c9ea33b1e792c3087247db6801fa70df4a7f27dad3a1d46c8a54850455e71",
+    "textures/eyeR_upper.png": "39c493eede3e92c8403fbab189707658d2dc3f57b81e3b9377d40460ffb05fe8",
+    "textures/eyeR_front.png": "548b4510871b12d02e7fd2137831ee4454501979f41ddc72e0772d6a495fbb05",
+    "textures/eyeL_ball.png": "33d0a24068ec2e999efa7fe7b2fec1a1bc8c5d6eecd04b68530fb26052189a87",
+    "textures/eyeL_lower.png": "6c151b97c8d1f3dfe925477915546e434c325f566a6f07a6811633b019d12414",
+    "textures/eyeL_crease.png": "df51f108ff27e90116921f4e325eb1bcad16ade3b806fae7a68a761cca94f8c5",
+    "textures/eyeL_upper.png": "bd7e912b3c18067802fdc756a01f3e7e08db5193e2430db72eda31e5321d7a04",
+    "textures/eyeL_front.png": "32cb942f2911368bded88e94c22748ff73f27874d92a040d8aec056973cc7d90",
+    "textures/mouth.png": "08062f9709ec732a1c0fc8809d7cda1e5bed694215f4576870699f28ba98933f"
+  }
+}

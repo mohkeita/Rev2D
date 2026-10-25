@@ -15,6 +15,7 @@
  */
 import type { BlendMode, DrawItem, ImageRGBA, RenderList, RGBA } from '../core/types.js';
 import { assertImage } from './image.js';
+import type { RasterWorkspace, RasterTexture as PremulTexture } from './workspace.js';
 
 export interface RenderOptions {
   /** Region of setup space to render [x, y, w, h]. Default [0, 0, list.width, list.height]. */
@@ -25,6 +26,8 @@ export interface RenderOptions {
   background?: RGBA | null;
   /** Supersampling factor per axis (1..4). Default 2. */
   supersample?: number;
+  /** Optional reusable scratch framebuffer for sequential rendering. Outputs remain independent. */
+  workspace?: RasterWorkspace;
 }
 
 const SUBPIXEL = 256;
@@ -67,7 +70,7 @@ export function renderImage(
       `renderImage: ${width}x${height} px at supersample ${ss} exceeds ${MAX_SAMPLES} samples; lower scale or supersample`,
     );
   }
-  const raster = new Rasterizer(width * ss, height * ss, vb[0], vb[1], scale * ss, textures);
+  const raster = new Rasterizer(width * ss, height * ss, vb[0], vb[1], scale * ss, textures, opts.workspace);
   raster.clear(opts.background ?? list.background);
   for (const item of list.draws) raster.draw(item);
   return raster.resolve(ss);
@@ -212,12 +215,6 @@ function rasterizeTriangle(
 // ------------------------------------------------------------------------------------ textures
 
 /** Texture with premultiplied Float32 texels. */
-interface PremulTexture {
-  width: number;
-  height: number;
-  data: Float32Array;
-}
-
 function premultiplyTexture(img: ImageRGBA): PremulTexture {
   const n = img.width * img.height;
   const data = new Float32Array(n * 4);
@@ -299,8 +296,9 @@ class Rasterizer {
     /** Framebuffer samples per setup unit. */
     private readonly k: number,
     private readonly textures: Record<string, ImageRGBA>,
+    private readonly workspace?: RasterWorkspace,
   ) {
-    this.data = new Float32Array(width * height * 4);
+    this.data = workspace?.framebuffer(width * height * 4) ?? new Float32Array(width * height * 4);
     this.full = { x0: 0, y0: 0, x1: width, y1: height };
   }
 
@@ -309,7 +307,10 @@ class Rasterizer {
     const r = clamp01(bg[0]) * a;
     const g = clamp01(bg[1]) * a;
     const b = clamp01(bg[2]) * a;
-    if (r === 0 && g === 0 && b === 0 && a === 0) return;
+    if (r === 0 && g === 0 && b === 0 && a === 0) {
+      this.data.fill(0);
+      return;
+    }
     const d = this.data;
     for (let i = 0; i < d.length; i += 4) {
       d[i] = r;
@@ -393,7 +394,7 @@ class Rasterizer {
       if (!img) throw new Error(`renderImage: ${itemName(item)} uses texture "${id}", which was not provided`);
       assertImage(img, `renderImage: texture "${id}"`);
       if (img.width === 0 || img.height === 0) throw new RangeError(`renderImage: texture "${id}" is empty`);
-      t = premultiplyTexture(img);
+      t = this.workspace?.texture(img, () => premultiplyTexture(img)) ?? premultiplyTexture(img);
       this.textureCache.set(id, t);
     }
     return t;
