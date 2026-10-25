@@ -11,3 +11,6 @@ export * from './interop/index.js';
 export * from './node/interop.js';
 export * from './library/index.js';
 export * from './node/library.js';
+export * from './scene/index.js';
+export * from './node/scene.js';
+export * from './node/video.js';

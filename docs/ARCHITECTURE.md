@@ -1,5 +1,10 @@
 # Rev2D architecture
 
+Studio scenes add a separate pipeline: `src/scene` (browser-safe schema, narration alignment,
+timing, camera, placement, triangle composition and sampled analysis) → `src/node/scene.ts`
+(cached asset/model/audio loading) → `src/node/video.ts` (bounded RGBA stream to optional ffmpeg).
+CLI and MCP share those Node adapters. See [SCENE.md](SCENE.md); model evaluation stays unchanged.
+
 How a `*.r2d.json` file becomes pixels, which module owns which step, the data contracts between
 them, what is guaranteed to be deterministic, how the editor talks to the CLI/MCP side and confines
 file management to a workspace root, how the editor UI is put together (shell, modes, design system,

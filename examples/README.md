@@ -1,5 +1,11 @@
 # Rev2D example models
 
+The separate [room scene example](scenes/room-demo/scene.json) uses original synthetic assets,
+two avatar poses, a pop-in box, a thought bubble, a progress UI and narration cues. Its
+[portrait version](scenes/room-demo/portrait.json) is 1080×1920. The audio is a timing tone.
+See [SCENE.md](../docs/SCENE.md) for validate, sheet, analyze and video commands. Regenerate into
+a new directory with `node --import tsx scripts/build-scenes.ts out/new-scene-example`.
+
 Five ready-to-run models. Each is a template (`rev2d new my.r2d.json --template <name>`) and a
 reference for authoring techniques: open the JSON next to this page and copy what you need.
 

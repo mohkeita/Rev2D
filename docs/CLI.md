@@ -1,5 +1,53 @@
 # rev2d command-line reference
 
+## Scene commands
+
+See [SCENE.md](SCENE.md) for the version 1 format, placement, camera, narration cues and examples.
+All scene commands accept `--json`; data goes to stdout and render progress to stderr.
+Existing output files/directories are refused.
+
+### rev2d scene new
+
+`rev2d scene new <scene.json> [--library dir] [--background id] [--size 1920x1080]` creates a scene.
+Library and assets use paths relative to the scene file. Portrait `--size 1080x1920` is supported.
+
+### rev2d scene validate
+
+`rev2d scene validate <scene.json> [--json]` returns `{ok,diagnostics}`; exit 1 on any error.
+It checks schema, files, library references, poses, placement, animation targets and narration cues.
+
+### rev2d scene info
+
+`rev2d scene info <scene.json> [--json]` returns dimensions, fps, duration, frame count, layers,
+used poses, resolved cues, audio metadata and diagnostics.
+
+### rev2d scene frame
+
+`rev2d scene frame <scene.json> -o frame.png [--time 0] [--scale 1] [--overlay camera,bounds,safe,anchors]`
+renders one frame. JSON includes file, time and pixel dimensions.
+
+### rev2d scene sheet
+
+`rev2d scene sheet <scene.json> -o sheet.png [--frames 12] [--times 0,2,4] [--scale 0.25]`
+renders sampled motion. Explicit times override the sample count (1–100). JSON includes times and size.
+
+### rev2d scene analyze
+
+`rev2d scene analyze <scene.json> [--json]` returns frame count, fps and scene warnings with
+intervals, maximum severity measurements and units; `models` includes existing model motion analysis.
+
+### rev2d scene render
+
+`rev2d scene render <scene.json> -o shot.mp4 [--from 0] [--to 6] [--scale 1] [--crf 18] [--no-audio]`
+streams frames through optional ffmpeg. `--format mp4|gif|png` overrides extension detection;
+`--format png -o frames-dir` writes PNG frames and manifest.json without ffmpeg. `--audio` is on
+by default when narration exists. CRF is 0–51. MP4 output needs even dimensions and uses H.264
+yuv420p, veryfast, faststart and optional AAC. `REV2D_FFMPEG` overrides PATH discovery.
+Missing ffmpeg gives `scene-ffmpeg-missing`. JSON includes file, format, size, fps, frames, duration,
+render window and observed peak RSS. GIF uses a fixed palette. Output is published without clobbering
+existing files; cancellation removes incomplete output. The whole frame sequence is never buffered.
+
+
 `rev2d` is the text-first front end of Rev2D: create, validate, render, inspect and edit rigged 2D
 models (`*.r2d.json`, see [SPEC.md](SPEC.md)), run the live editor, and serve the MCP server.
 Every command is deterministic (same model + same flags = same bytes) and designed to be driven by

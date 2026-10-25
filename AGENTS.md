@@ -683,6 +683,13 @@ Keep these boundaries: anything the editor imports must stay browser-safe (`src/
 
 ## 2.5 Where to add features
 
+Layered scenes: read [docs/SCENE.md](docs/SCENE.md). `src/scene` is browser-safe (schema, alignment,
+timing, camera, evaluation, render-list composition and analysis). Files/models/WAV loading and
+resource caches belong in `src/node/scene.ts`; optional ffmpeg and streaming output belong in
+`src/node/video.ts`. CLI/MCP share those adapters. Keep a physics player per layer and pose, keep
+symbolic narration times out of numeric evaluation, and never buffer the whole video. Synthetic
+scene builders live in `scripts/examples/scene-assets.ts`; user assets remain local under `out/`.
+
 Reusable asset libraries: read [docs/LIBRARY.md](docs/LIBRARY.md). Pure schema/keying/search/prompts live in `src/library`; files, external removers and build fingerprints live in `src/node/library.ts`. CLI and MCP share that IO. Fixtures are original vector builders in `scripts/examples/figure.ts` and `room.ts`, exposed by `test/fixtures/studio.ts`. Keep user artwork in ignored `out/`; import is not rigging or artistic approval.
 
 | Feature | Touch |

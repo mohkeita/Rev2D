@@ -286,7 +286,25 @@ error   /parts/1/fil  schema-unrecognized-keys  unknown key "fil"  → did you m
 
 ## Asset library and avatar tools
 
-Eleven Studio tools supplement the upstream eighteen (29 total). See [LIBRARY.md](LIBRARY.md).
+## Scene tools
+
+Read [SCENE.md](SCENE.md), also served by `rev2d_docs {topic:"scene"}`. Scene paths resolve
+against the MCP working directory; paths inside the document resolve against that document.
+
+| Tool | Inputs | Result |
+| --- | --- | --- |
+| `rev2d_scene_validate` | `path` | Read-only `{ok,diagnostics,cues}`; isError when invalid |
+| `rev2d_scene_frame` | `path`, optional `time`, `scale`, `overlay`, `save_to` | Inline PNG, size and resolved cues; optional new PNG file |
+| `rev2d_scene_sheet` | `path`, optional `frames`, `times`, `scale`, `save_to` | Inline contact sheet and sample times |
+| `rev2d_scene_analyze` | `path` | Read-only framing warnings with intervals/maxima and per-model analysis |
+| `rev2d_scene_render` | `path`, `out`, optional `format`, `from`, `to`, `scale`, `crf`, `audio` | Streaming MP4/GIF or PNG sequence with manifest; metadata and observed peak RSS |
+
+Outputs must be new. MP4/GIF use external ffmpeg; `REV2D_FFMPEG` overrides PATH discovery.
+PNG sequences need no encoder. No source files or library assets are changed by these tools.
+
+## Library and avatar reference
+
+Eleven library/avatar tools supplement the upstream eighteen; five scene tools bring the total to 34. See [LIBRARY.md](LIBRARY.md).
 
 | Tool | Inputs | Result |
 | --- | --- | --- |

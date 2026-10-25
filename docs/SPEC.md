@@ -1,5 +1,8 @@
 # Rev2D Model Format & Evaluation Semantics (v1)
 
+Layered world/camera/narration documents use the separate scene v1 format in [SCENE.md](SCENE.md).
+Scene evaluation preserves this model format and each model's shared scene clock and physics player.
+
 Rev2D is a 2D rigging/animation system in the spirit of Live2D Cubism and Spine, designed so that
 **AI agents can author, inspect and verify models as plain text**. A model is one JSON file
 (`*.r2d.json`). Everything is addressed by string ids, and every animatable property has a single

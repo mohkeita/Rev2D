@@ -17,6 +17,7 @@ import { registerEditorTools } from './tools/editor.js';
 import { registerInteropTools } from './tools/interop.js';
 import { registerModelTools } from './tools/model.js';
 import { registerLibraryTools } from './tools/library.js';
+import { registerSceneTools } from './tools/scene.js';
 
 export interface McpServerOptions {
   /** Base directory for relative model paths (default process.cwd()). */
@@ -51,6 +52,7 @@ export function createMcpServer(opts: McpServerOptions = {}): McpServer {
   registerInteropTools(server, ctx);
   registerEditorTools(server, ctx);
   registerLibraryTools(server, ctx);
+  registerSceneTools(server, ctx);
   registerDocResources(server);
   return server;
 }
