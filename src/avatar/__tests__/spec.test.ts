@@ -2,6 +2,7 @@
  * parseAvatarSpec and draftAvatarSpec: structural diagnostics (the model validator's conversion on
  * AvatarSpecSchema), the list of missing landmarks of a draft, and every semantic "avatar-*" code.
  */
+import {ARM_VALIDATION_CASES} from '../../../test/fixtures/avatar-arms.js';
 import { describe, expect, it } from 'vitest';
 import type { Diagnostic } from '../../core/types.js';
 import { formatDiagnostics } from '../../core/validate.js';
@@ -363,7 +364,7 @@ describe('parseAvatarSpec: semantic checks', () => {
   }
 
   it('covers every documented code', () => {
-    const tested = new Set<string>([...CASES.map((c) => c.code), 'avatar-missing-landmark']);
+    const tested = new Set<string>([...CASES.map((c) => c.code), ...ARM_VALIDATION_CASES.map(c=>c.code), 'avatar-missing-landmark']);
     expect([...tested].sort()).toEqual(Object.keys(AVATAR_DIAGNOSTIC_CODES).sort());
   });
 

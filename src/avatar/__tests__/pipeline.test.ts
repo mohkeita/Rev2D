@@ -41,7 +41,7 @@ const SKELETON = AVATAR_FEATURES.filter((f) => f.id === 'head' || f.id === 'body
 describe('feature registry', () => {
   it('lists every feature once, head and body first, animations last', () => {
     const ids = AVATAR_FEATURES.map((f) => f.id);
-    expect(ids).toEqual(['head', 'body', 'eyes', 'mouth', 'brows', 'cheeks', 'hair', 'attachments', 'sprites', 'animations']);
+    expect(ids).toEqual(['head', 'body', 'arms','eyes', 'mouth', 'brows', 'cheeks', 'hair', 'attachments', 'sprites','expressions', 'animations']);
     expect(AVATAR_FEATURES.every((f) => f.summary.length > 10)).toBe(true);
   });
 });

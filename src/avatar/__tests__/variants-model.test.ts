@@ -153,7 +153,7 @@ describe('eye sprite curves', () => {
 
 describe('mouth sprite selection', () => {
   const grid = mouthGrid();
-  const table = (Object.keys(VARIANTS) as VariantId[]).filter((id) => VARIANTS[id].group === 'mouth');
+  const table = (Object.keys(VARIANTS) as VariantId[]).filter((id) => VARIANTS[id].mouth !== undefined);
 
   it('puts every table point on the grid and shows the closed mouth up to MouthOpen 0.15', () => {
     for (const id of table) {

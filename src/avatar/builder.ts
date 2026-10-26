@@ -13,6 +13,7 @@ import { fieldOffsets, latticeOf, makeLattice, type Field, type Lattice, type La
 type Items<K extends keyof ModelInput> = NonNullable<ModelInput[K]> extends Array<infer T> ? T : never;
 export type ParameterInput = Items<'parameters'>;
 export type TextureInput = Items<'textures'>;
+export type BoneInput = Items<'bones'>;
 export type WarpInput = Items<'warps'>;
 export type PartInput = Items<'parts'>;
 export type BindingInput = Items<'bindings'>;
@@ -49,6 +50,18 @@ export const STANDARD_PARAMETERS = {
   Cheek: { min: 0, max: 1, default: 0, group: 'Face', description: 'Blush strength.' },
   BodyAngleX: { min: -10, max: 10, default: 0, group: 'Body', description: 'Body sway: + leans toward the screen right.' },
   Breath: { min: 0, max: 1, default: 0, group: 'Body', description: '0 exhaled, 1 inhaled.' },
+  BodyY: { min: -8, max: 8, default: 0, group: 'Body', description: 'Upper-body bounce in pixels, + down; feet stay planted.' },
+  BodyAngleZ: { min: -15, max: 15, default: 0, group: 'Body', description: 'Body lean: + clockwise, planted feet or seated hips stay fixed.' },
+  ArmRA: { min: -170, max: 170, default: 0, group: 'Arms', description: 'Right shoulder delta in clockwise degrees (image left).' },
+  ArmLA: { min: -170, max: 170, default: 0, group: 'Arms', description: 'Left shoulder delta in clockwise degrees (image right).' },
+  ArmRB: { min: -150, max: 150, default: 0, group: 'Arms', description: 'Right elbow delta in clockwise degrees.' },
+  ArmLB: { min: -150, max: 150, default: 0, group: 'Arms', description: 'Left elbow delta in clockwise degrees.' },
+  HandR: { min: -120, max: 120, default: 0, group: 'Arms', description: 'Right wrist delta in clockwise degrees.' },
+  HandL: { min: -120, max: 120, default: 0, group: 'Arms', description: 'Left wrist delta in clockwise degrees.' },
+  HandRForm: { min: 0, max: 7, default: 0, group: 'Arms', description: 'Discrete right-hand drawing: original, open, palm up, point, fist, thumb up, count2, count3.' },
+  HandLForm: { min: 0, max: 7, default: 0, group: 'Arms', description: 'Discrete left-hand drawing: original, open, palm up, point, fist, thumb up, count2, count3.' },
+  EyeWide: { min: 0, max: 1, default: 0, group: 'Eyes', description: 'Eye widening: 0 original, 1 surprised.' },
+  MouthShape: { min: 0, max: 4, default: 0, group: 'Mouth', description: 'Discrete drawn expression: original, shock, grin, frown, smile.' },
 } as const satisfies Record<string, Omit<ParameterInput, 'id'>>;
 
 export type StandardParameterId = keyof typeof STANDARD_PARAMETERS;
@@ -65,6 +78,7 @@ const MAX_IMAGE_CELLS = 64;
  */
 export const AVATAR_Z = {
   /** The base image (the whole illustration with the moving layers cut out and filled). */
+  armsBack: -10,
   base: 0,
   /** Blush ellipses: over the skin, under the eyes and the hair. */
   cheeks: 10,
@@ -82,6 +96,7 @@ export const AVATAR_Z = {
   hair: 50,
   /** Pendulums and other attachments that hang on the head or body. */
   attachments: 60,
+  arms: 65,
   /** Cut-outs in front of everything (a hand over the chin). */
   cutouts: 70,
 } as const;
@@ -122,6 +137,7 @@ export class ModelBuilder {
   private readonly meta: ModelMeta;
   private readonly parameters = new Map<string, ParameterInput>();
   private readonly textures = new Map<string, TextureInput>();
+  private readonly bones = new Map<string, BoneInput>();
   private readonly warps = new Map<string, WarpInput>();
   private readonly lattices = new Map<string, Lattice>();
   private readonly parts = new Map<string, PartInput>();
@@ -229,7 +245,7 @@ export class ModelBuilder {
   /** Add a part. `z` is required: see AVATAR_Z for the range of each feature. */
   part(part: PartInput & { z: number }): string {
     this.checkId('part', part.id, this.parts.has(part.id));
-    if (part.parent !== undefined && !this.warps.has(part.parent)) throw new AvatarBuildError(`part "${part.id}": the parent warp "${part.parent}" does not exist`);
+    if (part.parent !== undefined && !this.warps.has(part.parent) && !this.bones.has(part.parent)) throw new AvatarBuildError(`part "${part.id}": the parent warp or bone "${part.parent}" does not exist`);
     if (!Number.isFinite(part.z)) throw new AvatarBuildError(`part "${part.id}" needs a finite z`);
     for (const m of part.mask ?? []) {
       if (!this.parts.has(m)) throw new AvatarBuildError(`part "${part.id}": the mask part "${m}" does not exist (add mask parts first)`);
@@ -261,6 +277,12 @@ export class ModelBuilder {
 
   hasPart(id: string): boolean {
     return this.parts.has(id);
+  }
+
+  bone(bone: BoneInput): string {
+    this.checkId('bone', bone.id, this.bones.has(bone.id));
+    if (bone.parent && !this.bones.has(bone.parent)) throw new AvatarBuildError(`unknown parent bone ${bone.parent}`);
+    this.bones.set(bone.id, bone); return bone.id;
   }
 
   /** A part added earlier, to adjust it (e.g. a later feature adds a mask). Undefined when absent. */
@@ -351,6 +373,7 @@ export class ModelBuilder {
     if (this.meta.description !== undefined) meta.description = this.meta.description;
     const doc: Record<string, unknown> = { format: 'rev2d', version: 1, meta, parameters: this.sortedParameters() };
     if (this.textures.size) doc.textures = [...this.textures.values()];
+    if (this.bones.size) doc.bones = [...this.bones.values()];
     doc.warps = [...this.warps.values()];
     doc.parts = parts;
     doc.bindings = this.bindings;

@@ -15,7 +15,7 @@ import { AVATAR_PART_GROUPS } from './parts.js';
 import type { AvatarSpec, VariantGroup, VariantId } from './types.js';
 import { variantFiles, VARIANT_PREVIEW, VARIANT_README, VARIANT_TUNING, VARIANTS, type VariantArea, type VariantEditAreas } from './variants-areas.js';
 
-const groupColor = (id: 'eyes' | 'mouth'): string => AVATAR_PART_GROUPS.find((g) => g.id === id)?.color ?? (id === 'eyes' ? '#F0E442' : '#D55E00');
+const groupColor = (id: VariantGroup): string => AVATAR_PART_GROUPS.find((g) => g.id === (id.startsWith('hand')?'arms':id==='brows'?'face':id))?.color ?? (id === 'eyes' ? '#F0E442' : '#D55E00');
 
 function hexRgb(hex: string): RGB {
   const v = parseInt(hex.slice(1), 16);
@@ -25,13 +25,14 @@ function hexRgb(hex: string): RGB {
 const r0 = (v: number) => Math.round(v);
 
 /** Where an area is, in words with coordinates: "around the eye on the image left (x 424..556, y 424..516)". */
-function areaText(spec: AvatarSpec, a: VariantArea): string {
+function areaText(spec: AvatarSpec, a: VariantArea,group:VariantGroup='eyes'): string {
   const [x0, y0, x1, y1] = a.bounds;
   if (a.key === 'mouth') {
     const { center, radius, rotation } = spec.face.mouth.area;
     return `the ellipse around the mouth centred at (${r0(center[0])}, ${r0(center[1])}) with radii ${r0(radius[0])} x ${r0(radius[1])} px${rotation ? `, rotated ${Math.round(rotation)} degrees` : ''}, grown by about ${Math.max(1, Math.round(a.grow))} px`;
   }
-  return `the area around the eye on the image ${a.key === 'imageLeft' ? 'left' : 'right'} (x ${r0(x0)}..${r0(x1)}, y ${r0(y0)}..${r0(y1)}, grown by about ${Math.max(1, Math.round(a.grow))} px)`;
+  if(a.key==='hand')return `the glove area (x ${r0(x0)}..${r0(x1)}, y ${r0(y0)}..${r0(y1)})`;
+  return `the area around the ${group==='brows'?'brow':'eye'} on the image ${a.key === 'imageLeft' ? 'left' : 'right'} (x ${r0(x0)}..${r0(x1)}, y ${r0(y0)}..${r0(y1)}, grown by about ${Math.max(1, Math.round(a.grow))} px)`;
 }
 
 /** True when the picture has a transparent background worth keeping (some fully transparent pixels). */
@@ -55,7 +56,7 @@ export function variantPrompt(spec: AvatarSpec, id: VariantId, edit: VariantEdit
   const { width: W, height: H } = spec.image;
   const source = options.sourceName ?? spec.image.file;
   const transparent = options.transparent ?? false;
-  const where = edit.areas.map((a) => areaText(spec, a)).join(' and ');
+  const where = edit.areas.map((a) => areaText(spec, a,def.group)).join(' and ');
   return [
     `Edit this illustration: ${def.short}.`,
     '',
@@ -67,7 +68,7 @@ export function variantPrompt(spec: AvatarSpec, id: VariantId, edit: VariantEdit
     'Hard constraints:',
     `- The output is exactly ${W}x${H} px with the same framing as the input: no crop, zoom, shift, rotation or padding.`,
     `- Every pixel outside the transparent area of the mask stays identical to the input: same colours, line art and shading${transparent ? ', and the transparent background stays transparent' : ''}.`,
-    '- Nothing new: no extra objects, text, hands, hair strands, highlights or effects, and no restyling or recolouring of the picture.',
+    '- Nothing new outside the requested feature: no extra objects, text, hair strands or effects, and no restyling or recolouring of the picture.',
     '- The same art style, line weight, colours and lighting as the original, so the redrawn area blends seamlessly into its unchanged surroundings.',
     '',
     `Save the result as a PNG${transparent ? ' with transparency' : ''} at ${files.drawing}.`,
@@ -187,7 +188,7 @@ export function variantPreview(source: ImageRGBA, edits: readonly VariantEditAre
 
   let image = createImage(crop.width, crop.height, '#7d8797');
   compositeOver(image, cropImage(source, crop.x, crop.y, crop.width, crop.height));
-  for (const group of ['eyes', 'mouth'] as const) {
+  for (const group of new Set(areas.map(a=>a.group))) {
     const mask = createMask(crop.width, crop.height);
     for (const { group: g, area } of areas) {
       if (g !== group) continue;
@@ -230,9 +231,9 @@ export function variantPreview(source: ImageRGBA, edits: readonly VariantEditAre
   for (const { group, area } of areas) {
     const x = (area.bounds[0] - crop.x) * factor;
     const y = (area.bounds[1] - crop.y) * factor - 12 * textScale;
-    drawLabel(image, Math.max(0, x), Math.max(0, y), group === 'eyes' ? 'eye' : 'mouth', { scale: textScale });
+    drawLabel(image, Math.max(0, x), Math.max(0, y), group === 'eyes' ? 'eye' : group==='mouth'?'mouth':group.startsWith('hand')?'hand':'brow', { scale: textScale });
   }
-  return composeSheet([{ image, caption: 'tinted = may change (eyes yellow, mouth orange); everything else must stay identical' }], { title: `editable areas, x ${crop.x}..${crop.x + crop.width}, y ${crop.y}..${crop.y + crop.height}` });
+  return composeSheet([{ image, caption: 'tinted = editable feature; every other pixel must stay identical' }], { title: `editable areas, x ${crop.x}..${crop.x + crop.width}, y ${crop.y}..${crop.y + crop.height}` });
 }
 
 /** README and preview paths (relative to the project), for messages. */

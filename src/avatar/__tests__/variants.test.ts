@@ -100,7 +100,7 @@ describe('the variant table', () => {
     expect(VARIANTS.mouth_u.mouth).toEqual({ open: 0.35, form: -1 });
     expect(VARIANTS.mouth_e.mouth).toEqual({ open: 0.6, form: 0.5 });
     expect(VARIANTS.mouth_o.mouth).toEqual({ open: 0.75, form: -1 });
-    for (const id of VARIANT_IDS) expect(VARIANTS[id].group === 'eyes' ? VARIANTS[id].eye : VARIANTS[id].mouth).toBeTruthy();
+    for (const id of VARIANT_IDS) expect(VARIANTS[id].eye ?? VARIANTS[id].mouth ?? VARIANTS[id].expression ?? VARIANTS[id].handForm).toBeTruthy();
     expect(isVariantId('eyes_closed')).toBe(true);
     expect(isVariantId('eyes_open')).toBe(false);
     expect(normalizeVariantIds()).toEqual(['eyes_closed', 'mouth_a']);
@@ -169,9 +169,10 @@ describe('requests', () => {
   it('give one mask, prompt and file per variant (recommended by default), masks shared within a group', () => {
     const def = avatarVariantRequests(spec, layers.meta, source);
     expect(def.map((r) => r.id)).toEqual(['eyes_closed', 'mouth_a']);
-    const all = variantRequests(spec, source, [...VARIANT_IDS]);
-    expect(all.requests.map((r) => r.id)).toEqual([...VARIANT_IDS]);
-    expect(all.edits.map((e) => e.group)).toEqual(['eyes', 'mouth']);
+    const compatible=VARIANT_IDS.filter(id=>!VARIANTS[id].group.startsWith('hand'));
+    const all = variantRequests(spec, source, [...compatible]);
+    expect(all.requests.map((r) => r.id)).toEqual([...compatible]);
+    expect(all.edits.map((e) => e.group)).toEqual(['eyes', 'mouth','brows']);
     expect(all.transparent).toBe(true);
     const closed = all.requests[0];
     expect(closed).toMatchObject({ id: 'eyes_closed', group: 'eyes', file: 'variants/eyes_closed.png', maskFile: 'variant-requests/eyes_closed.mask.png', promptFile: 'variant-requests/eyes_closed.prompt.txt', recommended: true });
@@ -458,7 +459,7 @@ describe('sprites', () => {
       mouth_o: { requested: false, drawing: { hash: 'ffff' } },
     });
     const state = Object.fromEntries(rows.map((r) => [r.id, r.state]));
-    expect(state).toEqual({ eyes_closed: 'accepted', eyes_half: 'requested', eyes_smile: 'missing', mouth_a: 'rejected', mouth_a_half: 'missing', mouth_i: 'missing', mouth_u: 'missing', mouth_e: 'missing', mouth_o: 'drawn' });
+    expect(state).toEqual({ ...Object.fromEntries(VARIANT_IDS.map(id=>[id,'missing'])), eyes_closed: 'accepted', eyes_half: 'requested', eyes_smile: 'missing', mouth_a: 'rejected', mouth_a_half: 'missing', mouth_i: 'missing', mouth_u: 'missing', mouth_e: 'missing', mouth_o: 'drawn' });
     const mouth = rows.find((r) => r.id === 'mouth_a')!;
     expect(mouth.sprite).toBe(true);
     expect(mouth.rejection?.reason).toContain('nothing changed inside');

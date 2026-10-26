@@ -14,8 +14,10 @@
 import { animations } from './animations.js';
 import { attachments } from './attachments.js';
 import { body } from './body.js';
+import { arms } from './arms.js';
 import { brows } from './brows.js';
 import { cheeks } from './cheeks.js';
+import { expressions } from './expressions.js';
 import { eyes } from './eyes.js';
 import { hair } from './hair.js';
 import { head } from './head.js';
@@ -23,7 +25,7 @@ import { mouth } from './mouth.js';
 import { sprites } from './sprites.js';
 import type { AvatarFeature } from './types.js';
 
-export const AVATAR_FEATURES: readonly AvatarFeature[] = [head, body, eyes, mouth, brows, cheeks, hair, attachments, sprites, animations];
+export const AVATAR_FEATURES: readonly AvatarFeature[] = [head, body, arms, eyes, mouth, brows, cheeks, hair, attachments, sprites, expressions, animations];
 
 export type { AvatarFeature, CompileContext, FeatureId, FoldPlanSink, LayersContext, PosesContext, ReportSink } from './types.js';
 export { createReportSink, mergeReports } from './report.js';

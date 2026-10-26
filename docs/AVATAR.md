@@ -514,7 +514,7 @@ rev2d avatar poses avatars/hana
 ```
 
 1. **Request** (the avatar must be built). Without ids it requests `eyes_closed` and `mouth_a`;
-   name ids (`rev2d avatar variants request avatars/hana eyes_closed eyes_half mouth_a`) or `--all`.
+   name ids (`rev2d avatar variants request avatars/hana eyes_closed eyes_half mouth_a`) or `--all` (every variant supported by its authored landmarks).
    Per variant `variant-requests/` gets `<id>.mask.png` (the edit mask), `<id>.prompt.txt` (what to
    draw, where, and the hard constraints), plus `README.md` and `preview.png` (the editable areas
    tinted on the picture).
@@ -813,3 +813,76 @@ How the builder works inside (the pipeline, the deformation fields, the quality 
 ## Asset libraries and MCP
 
 Avatar projects can be registered as reusable character poses in a [library](LIBRARY.md). Use `library rig` to build/fingerprint them and `library validate` to check a consistent parameter interface. MCP now exposes `rev2d_avatar_new`, `rev2d_avatar_validate`, `rev2d_avatar_grid`, `rev2d_avatar_overlay`, `rev2d_avatar_build` and `rev2d_avatar_poses`; image tools return inline PNGs. Imported poses require measured landmarks. Whole-body articulated acting remains a later Studio phase.
+
+
+## Full-body acting landmarks and drawings
+
+`framing` is optional (`bust` effectively, preserving existing files) or `full`. Full framing requires
+`legs: {hips:[x,y], feet:[[x,y],[x,y]], seated:false}`. Feet are planted; seated figures anchor at
+hips. `BodyY` adds weighted upper-body bounce and `BodyAngleZ` weighted lean. Legs are a continuous
+image mesh, not independently walking limbs.
+
+`arms` is an optional list of at most two entries:
+
+```json
+{"id":"armR","shoulder":[130,210],"elbow":[108,266],"wrist":[116,312],"width":[28,28],"hand":{"center":[116,312],"radius":20},"front":true}
+```
+
+An optional `outline` (flat numbers or pairs) follows the arm silhouette; `hand.outline` follows the
+glove. Shoulder/elbow/wrist, widths, hand centre/radius and outlines **CUT LAYERS**. Hip/chest changes
+also rebuild the torso fill when arms exist. `front` only changes depth. The editor and
+`rev2d avatar overlay` expose arms and leg anchors as handles. Keep widths large enough to cover the
+whole sleeve. Authored landmarks are required; runtime does not infer anatomy from an image.
+
+Arm/hand pixels are lifted into separate textures. The exposed torso is inpainted; pixels outside
+the torso become transparent when an arm moves, which prevents a stationary ghost arm. A clean
+layered source is preferable when the original arm hides important details. Shoulder roots follow
+body fields through shared x/y/rotation bindings: core v1 permits bone-to-bone parents, so they
+cannot directly parent to a warp. Separate meshes keep the sleeve and forearm rigid, preserving their drawn outlines; a covered
+joint connects the elbow. The sleeve sits behind the torso, while `front` controls forearm/glove
+depth. A short sampled-colour extension under the cuff keeps the wrist connected during rotation.
+Gloves are rigid meshes on wrist bones. Full-avatar base meshes omit the transparent border from drawable bounds without
+cropping source textures. Bust builds keep their previous hashes and geometry.
+
+| Parameter | Range (default) | Effect |
+| --- | --- | --- |
+| `ArmRA`, `ArmLA` | -170..170 (0) | shoulder delta, positive clockwise |
+| `ArmRB`, `ArmLB` | -150..150 (0) | elbow delta, positive clockwise; rigid sections preserve sleeve shape |
+| `HandR`, `HandL` | -120..120 (0) | wrist delta, positive clockwise |
+| `HandRForm`, `HandLForm` | 0..7 (0), step | original/open/palm_up/point/fist/thumb_up/count2/count3; declared with drawings |
+| `BodyY` | -8..8 (0) | upper-body bounce in pixels, positive down |
+| `BodyAngleZ` | -15..15 (0) | weighted clockwise lean, feet/seat anchored |
+| `EyeWide` | 0..1 (0) | wider eyes; mesh fallback on full figures |
+| `MouthShape` | 0..4 (0), step | original/shock/grin/frown/smile; full figures have analytic fallbacks |
+
+New drawing ids use the existing request/check/import workflow and full-size PNGs:
+
+| Ids | Control |
+| --- | --- |
+| `eyes_wide` | `EyeWide`, respects eye closure |
+| `mouth_shock`, `mouth_grin`, `mouth_frown`, `mouth_smile` | `MouthShape`; viseme selection remains separate |
+| `brows_worried`, `brows_angry` | existing `BrowLY`, `BrowRY` |
+| `handR_open`, `handR_palm_up`, `handR_point`, `handR_fist`, `handR_thumb_up` | `HandRForm` 1..5 |
+| `handL_open`, `handL_palm_up`, `handL_point`, `handL_fist`, `handL_thumb_up` | `HandLForm` 1..5 |
+| `handR_count2`, `handR_count3`, `handL_count2`, `handL_count3` | corresponding hand form 6/7 |
+
+Hand requests require that arm's landmarks. The wrist contact and original forearm direction stay
+fixed in every drawing; the hand bone rotates it with the arm. Missing drawn hand forms retain the
+original glove. Full figures have simple analytic mouth fallbacks using the sampled skin colour;
+these are approximations, and imported drawings take priority. See [GESTURES.md](GESTURES.md) for acting, timing, seeded idle and scene references.
+
+| Code | Meaning / correction |
+| --- | --- |
+| `avatar-legs-missing` | `full` needs hips and both feet |
+| `avatar-legs-outside-image` | move leg landmarks inside source image |
+| `avatar-legs-feet-coincident` | give each foot its own contact point |
+| `avatar-legs-order` | standing feet lie below hips; set `seated` for seated figures |
+| `avatar-arm-outside-image` | move joints/outline points inside source image |
+| `avatar-arm-duplicate-id` | use each of armR/armL once |
+| `avatar-arm-segment-short` | joints must be distinct and appropriate to limb width |
+| `avatar-arm-hand-detached` | glove must reach the wrist |
+| `avatar-arm-shoulder-detached` | shoulder must meet the torso |
+| `avatar-arm-outline` | outline needs at least three pairs |
+| `avatar-arm-outline-crosses` | trace a simple perimeter |
+| `avatar-arm-outline-joint` | arm outline must contain its elbow |
+| `avatar-arm-layers-missing` | rebuild layers after placing arm landmarks |

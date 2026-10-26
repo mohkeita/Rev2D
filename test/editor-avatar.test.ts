@@ -31,6 +31,7 @@ import {
   type SpecDoc,
 } from '../editor/src/avatar/geometry.js';
 import { SpecHistory, HISTORY_LIMIT } from '../editor/src/avatar/history.js';
+import {fullFigureAvatarDoc} from './fixtures/studio.js';
 import { ITEM_PATTERNS, groupLabel, handleLabel, itemKeys, itemLabel, itemTip } from '../editor/src/avatar/labels.js';
 import { avatarNameFrom, isAvatarName } from '../editor/src/avatar/naming.js';
 import { controlValue, poseControls, resetControl, setControl } from '../editor/src/avatar/params.js';
@@ -501,6 +502,7 @@ describe('avatar pose controls', () => {
 describe('avatar part names', () => {
   const docs: Array<[string, unknown]> = [
     ['complete', doc()],
+    ['full figure',fullFigureAvatarDoc()],
     ['draft', draftAvatarSpec('draft', WIDTH, HEIGHT)],
   ];
   const languages = ['en', 'ko', 'ja'] as const;
@@ -518,7 +520,7 @@ describe('avatar part names', () => {
             expect(dict[keys.tip], `${lang} ${keys.tip}`).toBeTruthy();
             if (keys.side) expect(dict[keys.side]).toBeTruthy();
           }
-          seen.add(it.id.replace(/^(eyes|cheeks)\.image(Left|Right)/, '$1.<side>').replace(/\.image(Left|Right)$/, '.<side>').replace(/^strand\..+$/, 'strand.<id>').replace(/^attachment\.[^.]+\./, 'attachment.<id>.'));
+          seen.add(it.id.replace(/^(eyes|cheeks)\.image(Left|Right)/, '$1.<side>').replace(/\.image(Left|Right)$/, '.<side>').replace(/^strand\..+$/, 'strand.<id>').replace(/^attachment\.[^.]+\./, 'attachment.<id>.').replace(/^arms\.[^.]+\./,'arms.<id>.').replace(/^legs\.foot1$/,'legs.foot0'));
         }
       }
     }
@@ -581,7 +583,7 @@ describe('avatar store', () => {
     const s0 = store.get();
     expect(s0.status).toBe('ready');
     expect(s0.unsaved).toBe(false);
-    expect(s0.parts.length).toBe(8);
+    expect(s0.parts.length).toBe(10);
     expect(store.edit('nose', setValue(s0.doc!, '/face/nose', [201, 225]))).toBe(true);
     expect(store.get().unsaved).toBe(true);
     // A drag: many moves, one step.

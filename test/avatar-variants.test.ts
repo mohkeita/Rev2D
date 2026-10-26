@@ -22,6 +22,8 @@ import type { ImageRGBA } from '../src/core/types.js';
 import { parseAvatarSpec, type AvatarSpec, type LayersMeta } from '../src/avatar/index.js';
 import { EYE_FRONT_Z, hashImage, spriteBackdrop, spritesMeta, variantEditable, variantEditAreas, type SpriteBackdrop } from '../src/avatar/variants.js';
 import { buildAvatarProject } from '../src/node/avatar.js';
+import {VARIANT_IDS} from '../src/avatar/types.js';
+import {VARIANTS} from '../src/avatar/variants-areas.js';
 import { avatarVariantStatus, importAvatarVariants, writeAvatarVariantRequests } from '../src/node/avatar-variants.js';
 import type { AvatarInfo, AvatarJobEvent, AvatarVariantRequestsResult, AvatarVariantsInfo } from '../src/node/editor-registry.js';
 import { loadModelFile } from '../src/node/load.js';
@@ -159,7 +161,7 @@ describe('rev2d avatar variants request', () => {
     const again = (await run(['avatar', 'variants', 'request', p, '--json'])).json();
     expect(again.requests.map((q: any) => q.id)).toEqual(['eyes_closed', 'mouth_a', 'mouth_o']);
     const all = (await run(['avatar', 'variants', 'request', p, '--all', '--json'])).json();
-    expect(all.requests).toHaveLength(9);
+    expect(all.requests.map((r:any)=>r.id)).toEqual(VARIANT_IDS.filter(id=>!VARIANTS[id].group.startsWith('hand')));
     const listed = readFileSync(file(p, 'variant-requests/README.md'), 'utf8');
     for (const id of ['eyes_half', 'mouth_u', 'mouth_o']) expect(listed).toContain(`\`${id}\``);
   });
@@ -309,8 +311,8 @@ describe('rev2d avatar variants status', () => {
     expect(text.stderr).toContain('1 drawing is not imported yet');
     const j = (await run(['avatar', 'variants', 'status', p, '--json'])).json();
     expect(Object.keys(j)).toEqual(['ok', 'dir', 'name', 'built', 'variants', 'counts', 'ignored', 'notes']);
-    expect(j).toMatchObject({ ok: true, name: 'hana', built: true, counts: { accepted: 1, stale: 1, drawn: 1, requested: 1, rejected: 0, missing: 5 } });
-    expect(j.variants).toHaveLength(9);
+    expect(j).toMatchObject({ ok: true, name: 'hana', built: true, counts: { accepted: 1, stale: 1, drawn: 1, requested: 1, rejected: 0, missing: VARIANT_IDS.length-4 } });
+    expect(j.variants).toHaveLength(VARIANT_IDS.length);
     expect(Object.keys(j.variants[0])).toEqual(['id', 'group', 'label', 'recommended', 'state', 'requested', 'drawn', 'sprite', 'stale', 'rejection', 'check', 'file', 'maskFile', 'promptFile']);
   });
 });
@@ -396,7 +398,7 @@ describe('the editor server', () => {
       expect(before.status).toBe(200);
       const info = before.body as AvatarVariantsInfo;
       expect(info).toMatchObject({ project: path.join(root, p), built: true, requests: { readme: null, preview: null } });
-      expect(info.variants.map((v) => [v.id, v.state])).toEqual([['eyes_closed', 'drawn'], ['eyes_half', 'missing'], ['eyes_smile', 'missing'], ['mouth_a', 'drawn'], ['mouth_a_half', 'missing'], ['mouth_i', 'missing'], ['mouth_u', 'missing'], ['mouth_e', 'missing'], ['mouth_o', 'missing']]);
+      expect(info.variants.map((v) => [v.id, v.state])).toEqual([['eyes_closed', 'drawn'], ['eyes_half', 'missing'], ['eyes_smile', 'missing'], ['mouth_a', 'drawn'], ['mouth_a_half', 'missing'], ['mouth_i', 'missing'], ['mouth_u', 'missing'], ['mouth_e', 'missing'], ['mouth_o', 'missing'],...VARIANT_IDS.slice(9).map(id=>[id,'missing'])]);
       const eyes = info.areas.eyes!;
       for (const side of ['imageLeft', 'imageRight'] as const) {
         const r = spec.face.eyes[side].region;

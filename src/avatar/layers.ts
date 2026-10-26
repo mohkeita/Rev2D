@@ -87,6 +87,7 @@ export function buildLayers(spec: AvatarSpec, source: ImageRGBA, previous: Layer
 
   if (ctx.base.width !== width || ctx.base.height !== height) throw new Error('buildAvatarLayers: a feature changed the size of the base layer');
   const baseRect: RectTuple = [0, 0, width, height];
+  if(spec.framing==='full'){let x0=width,y0=height,x1=0,y1=0;for(let y=0;y<height;y++)for(let x=0;x<width;x++)if(ctx.base.data[(y*width+x)*4+3]){x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x+1);y1=Math.max(y1,y+1);}if(x1>x0)extra.fullBaseBounds=[x0,y0,x1,y1];}
   const base: LayerInfo = { id: BASE_LAYER, file: layerFile(BASE_LAYER), rect: baseRect };
   const meta: LayersMeta = { version: 1, inputsHash: layerInputsHash(spec), image: { width, height }, layers: [base, ...layers], variants, ...extra };
   report.stat('layers', meta.layers.length);

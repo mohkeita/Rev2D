@@ -33,6 +33,7 @@ import { cropRect } from '../image/compose.js';
 import { pixelRect, type RGB } from '../image/types.js';
 import type { AvatarPose, AvatarSpec } from '../types.js';
 import { hexColor, makeFrame, parseHex, rgbToLab, round2, type Frame } from './eyes-matte.js';
+import { VARIANTS } from '../variants-areas.js';
 import { shownSprites } from '../variants-sprites.js';
 import type { AvatarFeature, CompileContext } from './types.js';
 
@@ -286,7 +287,7 @@ function compileMouth(ctx: CompileContext): void {
   const g = mouthGeometry(spec);
   if (!(g.width >= 4)) return;
   // Drawn mouths (the "sprites" feature) take over the opening: the mesh then keeps MouthForm only.
-  const drawn = shownSprites(ctx.meta, 'mouth').length > 0;
+  const drawn = shownSprites(ctx.meta, 'mouth').some(s=>VARIANTS[s.id].mouth !== undefined);
   const open = drawn ? null : model.parameter('MouthOpen');
   const form = model.parameter('MouthForm');
   const cell = Math.max(2, Math.min(ctx.metrics.cell.detail, g.width / T.cells));

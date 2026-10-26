@@ -31,7 +31,7 @@ import type { LabImage } from '../image/color.js';
 import type { Mask } from '../image/types.js';
 import type { AvatarIssue, AvatarPose, AvatarSpec, LayerInfo, LayersMeta } from '../types.js';
 
-export type FeatureId = 'head' | 'body' | 'eyes' | 'mouth' | 'brows' | 'cheeks' | 'hair' | 'attachments' | 'sprites' | 'animations';
+export type FeatureId = 'head' | 'body' | 'arms' | 'expressions' | 'eyes' | 'mouth' | 'brows' | 'cheeks' | 'hair' | 'attachments' | 'sprites' | 'animations';
 
 export interface AvatarFeature {
   id: FeatureId;

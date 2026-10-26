@@ -88,6 +88,8 @@ export const AVATAR_PART_GROUPS: readonly AvatarPartGroupMeta[] = [
     description: 'Hanging accessories, wobbling buns and things in front of the face or body.',
     color: '#0072B2',
   },
+  {id:'arms',category:'body',label:'Arms and hands',description:'Authored shoulders, elbows, wrists, glove cuts and arm outlines.',color:'#7F3C8D'},
+  {id:'legs',category:'body',label:'Leg anchors',description:'Hips and planted feet for standing or seated figures.',color:'#303030'},
   {
     id: 'body',
     category: 'body',
@@ -170,7 +172,8 @@ export function readRadius(v: unknown): Vec2 | null {
 
 /** A flat list of finite numbers (any length, possibly odd), else null. */
 export function readPoints(v: unknown): number[] | null {
-  return Array.isArray(v) && v.every(finite) ? (v as number[]) : null;
+  const flat = Array.isArray(v) ? v.flat() : v;
+  return Array.isArray(flat) && flat.every(finite) ? (flat as number[]) : null;
 }
 
 export type ResolvedShape =
@@ -458,7 +461,7 @@ function attachmentItems(doc: unknown): ItemDef[] {
   });
 }
 
-function bodyItems(): ItemDef[] {
+function bodyItems(doc:unknown): ItemDef[] {
   return [
     {
       id: 'body.pivot',
@@ -473,6 +476,7 @@ function bodyItems(): ItemDef[] {
       tip: 'yStart at the upper body (full sway above it), yEnd at the anchored bottom (no sway below it).',
     },
     {
+      cutsLayers: Array.isArray(resolvePointer(doc,'/arms'))&&(resolvePointer(doc,'/arms') as unknown[]).length>0,
       id: 'body.chest',
       label: 'Chest',
       shape: { type: 'ellipse', center: '/body/chest/center', radius: '/body/chest/radius' },
@@ -490,6 +494,22 @@ function bodyItems(): ItemDef[] {
   ];
 }
 
+function armItems(doc:unknown):ItemDef[] {
+  const list=resolvePointer(doc,'/arms');if(!Array.isArray(list))return [];
+  return list.flatMap((arm,i):ItemDef[]=>{if(!isObject(arm))return [];const base=`/arms/${i}`,id=`arms.${typeof arm.id==='string'?arm.id:i}`;
+    return [
+      ...['shoulder','elbow','wrist'].map((key):ItemDef=>({id:`${id}.${key}`,label:`${arm.id}: ${key}`,shape:{type:'point',at:`${base}/${key}`},cutsLayers:true,tip:'Place at the joint centre on the original arm drawing.'})),
+      {id:`${id}.outline`,label:`${arm.id}: arm outline`,shape:{type:'polygon',points:`${base}/outline`},cutsLayers:true,required:false,tip:'Optional outline covering upper arm and forearm; exclude the glove.'},
+      {id:`${id}.hand`,label:`${arm.id}: glove`,shape:{type:'ellipse',center:`${base}/hand/center`,radius:`${base}/hand/radius`},cutsLayers:true,tip:'Cover the original glove; keep the wrist touching the forearm.'},
+      {id:`${id}.handOutline`,label:`${arm.id}: glove outline`,shape:{type:'polygon',points:`${base}/hand/outline`},cutsLayers:true,required:false,tip:'Optional polygon following the glove silhouette.'}
+    ];});
+}
+function legItems(doc:unknown):ItemDef[] {
+  if(!isObject(resolvePointer(doc,'/legs')))return [];
+  return [{id:'legs.hips',label:'Hip pivot',shape:{type:'point',at:'/legs/hips'},cutsLayers:Array.isArray(resolvePointer(doc,'/arms'))&&(resolvePointer(doc,'/arms') as unknown[]).length>0,tip:'Centre of the hips; seated figures pivot here.'},
+    ...[0,1].map((i):ItemDef=>({id:`legs.foot${i}`,label:`Planted foot ${i+1}`,shape:{type:'point',at:`/legs/feet/${i}`},tip:'Ground contact of each foot. Feet remain still during upper-body motion.'}))];
+}
+
 function groupDefs(doc: unknown): Record<AvatarPartGroupId, ItemDef[]> {
   return {
     head: headItems(),
@@ -499,7 +519,9 @@ function groupDefs(doc: unknown): Record<AvatarPartGroupId, ItemDef[]> {
     cheeks: cheekItems(),
     strands: strandItems(doc),
     attachments: attachmentItems(doc),
-    body: bodyItems(),
+    body: bodyItems(doc),
+    arms: armItems(doc),
+    legs: legItems(doc),
   };
 }
 
@@ -517,7 +539,7 @@ function toItem(doc: unknown, def: ItemDef): AvatarPartItemInfo {
 
 function groupPresent(id: AvatarPartGroupId, doc: unknown, items: readonly ItemDef[]): boolean {
   if (id === 'cheeks') return isObject(resolvePointer(doc, '/face/cheeks'));
-  if (id === 'strands' || id === 'attachments') return items.length > 0;
+  if (id === 'strands' || id === 'attachments' || id === 'arms' || id === 'legs') return items.length > 0;
   return true;
 }
 

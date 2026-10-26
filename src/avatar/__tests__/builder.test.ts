@@ -55,7 +55,7 @@ describe('ModelBuilder', () => {
     expect(() => b.warp({ id: 'child', rect: [0, 0, 10, 10] })).toThrow(/cell size or cols and rows/);
     b.part({ id: 'a', parent: 'root', shape: { type: 'rect', x: 0, y: 0, w: 10, h: 10 }, z: 1 });
     expect(() => b.part({ id: 'a', shape: { type: 'rect', x: 0, y: 0, w: 10, h: 10 }, z: 1 })).toThrow(/used twice/);
-    expect(() => b.part({ id: 'b', parent: 'ghost', shape: { type: 'rect', x: 0, y: 0, w: 10, h: 10 }, z: 1 })).toThrow(/parent warp "ghost"/);
+    expect(() => b.part({ id: 'b', parent: 'ghost', shape: { type: 'rect', x: 0, y: 0, w: 10, h: 10 }, z: 1 })).toThrow(/parent warp or bone "ghost"/);
     expect(() => b.part({ id: 'b', mask: ['ghost'], shape: { type: 'rect', x: 0, y: 0, w: 10, h: 10 }, z: 1 })).toThrow(/mask part "ghost"/);
     expect(() => b.bind({ target: 'part:a.opacity', params: ['Cheek'], keys: [{ at: [0], value: 0 }] })).toThrow(/"Cheek" is not declared/);
     b.parameter('Cheek');

@@ -1177,8 +1177,8 @@ export class AvatarBridge {
     const { variants, lib } = await avatarModules();
     const status = await variants.avatarVariantStatus(ref.project, { cache: this.drawingHashes });
     const view = await this.view(ref);
-    const box = (group: 'eyes' | 'mouth'): [number, number, number, number] | null => {
-      if (!view.spec) return null;
+    const box = (group: import('../avatar/types.js').VariantGroup): [number, number, number, number] | null => {
+      if (!view.spec || group.startsWith('hand')&&!view.spec.arms?.some(a=>a.id===(group==='handR'?'armR':'armL'))) return null;
       const rects = lib.variantEditAreas(view.spec, group).areas.map((a) => a.rect);
       if (!rects.length) return null;
       const x0 = Math.min(...rects.map((r) => r.x));
@@ -1194,7 +1194,7 @@ export class AvatarBridge {
       variants: status.variants,
       counts: status.counts,
       ignored: status.ignored,
-      areas: { eyes: box('eyes'), mouth: box('mouth') },
+      areas: { eyes: box('eyes'), mouth: box('mouth'),brows:box('brows'),handR:box('handR'),handL:box('handL') },
       requests: { readme: has(lib.VARIANT_README) ? lib.VARIANT_README : null, preview: has(lib.VARIANT_PREVIEW) ? lib.VARIANT_PREVIEW : null },
       notes: status.notes,
     };

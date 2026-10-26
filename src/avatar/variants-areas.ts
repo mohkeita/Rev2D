@@ -17,7 +17,7 @@ import { VARIANT_IDS, type AvatarSpec, type ImageSide, type VariantGroup, type V
 // ----------------------------------------------------------------------------- the table
 
 /** Which edit area of a group a sprite layer belongs to: one per eye, or the mouth area. */
-export type VariantAreaKey = ImageSide | 'mouth';
+export type VariantAreaKey = ImageSide | 'mouth' | 'hand';
 
 export interface VariantDef {
   id: VariantId;
@@ -29,7 +29,9 @@ export interface VariantDef {
   /** The variants that matter most (they replace the two deformations a mesh does worst). */
   recommended: boolean;
   /** Eye variants: the eye state the sprite shows. */
-  eye?: 'closed' | 'half' | 'smile';
+  eye?: 'closed' | 'half' | 'smile' | 'wide';
+  expression?: number;
+  handForm?: number;
   /** Mouth variants: where on (MouthOpen, MouthForm) the sprite shows (the src/lipsync viseme table). */
   mouth?: { open: number; form: number };
   /** What the image generator draws inside the mask (English, without the constraints). */
@@ -124,6 +126,27 @@ export const VARIANTS: Readonly<Record<VariantId, VariantDef>> = {
     mouth: { open: VISEME_SHAPES.o.open, form: VISEME_SHAPES.o.form },
     draw: `The mouth saying "o" (as in "go"): a rounded oval opening, taller than wide, with rounded lips and the dark inside of the mouth visible. ${MOUTH_KEEP}`,
   },
+  eyes_wide: {id:'eyes_wide', group:'eyes', label:'Eyes wide', short:'both eyes wide with raised upper lids', recommended:false, eye:'wide', draw:'Draw both eyes wide with raised upper lids; keep the original colours and line weight. Change only the masked feature, without moving the head.'},
+  mouth_shock: {id:'mouth_shock', group:'mouth', label:'Shocked mouth', short:'a surprised round O mouth', recommended:false, expression:1, draw:'Draw a surprised round O mouth; keep the original colours and line weight. Change only the masked feature, without moving the head.'},
+  mouth_grin: {id:'mouth_grin', group:'mouth', label:'Grinning mouth', short:'a broad grin with visible teeth', recommended:false, expression:2, draw:'Draw a broad grin with visible teeth; keep the original colours and line weight. Change only the masked feature, without moving the head.'},
+  mouth_frown: {id:'mouth_frown', group:'mouth', label:'Frowning mouth', short:'a downward curved frown', recommended:false, expression:3, draw:'Draw a downward curved frown; keep the original colours and line weight. Change only the masked feature, without moving the head.'},
+  mouth_smile: {id:'mouth_smile', group:'mouth', label:'Smiling mouth', short:'a gentle closed smile', recommended:false, expression:4, draw:'Draw a gentle closed smile; keep the original colours and line weight. Change only the masked feature, without moving the head.'},
+  brows_worried: {id:'brows_worried', group:'brows', label:'Worried brows', short:'both eyebrows with raised inner ends', recommended:false, expression:1, draw:'Draw both eyebrows with raised inner ends; keep the original colours and line weight. Change only the masked feature, without moving the head.'},
+  brows_angry: {id:'brows_angry', group:'brows', label:'Angry brows', short:'both eyebrows with lowered inner ends', recommended:false, expression:2, draw:'Draw both eyebrows with lowered inner ends; keep the original colours and line weight. Change only the masked feature, without moving the head.'},
+  handR_open: {id:'handR_open', group:'handR', label:'Hand R: open', short:'the character R hand showing open', recommended:false, handForm:1, draw:'Redraw only the character R hand showing open. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handR_palm_up: {id:'handR_palm_up', group:'handR', label:'Hand R: palm up', short:'the character R hand showing palm up', recommended:false, handForm:2, draw:'Redraw only the character R hand showing palm up. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handR_point: {id:'handR_point', group:'handR', label:'Hand R: point', short:'the character R hand showing point', recommended:false, handForm:3, draw:'Redraw only the character R hand showing point. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handR_fist: {id:'handR_fist', group:'handR', label:'Hand R: fist', short:'the character R hand showing fist', recommended:false, handForm:4, draw:'Redraw only the character R hand showing fist. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handR_thumb_up: {id:'handR_thumb_up', group:'handR', label:'Hand R: thumb up', short:'the character R hand showing thumb up', recommended:false, handForm:5, draw:'Redraw only the character R hand showing thumb up. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handR_count2: {id:'handR_count2', group:'handR', label:'Hand R: count2', short:'the character R hand showing count2', recommended:false, handForm:6, draw:'Redraw only the character R hand showing count2. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handR_count3: {id:'handR_count3', group:'handR', label:'Hand R: count3', short:'the character R hand showing count3', recommended:false, handForm:7, draw:'Redraw only the character R hand showing count3. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handL_open: {id:'handL_open', group:'handL', label:'Hand L: open', short:'the character L hand showing open', recommended:false, handForm:1, draw:'Redraw only the character L hand showing open. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handL_palm_up: {id:'handL_palm_up', group:'handL', label:'Hand L: palm up', short:'the character L hand showing palm up', recommended:false, handForm:2, draw:'Redraw only the character L hand showing palm up. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handL_point: {id:'handL_point', group:'handL', label:'Hand L: point', short:'the character L hand showing point', recommended:false, handForm:3, draw:'Redraw only the character L hand showing point. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handL_fist: {id:'handL_fist', group:'handL', label:'Hand L: fist', short:'the character L hand showing fist', recommended:false, handForm:4, draw:'Redraw only the character L hand showing fist. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handL_thumb_up: {id:'handL_thumb_up', group:'handL', label:'Hand L: thumb up', short:'the character L hand showing thumb up', recommended:false, handForm:5, draw:'Redraw only the character L hand showing thumb up. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handL_count2: {id:'handL_count2', group:'handL', label:'Hand L: count2', short:'the character L hand showing count2', recommended:false, handForm:6, draw:'Redraw only the character L hand showing count2. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
+  handL_count3: {id:'handL_count3', group:'handL', label:'Hand L: count3', short:'the character L hand showing count3', recommended:false, handForm:7, draw:'Redraw only the character L hand showing count3. Keep the wrist attached at exactly the same point. The fingers extend along the original forearm direction. Preserve glove colour, outline and transparent surroundings.'},
 };
 
 /** The variants drawn when nobody names any: closed eyes and the open mouth. */
@@ -248,12 +271,29 @@ export function variantEditAreas(spec: AvatarSpec, group: VariantGroup): Variant
       const feather = Math.max(T.minFeather, T.featherShare * grow);
       areas.push(areaFrom(side, width, height, polygonBounds(region), grow, feather, (w, h, ox, oy) => polygonMask(w, h, translatePoints(region, -ox, -oy))));
     }
-  } else {
+  } else if (group === 'mouth') {
     const { center, radius, rotation } = spec.face.mouth.area;
     const grow = Math.max(T.minGrow, T.mouthGrow * Math.min(radius[0], radius[1]));
     const feather = Math.max(T.minFeather, T.featherShare * grow);
     const bounds = ellipseBounds(center[0], center[1], radius[0], radius[1], rotation);
     areas.push(areaFrom('mouth', width, height, bounds, grow, feather, (w, h, ox, oy) => ellipseMask(w, h, center[0] - ox, center[1] - oy, radius[0], radius[1], rotation)));
+  }
+  if (group === 'brows') {
+    for (const side of ['imageLeft','imageRight'] as const) {
+      const eye = polygonBounds(spec.face.eyes[side].region);
+      const points = spec.face.brows?.[side];
+      const bounds = points ? polygonBounds(points) : {x:eye.x,y:eye.y-13,width:eye.width,height:10};
+      const grow = Math.max(3,eye.width*0.1), feather = 1;
+      areas.push(areaFrom(side,width,height,bounds,grow,feather,(w,h,ox,oy)=>polygonMask(w,h,[bounds.x-ox,bounds.y-oy,bounds.x+bounds.width-ox,bounds.y-oy,bounds.x+bounds.width-ox,bounds.y+bounds.height-oy,bounds.x-ox,bounds.y+bounds.height-oy])));
+    }
+  }
+  if (group === 'handR' || group === 'handL') {
+    const arm = spec.arms?.find(a=>a.id === (group==='handR'?'armR':'armL'));
+    if (!arm) throw new Error(`variant group ${group} requires authored ${group==='handR'?'armR':'armL'} landmarks`);
+    const {center,radius,outline}=arm.hand;
+    const bounds=outline?polygonBounds(outline):ellipseBounds(center[0],center[1],radius,radius,0);
+    const grow=Math.max(3,radius*0.65),feather=1;
+    areas.push(areaFrom('hand',width,height,bounds,grow,feather,(w,h,ox,oy)=>outline?polygonMask(w,h,translatePoints(outline,-ox,-oy)):ellipseMask(w,h,center[0]-ox,center[1]-oy,radius,radius)));
   }
   return { group, width, height, areas };
 }
@@ -301,7 +341,7 @@ export function variantInputsHash(spec: AvatarSpec, group: VariantGroup): string
   const inputs =
     group === 'eyes'
       ? { imageLeft: spec.face.eyes.imageLeft.region, imageRight: spec.face.eyes.imageRight.region }
-      : { area: spec.face.mouth.area };
+      : group === 'mouth' ? { area: spec.face.mouth.area } : group === 'brows' ? { brows: spec.face.brows, eyes: [spec.face.eyes.imageLeft.region,spec.face.eyes.imageRight.region] } : { arm: spec.arms?.find(a=>a.id===(group==='handR'?'armR':'armL')) };
   return fnv1a64(canonicalJson({ version: VARIANT_AREA_VERSION, group, image: [spec.image.width, spec.image.height], inputs }));
 }
 

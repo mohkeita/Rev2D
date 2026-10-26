@@ -27,7 +27,18 @@ export const BODY_TUNING = {
 
 /** The sway field at `degrees` (clockwise: the upper body leans toward the screen right). */
 export function bodySwayField(spec: AvatarSpec, degrees: number): Field {
-  return rotationField(spec.body.pivot, degrees, bandWeight(spec.body.fade));
+  const geometry = bodyGeometry(spec);
+  return rotationField(geometry.pivot, degrees, bandWeight(geometry.fade));
+}
+
+export function bodyGeometry(spec: AvatarSpec): {pivot:[number,number];fade:[number,number]} {
+  if(spec.framing!=='full'||!spec.legs)return {pivot:spec.body.pivot,fade:spec.body.fade};
+  const legs=spec.legs, feet:[number,number]=[(legs.feet[0][0]+legs.feet[1][0])/2,(legs.feet[0][1]+legs.feet[1][1])/2];
+  return {pivot:legs.seated?legs.hips:feet,fade:legs.seated?[legs.hips[1]-Math.max(2,spec.image.height*0.05),legs.hips[1]]:[legs.hips[1],Math.min(...legs.feet.map(p=>p[1]))-2]};
+}
+export function bodyBounceField(spec: AvatarSpec, pixels:number):Field {
+  const weight=bandWeight(bodyGeometry(spec).fade);
+  return (x,y)=>[0,pixels*weight(x,y)];
 }
 
 /** The breath field at Breath = 1. */
@@ -36,7 +47,7 @@ export function breathField(spec: AvatarSpec, metrics: AvatarMetrics): Field {
   const { center, radius } = spec.body.chest;
   const reach: Ellipse = { center, radius: [radius[0] * T.chestReach, radius[1] * T.chestReach] };
   const chest = domeWeight(reach, 2);
-  const anchored = bandWeight(spec.body.fade);
+  const anchored = bandWeight(bodyGeometry(spec).fade);
   const shoulders = (spec.body.shoulders ?? []).map((p) => gaussianWeight(p, T.shoulderSigma * radius[0]));
   const lift = metrics.breath;
   return (x, y) => {
@@ -74,5 +85,10 @@ export const body: AvatarFeature = {
       description: 'Breathing: the chest rises and widens, shoulders and head follow by a third.',
     });
     ctx.report.stat('breathPoints', Math.max(...breathKeys.map((v) => Object.keys(v).length)));
+    if(spec.framing==='full'&&spec.legs){
+      const bounce=model.parameter('BodyY'),lean=model.parameter('BodyAngleZ');
+      model.bindField(root,{id:'bodyBounce',params:[bounce],keys:[{at:[-8],field:bodyBounceField(spec,-8)},{at:[0]},{at:[8],field:bodyBounceField(spec,8)}]});
+      model.bindField(root,{id:'bodyLean',params:[lean],keys:[-15,-7.5,0,7.5,15].map(v=>({at:[v],...(v?{field:bodySwayField(spec,v)}:{})}))});
+    }
   },
 };

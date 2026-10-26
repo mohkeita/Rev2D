@@ -16,6 +16,7 @@ import { entryPointer } from './placement.js';
 export type PartCategory = 'face' | 'hair' | 'body';
 
 const GROUP_LABEL: Record<AvatarPartGroupId, MessageKey> = {
+  arms:'avatar.group.arms', legs:'avatar.group.legs',
   head: 'avatar.group.head',
   eyes: 'avatar.group.eyes',
   mouth: 'avatar.group.mouth',
@@ -27,6 +28,7 @@ const GROUP_LABEL: Record<AvatarPartGroupId, MessageKey> = {
 };
 
 const GROUP_DESC: Record<AvatarPartGroupId, MessageKey> = {
+  arms:'avatar.group.arms.desc', legs:'avatar.group.legs.desc',
   head: 'avatar.group.head.desc',
   eyes: 'avatar.group.eyes.desc',
   mouth: 'avatar.group.mouth.desc',
@@ -88,7 +90,11 @@ export function itemKeys(item: AvatarPartItemInfo, doc: unknown): ItemKeys {
   const id = item.id;
   const fixed = FIXED[id];
   if (fixed) return { label: fixed[0], tip: fixed[1], vars: {} };
-  let m = /^eyes\.(imageLeft|imageRight)\.(opening|region|iris)$/.exec(id);
+  let m = /^arms\.(armR|armL)\.(shoulder|elbow|wrist|outline|hand|handOutline)$/.exec(id);
+  if(m)return {label:'avatar.item.arm.'+m[2] as MessageKey,tip:'avatar.tip.arm',vars:{id:m[1]}};
+  m=/^legs\.(hips|foot[01])$/.exec(id);
+  if(m)return {label:m[1]==='hips'?'avatar.item.legs.hips':'avatar.item.legs.foot',tip:'avatar.tip.legs',vars:{id:m[1]}};
+  m = /^eyes\.(imageLeft|imageRight)\.(opening|region|iris)$/.exec(id);
   if (m) return { label: EYE[m[2]][0], tip: EYE[m[2]][1], vars: {}, side: SIDE[m[1]] };
   m = /^face\.(brows|ears)\.(imageLeft|imageRight)$/.exec(id);
   if (m) return m[1] === 'brows' ? { label: 'avatar.item.face.brow', tip: 'avatar.tip.face.brow', vars: {}, side: SIDE[m[2]] } : { label: 'avatar.item.face.ear', tip: 'avatar.tip.face.ear', vars: {}, side: SIDE[m[2]] };
@@ -171,6 +177,7 @@ export const ITEM_PATTERNS = [
   'attachment.<id>.swing',
   'attachment.<id>.ellipse',
   'attachment.<id>.contact',
+  'arms.<id>.shoulder', 'arms.<id>.elbow', 'arms.<id>.wrist', 'arms.<id>.outline', 'arms.<id>.hand', 'arms.<id>.handOutline', 'legs.hips', 'legs.foot0',
   'body.pivot',
   'body.fade',
   'body.chest',
