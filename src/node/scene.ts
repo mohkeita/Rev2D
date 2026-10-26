@@ -40,7 +40,7 @@ export interface LoadedScene {
   models: Map<string, LoadedModel>;
   audio?: { file: string; duration: number; offset: number };
 }
-export async function loadScene(file: string): Promise<LoadedScene> {
+export async function loadScene(file: string, document?: unknown): Promise<LoadedScene> {
   file = path.resolve(file);
   const out: LoadedScene = { file, prepared: null, diagnostics: [], models: new Map() },
     base = path.dirname(file);
@@ -51,8 +51,8 @@ export async function loadScene(file: string): Promise<LoadedScene> {
       throw new Error('use a relative asset path');
     return path.resolve(base, name);
   };
-  let input: unknown;
-  try {
+  let input: unknown = document;
+  if (document === undefined) try {
     const r = parseJsonc(await readFile(file, 'utf8'));
     if (!r.ok) {
       fail('scene-schema-json', '', r.error.message, 'repair the scene JSON or JSONC syntax');
