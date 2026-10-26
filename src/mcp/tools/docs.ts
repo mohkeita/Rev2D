@@ -106,11 +106,12 @@ export function formatOpCatalogue(): string {
 
 // ----------------------------------------------------------------------------- docs
 
-export const DOC_TOPICS = ['scene', 'library', 'spec', 'ops', 'cli', 'mcp', 'recipes', 'interop', 'avatar', 'architecture', 'examples', 'agents'] as const;
+export const DOC_TOPICS = ['gestures','scene', 'library', 'spec', 'ops', 'cli', 'mcp', 'recipes', 'interop', 'avatar', 'architecture', 'examples', 'agents'] as const;
 export type DocTopic = (typeof DOC_TOPICS)[number];
 
 /** Candidate files per topic, relative to the package root (first existing wins). */
 const DOC_FILES: Record<Exclude<DocTopic, 'examples'>, string[]> = {
+  gestures:['docs/GESTURES.md'],
   scene: ['docs/SCENE.md'],
   library: ['docs/LIBRARY.md'],
   spec: ['docs/SPEC.md'],

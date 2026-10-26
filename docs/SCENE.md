@@ -186,3 +186,12 @@ MCP: `rev2d_scene_validate`, `rev2d_scene_frame`, `rev2d_scene_sheet`, `rev2d_sc
 `rev2d_scene_render`. Frame and sheet return PNGs inline. Node entry points are in `src/node/scene.ts`
 and `src/node/video.ts`; browser clients import `src/scene/index.ts`. See [LIBRARY.md](LIBRARY.md)
 for asset preparation and [AVATAR.md](AVATAR.md) for landmark/build/review work.
+
+
+## Acting on characters
+
+Layers may use `"idle_alive"` and `{gesture:"voila",t:"@text:voilà",intensity:0.8}` or
+`{expression:"surprised",t:2.5,hold:1.2}` alongside existing animation references. These are JSON
+objects with quoted keys in scene files. Generation happens after narration cue resolution, on
+cloned models in memory; source model files are unchanged. Set an optional scene `id` for stable
+character-plus-shot idle seeding. See [GESTURES.md](GESTURES.md#seeded-idle-and-scenes).

@@ -14,3 +14,6 @@ export * from './node/library.js';
 export * from './scene/index.js';
 export * from './node/scene.js';
 export * from './node/video.js';
+
+export * from './gestures/index.js';
+export * from './node/acting.js';

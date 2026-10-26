@@ -1,4 +1,5 @@
 /** Every command, in help order. */
+import { ACTING_COMMANDS,GESTURE_PARENT,EXPRESSION_PARENT } from './acting.js';
 import type { Command } from '../command.js';
 import { AVATAR_COMMANDS, AVATAR_PARENT } from './avatar.js';
 import { create, ops, set } from './edit.js';
@@ -28,6 +29,7 @@ export const COMMANDS: Command[] = [
   ...AVATAR_COMMANDS,
   ...LIBRARY_COMMANDS,
   ...SCENE_COMMANDS,
+  ...ACTING_COMMANDS,
   importSpine,
   importLive2d,
   exportSpine,
@@ -59,4 +61,5 @@ export const PARENTS: Record<string, { summary: string; subcommands: Command[] }
   avatar: AVATAR_PARENT,
   library: LIBRARY_PARENT,
   scene: SCENE_PARENT,
+  gesture:GESTURE_PARENT,expression:EXPRESSION_PARENT,
 };

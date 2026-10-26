@@ -12,6 +12,7 @@ import { loadModelFile, type LoadedModel } from './load.js';
 import { loadAvatarProject } from './avatar.js';
 import { analyzeAnimation } from '../api/analyze.js';
 import {
+  compileSceneActing,
   parseScene,
   sceneDiagnostic,
   SceneError,
@@ -191,7 +192,7 @@ export async function loadScene(file: string): Promise<LoadedScene> {
     return { width: img.width, height: img.height, image: img, textures: {}, anchor, scale: 1 };
   };
   const libraryPath = async (name: string) => libraryFile(libraryDir!, name);
-  const assets: PreparedScene['assets'] = { layers: Object.create(null) };
+  let assets: PreparedScene['assets'] = { layers: Object.create(null) };
   for (const [index, layer] of scene.layers.entries()) {
     const pointer = `/layers/${index}`,
       asset: LayerAssets = { sources: Object.create(null) };
@@ -369,6 +370,8 @@ export async function loadScene(file: string): Promise<LoadedScene> {
     }
   }
   if (out.diagnostics.some((d) => d.severity === 'error')) return out;
+  const acting=compileSceneActing(scene,assets,path.basename(file));
+  scene=acting.scene;assets=acting.assets;out.diagnostics.push(...acting.diagnostics);
   out.diagnostics.push(...validateScene(scene, assets));
   if (out.diagnostics.some((d) => d.severity === 'error')) return out;
   const prepared: PreparedScene = { scene, assets, cues: resolved.cues };
@@ -432,6 +435,12 @@ export function analyzeLoadedScene(loaded: LoadedScene) {
         analysis: analyzeAnimation(m, { animation: animation.id, fps: p.scene.fps, pixels: false }),
       });
     }
+  for(const [layer,asset]of Object.entries(p.assets.layers))for(const [pose,source]of Object.entries(asset.sources)){
+    if(!source.rig||!source.generatedAnimations?.length)continue;
+    const model=source.rig.model,textureInfo=Object.fromEntries(Object.entries(source.textures).map(([id,image])=>[id,{width:image.width,height:image.height}]));
+    const m:LoadedModel={file:null,baseDir:path.dirname(loaded.file),model,rig:source.rig,textures:source.textures,textureInfo,diagnostics:[]};
+    for(const id of source.generatedAnimations){const duration=model.animations.find(a=>a.id===id)!.duration;models.push({file:`${loaded.file}#${layer}:${pose}`,animation:id,analysis:analyzeAnimation(m,{animation:id,fps:Math.min(p.scene.fps,1999/duration),pixels:false})});}
+  }
   return { ...analysis, models };
 }
 export async function newScene(

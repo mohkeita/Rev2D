@@ -725,3 +725,9 @@ Reusable asset libraries: read [docs/LIBRARY.md](docs/LIBRARY.md). Pure schema/k
 4. Docs updated (SPEC/CLI/OPS/MCP/RECIPES/AVATAR, examples/README.md) and still true: run the commands you
    documented; `npx vitest run test/docs-recipes.test.ts test/docs-links.test.ts test/docs-commands.test.ts test/docs-avatar.test.ts`
    checks the recipes, links, command lines and avatar codes.
+
+
+Acting: read [docs/GESTURES.md](docs/GESTURES.md) before using `gesture apply`, `expression apply`,
+the `act` op or scene `idle_alive`/gesture/expression references. New names belong in the pure
+`src/gestures/` catalogue/generators; IO is shared in `src/node/acting.ts`. Review both motion and
+contact positions; generated numeric gestures do not establish artistic fidelity.

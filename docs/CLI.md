@@ -1238,7 +1238,7 @@ and the mesh eye, or between two sprites, is one picture fading over another ful
 | `README.md` | the flow, the files, the mask convention and the rules of the check |
 | `preview.png` | the illustration around the edit areas with them tinted (eyes yellow, mouth orange) |
 
-Without ids it requests `eyes_closed` and `mouth_a`; `--all` requests every variant. Requests written
+Without ids it requests `eyes_closed` and `mouth_a`; `--all` requests every variant supported by the authored landmarks. Requests written
 before are written again (the landmarks may have moved). The drawing of a variant goes to
 `<project>/variants/<id>.png`, full size.
 
@@ -1276,7 +1276,7 @@ layers changed since the sprite was cut: import again).
 
 | Flag | Meaning |
 | --- | --- |
-| `--all` | `request`: every variant instead of the recommended ones |
+| `--all` | `request`: every compatible variant instead of the recommended ones |
 
 Exit 1 when the project is missing, its spec has errors, `import` finds nothing to import (or the
 avatar is not built yet), or a drawing is **rejected** (the accepted ones are imported all the same);
@@ -2113,3 +2113,34 @@ records source/spec/model/layer fingerprints. Missing landmarks fail with diagno
 
 `rev2d library sheet <dir> -o <new.png> [--kind kind] [--character id] [--json]` renders imported artwork
 previews. This is an asset contact sheet; avatar poses reviews the generated rig's motions.
+
+
+## Acting libraries
+
+`rev2d gesture list [--json]`, `rev2d expression list [--json]` list available names.
+`rev2d gesture apply <model> --gesture <name>` and
+`rev2d expression apply <model> --expression <name>` accept `--id`, `--t`, `--duration`,
+`--intensity`, `--hold`, `--release`, `--dry-run`, `--json`; gestures also accept `--side R|L|both`
+and `--count 1|2|3`. JSON returns `{ok,file,written,changed,dryRun,animation,diagnostics}`.
+See [GESTURES.md](GESTURES.md) for the catalogue and [AVATAR.md](AVATAR.md#full-body-acting-landmarks-and-drawings)
+for hand/expression variant ids and ranges. `rev2d docs gestures` works offline.
+
+
+### rev2d gesture list
+
+List gestures; accepts `--json`.
+
+### rev2d expression list
+
+List expressions; accepts `--json`.
+
+### rev2d gesture apply
+
+`rev2d gesture apply <model> --gesture <name>` accepts `--id`, `--t`, `--duration`,
+`--intensity`, `--side`, `--count`, `--hold`, `--release`, `--dry-run`, `--json`.
+`--side` is R, L or both; `--count` is 1, 2 or 3. A dry run does not write the model.
+
+### rev2d expression apply
+
+`rev2d expression apply <model> --expression <name>` accepts `--id`, `--t`, `--duration`,
+`--intensity`, `--hold`, `--release`, `--dry-run`, `--json`. See [GESTURES.md](GESTURES.md).

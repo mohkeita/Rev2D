@@ -176,6 +176,7 @@ rev2d_apply_ops (edits; the tool description lists every op) | rev2d_diff_images
 rev2d_import {format: "spine" | "live2d"} | rev2d_export {format, out_dir} (Spine JSON + atlas, Live2D motion3 / physics3 JSON)
 rev2d_editor_state | rev2d_editor_command | rev2d_editor_screenshot (live editor bridge)
 Reusable assets: rev2d_library_search | rev2d_library_validate | rev2d_library_import | rev2d_library_request | rev2d_library_sheet. Read rev2d_docs {topic: "library"}.
+Acting: rev2d_gesture_list -> rev2d_gesture_apply / rev2d_expression_apply (dry_run first) -> sheet/analyze. Read rev2d_docs {topic: "gestures"}. Scene acting is generated in memory.
 Scenes: rev2d_scene_validate -> rev2d_scene_sheet / rev2d_scene_frame -> rev2d_scene_analyze -> rev2d_scene_render. Read rev2d_docs {topic: "scene"}; scene cues synchronize appearances and pose changes to narration. MP4/GIF use optional ffmpeg; PNG sequences need none.
 Avatars: rev2d_avatar_new -> rev2d_avatar_grid / rev2d_avatar_overlay -> rev2d_avatar_validate -> rev2d_avatar_build -> rev2d_avatar_poses.
 Import creates draft landmarks; a built model is not artistic approval. The current avatar builder animates the face/bust, not articulated whole-body actions. Read rev2d_docs {topic: "avatar"}.
