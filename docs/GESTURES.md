@@ -35,6 +35,12 @@ Sleeves and forearms retain their drawn shape during elbow bends; glove drawings
 character-specific authoring. These are normalized gesture poses, not a motion-capture or collision-avoidance system; review contact
 positions on each character. Crossing arms requires suitable cut layers and depth order.
 
+A rest-pose glove rotated onto the head can still read as an open palm sliding over the face.
+For rubbing or scratching, author a hand pose with the appropriate finger curl and palm orientation;
+keep the cuff stable while animating localized finger flex and small wrist movement. A correct wrist
+coordinate or an unfolded mesh does not establish a convincing hand pose. Review the contact passage
+at enlarged scale, including the fingers, rather than approving only the arm's endpoint.
+
 Controls absent from the model are skipped, with a warning `gesture-missing-param`, a JSON pointer
 and a correction hint. Missing hand drawings keep the original glove and warn about the absent
 `HandRForm` / `HandLForm`; no invented fingers are drawn at runtime. `count` needs the corresponding

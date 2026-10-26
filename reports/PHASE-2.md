@@ -143,6 +143,22 @@ Résultats : scène sans erreur ; les deux avertissements de sourcils préexista
 
 La vue `P037-detail.mp4` est un simple agrandissement du même rendu pour examiner main et table ; le plan de production est `P037.mp4`. `visual-checks.json`, `contact-report.json`, `export-report.json` et les scripts restent locaux. Cette version remplace les précédentes démonstrations P037 ; elle ne prétend pas reconstruire tous les calques d’un décor automatiquement. La procédure de premier plan est ajoutée à `docs/SCENE.md` pour éviter la même erreur dans les autres plans.
 
+## Revue du frottement : pose de doigts adaptée
+
+La revue utilisateur du mouvement révèle une limite de `user-hand-table` : le gant de repos restait ouvert et rigide, même quand son extrémité suivait correctement un repère. Cette main glissait en bloc ; la précision du poignet ne constituait pas une validation du frottement.
+
+Le nouvel essai `out/demo-phase2/user-rub-fingers/P037.mp4` utilise la **main aux doigts repliés de l’image maître P037**. Un contour auteur isole cette petite pose dans la texture originale ; elle est intégrée à une copie locale du rig, sans réutiliser un clip vidéo. Son maillage comporte 511 sommets. Le paramètre local `HandRCurl` fléchit progressivement les zones des doigts ; la manchette et le dos de la main restent stables dans le repère de la main. Le glissement vertical de toute la main est supprimé et remplacé par cette flexion et une faible rotation de poignet. Le premier plan de table est conservé.
+
+```sh
+node --import tsx out/demo-phase2/prepare-rub-fingers.ts
+node --import tsx out/demo-phase2/verify-rub-fingers.ts
+node --import tsx out/demo-phase2/render-rub-fingers.ts
+```
+
+Les scripts prennent aussi un dossier neuf directement sous `out/demo-phase2/`. Vérifications locales : aucun pli dans les poses testées, scène sans erreur, variante de frottement active sur 144 images, déformation locale des doigts jusqu’à 7,0778 pixels modèle et **0 déplacement local de la manchette**. Les cinq contrôles d’occlusion de table conservent 836 pixels de chevauchement correctement masqués, avec erreur de couleur maximale 0. Le modèle original reste intact ; seule sa copie locale reçoit cette pose et ce contrôle. L’export est H.264/yuv420p, 1376×768, 24 fps, 144 images / 6 s, AAC 6 s. Les deux avertissements de sourcils subsistent ; les 25 contrôles documentaires passent.
+
+`P037-frottement-detail.mp4` agrandit uniquement la séquence de frottement pour sa revue. La source de main est petite : cet agrandissement n’ajoute pas de résolution. La flexion reste une déformation 2D légère d’une pose dessinée, sans articulation 3D des phalanges ni simulation de contact. Le résultat est présenté comme un nouvel essai visuel, pas comme une preuve automatique de naturel. Le point de contact numérique mesure le repère de pose ; il ne mesure pas la surface effective des doigts déformés. Le moteur public ne change pas ; `docs/GESTURES.md` précise désormais cette distinction entre pose de main et position du poignet.
+
 ## Inventaire des fichiers
 
 L’inventaire ci-dessous couvre chaque fichier ajouté ou modifié dans cette phase. Les artefacts privés sous `out/` n’y figurent pas.
