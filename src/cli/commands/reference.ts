@@ -49,6 +49,7 @@ interface DocTopic {
 }
 
 export const DOC_TOPICS: Record<string, DocTopic> = {
+  gestures:{files:['docs/GESTURES.md'],description:'gestures, facial expressions, acting curves and seeded idle'},
   scene: { files: ['docs/SCENE.md'], description: 'layered scenes, camera, narration cues, validation, analysis and streaming video export' },
   library: { files: ['docs/LIBRARY.md'], description: 'reusable asset libraries, uniform-background keying, requests, avatar rigs and review' },
   spec: { files: ['docs/SPEC.md'], description: 'model format and evaluation semantics (addresses, bindings, animation, physics)' },

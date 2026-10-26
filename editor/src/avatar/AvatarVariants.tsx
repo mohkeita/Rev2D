@@ -170,7 +170,7 @@ export function AvatarVariants() {
 
 function VariantRow({ row, info, image, onRemove }: { row: VariantRowView; info: NonNullable<ReturnType<typeof avatarStore.get>['variants']>; image: { width: number; height: number } | null; onRemove(): void }) {
   const t = useT();
-  const crop = thumbCrop(info.areas[row.group], image, THUMB);
+  const crop = thumbCrop(info.areas[row.group]??null, image, THUMB);
   const url = avatarFileUrl(row.thumb.file, row.thumb.version || undefined);
   const label = variantLabel(t, row.id);
   const detail = row.detail;
@@ -274,11 +274,11 @@ function DrawSheetBody({ open, initial, provider, onClose }: { open: boolean; in
       }
     >
       <div className="ed-avdraw-body">
-        {(['eyes', 'mouth'] as const).map((group) => (
+        {(['eyes', 'mouth','brows','handR','handL'] as const).map((group) => (
           <fieldset key={group} className="ed-avdraw-group">
             <legend>{t(`avatar.variants.group.${group}` as 'avatar.variants.group.eyes')}</legend>
             <div className="ed-avdraw-chips">
-              {VARIANT_IDS.filter((id) => (group === 'eyes' ? id.startsWith('eyes') : id.startsWith('mouth'))).map((id) => (
+              {VARIANT_IDS.filter((id) => id.startsWith(group)).map((id) => (
                 <label key={id} className="ed-avdraw-chip" data-checked={ids.includes(id) ? '' : undefined}>
                   <input type="checkbox" checked={ids.includes(id)} onChange={() => toggle(id)} data-testid={`avatar-variants-pick-${id}`} />
                   <Icon name={ids.includes(id) ? 'checkCircle' : group === 'eyes' ? 'eye' : 'mouth'} size={14} />

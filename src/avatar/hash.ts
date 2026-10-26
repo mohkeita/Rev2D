@@ -37,6 +37,7 @@ export function layerInputs(spec: AvatarSpec): Record<string, unknown> {
     strands: (spec.hair?.strands ?? []).map((s) => ({ id: s.id, nodes: s.nodes, width: s.width, group: s.group })),
     cuts: (spec.attachments ?? []).flatMap((a) => (a.kind === 'jiggle' ? [] : [{ id: a.id, kind: a.kind, outline: a.outline }])),
     feather: spec.build?.feather ?? null,
+    ...(spec.arms?.length ? { arms: spec.arms.map(({front,...cut})=>cut), armTorso: { hips:spec.legs?.hips,chest:spec.body.chest } } : {}),
   };
 }
 

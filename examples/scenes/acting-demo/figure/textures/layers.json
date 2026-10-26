@@ -1,0 +1,595 @@
+{
+  "version": 1,
+  "inputsHash": "646037f5a9261fb9",
+  "image": { "width": 360, "height": 480 },
+  "layers": [
+    { "id": "base", "file": "textures/base.png", "rect": [0, 0, 360, 480] },
+    { "id": "armRLayer", "file": "textures/armRLayer.png", "rect": [93, 191, 59, 107] },
+    { "id": "armRHandLayer", "file": "textures/armRHandLayer.png", "rect": [99, 293, 41, 37] },
+    { "id": "armLLayer", "file": "textures/armLLayer.png", "rect": [208, 191, 59, 107] },
+    { "id": "armLHandLayer", "file": "textures/armLHandLayer.png", "rect": [220, 293, 41, 37] },
+    { "id": "eyeR_ball", "file": "textures/eyeR_ball.png", "rect": [135, 94, 40, 46] },
+    { "id": "eyeR_lower", "file": "textures/eyeR_lower.png", "rect": [132, 91, 47, 51] },
+    { "id": "eyeR_crease", "file": "textures/eyeR_crease.png", "rect": [132, 91, 47, 51] },
+    { "id": "eyeR_upper", "file": "textures/eyeR_upper.png", "rect": [132, 91, 47, 51] },
+    { "id": "eyeR_front", "file": "textures/eyeR_front.png", "rect": [132, 91, 47, 51] },
+    { "id": "eyeL_ball", "file": "textures/eyeL_ball.png", "rect": [185, 94, 40, 46] },
+    { "id": "eyeL_lower", "file": "textures/eyeL_lower.png", "rect": [181, 92, 47, 50] },
+    { "id": "eyeL_crease", "file": "textures/eyeL_crease.png", "rect": [181, 92, 47, 50] },
+    { "id": "eyeL_upper", "file": "textures/eyeL_upper.png", "rect": [181, 92, 47, 50] },
+    { "id": "eyeL_front", "file": "textures/eyeL_front.png", "rect": [181, 92, 47, 50] },
+    { "id": "mouth", "file": "textures/mouth.png", "rect": [154, 139, 52, 32] },
+    {
+      "id": "sprite_eyes_wide_imageLeft",
+      "file": "textures/sprite_eyes_wide_imageLeft.png",
+      "rect": [127, 87, 56, 60]
+    },
+    {
+      "id": "sprite_eyes_wide_imageRight",
+      "file": "textures/sprite_eyes_wide_imageRight.png",
+      "rect": [177, 87, 56, 60]
+    },
+    {
+      "id": "sprite_mouth_shock_mouth",
+      "file": "textures/sprite_mouth_shock_mouth.png",
+      "rect": [152, 137, 56, 36]
+    },
+    {
+      "id": "sprite_mouth_grin_mouth",
+      "file": "textures/sprite_mouth_grin_mouth.png",
+      "rect": [152, 137, 56, 36]
+    },
+    {
+      "id": "sprite_mouth_frown_mouth",
+      "file": "textures/sprite_mouth_frown_mouth.png",
+      "rect": [152, 137, 56, 36]
+    },
+    {
+      "id": "sprite_mouth_smile_mouth",
+      "file": "textures/sprite_mouth_smile_mouth.png",
+      "rect": [152, 137, 56, 36]
+    },
+    {
+      "id": "sprite_brows_worried_imageLeft",
+      "file": "textures/sprite_brows_worried_imageLeft.png",
+      "rect": [126, 73, 58, 22]
+    },
+    {
+      "id": "sprite_brows_worried_imageRight",
+      "file": "textures/sprite_brows_worried_imageRight.png",
+      "rect": [176, 73, 58, 22]
+    },
+    {
+      "id": "sprite_brows_angry_imageLeft",
+      "file": "textures/sprite_brows_angry_imageLeft.png",
+      "rect": [126, 73, 58, 22]
+    },
+    {
+      "id": "sprite_brows_angry_imageRight",
+      "file": "textures/sprite_brows_angry_imageRight.png",
+      "rect": [176, 73, 58, 22]
+    },
+    {
+      "id": "sprite_handR_open_hand",
+      "file": "textures/sprite_handR_open_hand.png",
+      "rect": [82, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handR_palm_up_hand",
+      "file": "textures/sprite_handR_palm_up_hand.png",
+      "rect": [82, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handR_point_hand",
+      "file": "textures/sprite_handR_point_hand.png",
+      "rect": [82, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handR_fist_hand",
+      "file": "textures/sprite_handR_fist_hand.png",
+      "rect": [82, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handR_thumb_up_hand",
+      "file": "textures/sprite_handR_thumb_up_hand.png",
+      "rect": [82, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handR_count2_hand",
+      "file": "textures/sprite_handR_count2_hand.png",
+      "rect": [82, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handR_count3_hand",
+      "file": "textures/sprite_handR_count3_hand.png",
+      "rect": [82, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handL_open_hand",
+      "file": "textures/sprite_handL_open_hand.png",
+      "rect": [210, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handL_palm_up_hand",
+      "file": "textures/sprite_handL_palm_up_hand.png",
+      "rect": [210, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handL_point_hand",
+      "file": "textures/sprite_handL_point_hand.png",
+      "rect": [210, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handL_fist_hand",
+      "file": "textures/sprite_handL_fist_hand.png",
+      "rect": [210, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handL_thumb_up_hand",
+      "file": "textures/sprite_handL_thumb_up_hand.png",
+      "rect": [210, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handL_count2_hand",
+      "file": "textures/sprite_handL_count2_hand.png",
+      "rect": [210, 278, 68, 68]
+    },
+    {
+      "id": "sprite_handL_count3_hand",
+      "file": "textures/sprite_handL_count3_hand.png",
+      "rect": [210, 278, 68, 68]
+    }
+  ],
+  "variants": [
+    "eyes_wide", "mouth_shock", "mouth_grin", "mouth_frown", "mouth_smile", "brows_worried",
+    "brows_angry", "handR_open", "handR_palm_up", "handR_point", "handR_fist", "handR_thumb_up",
+    "handR_count2", "handR_count3", "handL_open", "handL_palm_up", "handL_point", "handL_fist",
+    "handL_thumb_up", "handL_count2", "handL_count3"
+  ],
+  "arms": {
+    "cuts": {
+      "armR": {
+        "arm": "armRLayer",
+        "hand": "armRHandLayer",
+        "joint": { "radius": 14, "color": "#327fba" },
+        "handOutline": [
+          101, 299, 112, 297, 124, 295, 131, 295, 133, 297, 135, 300, 137, 304, 138, 307, 138, 317,
+          137, 320, 135, 324, 121, 328, 111, 328, 109, 327, 104, 322, 102, 318, 101, 305
+        ]
+      },
+      "armL": {
+        "arm": "armLLayer",
+        "hand": "armLHandLayer",
+        "joint": { "radius": 14, "color": "#327fba" },
+        "handOutline": [
+          222, 307, 223, 304, 225, 300, 227, 297, 229, 295, 236, 295, 248, 297, 259, 299, 259, 305,
+          258, 318, 256, 322, 251, 327, 249, 328, 239, 328, 225, 324, 223, 320, 222, 317
+        ]
+      }
+    }
+  },
+  "eyes": {
+    "version": 1,
+    "imageLeft": {
+      "id": "eyeR",
+      "center": [155, 117],
+      "angle": 0,
+      "u": [-13.52, -12.84, -11.66, -10.14, -6.76, -3.38, 0, 3.38, 6.76, 10.14, 11.66, 12.84, 13.52],
+      "upper": [0, -4.25, -7.85, -10.69, -14, -15.71, -16.55, -15.71, -14, -10.69, -7.85, -4.25, 0],
+      "lower": [0, 4.25, 7.85, 10.69, 14, 15.71, 16.55, 15.71, 14, 10.69, 7.85, 4.25, 0],
+      "top": [
+        -19.67, -20.16, -21.02, -22.13, -23.54, -24.27, -25, -24.27, -23.54, -22.13, -21.02, -20.16,
+        -19.67
+      ],
+      "bottom": [19.67, 20.16, 21.02, 22.13, 23.54, 24.27, 25, 24.27, 23.54, 22.13, 21.02, 20.16, 19.67],
+      "grow": 1.5,
+      "lash": 3,
+      "lowerLash": 3,
+      "shift": [2.04, 1.22],
+      "rect": [132, 91, 47, 51],
+      "colors": { "skin": "#ffffff", "white": "#ffffff", "iris": "#26313c", "lash": "#17202b" },
+      "occluded": 0.23
+    },
+    "imageRight": {
+      "id": "eyeL",
+      "center": [205, 117],
+      "angle": 0,
+      "u": [-13.52, -12.84, -11.66, -10.14, -6.76, -3.38, 0, 3.38, 6.76, 10.14, 11.66, 12.84, 13.52],
+      "upper": [0, -4.25, -7.85, -10.69, -14, -15.71, -16.55, -15.71, -14, -10.69, -7.85, -4.25, 0],
+      "lower": [0, 4.25, 7.85, 10.69, 14, 15.71, 16.55, 15.71, 14, 10.69, 7.85, 4.25, 0],
+      "top": [
+        -19.67, -20.16, -21.02, -22.13, -23.54, -24.27, -25, -24.27, -23.54, -22.13, -21.02, -20.16,
+        -19.67
+      ],
+      "bottom": [19.67, 20.16, 21.02, 22.13, 23.54, 24.27, 25, 24.27, 23.54, 22.13, 21.02, 20.16, 19.67],
+      "grow": 1.5,
+      "lash": 3,
+      "lowerLash": 3,
+      "shift": [2.04, 1.22],
+      "rect": [181, 92, 47, 50],
+      "colors": { "skin": "#ffffff", "white": "#ffffff", "iris": "#26313c", "lash": "#17202b" },
+      "occluded": 0.23
+    }
+  },
+  "mouth": {
+    "version": 1,
+    "line": 3,
+    "colors": { "line": "#17202b", "inside": "#2b080e", "tongue": "#7a3e3e" }
+  },
+  "expressions": { "skin": "#ffffff" },
+  "fullBaseBounds": [116, 34, 241, 457],
+  "sprites": {
+    "version": 1,
+    "sprites": [
+      {
+        "id": "eyes_wide",
+        "group": "eyes",
+        "layers": [
+          { "id": "sprite_eyes_wide_imageLeft", "key": "imageLeft", "rect": [127, 87, 56, 60] },
+          { "id": "sprite_eyes_wide_imageRight", "key": "imageRight", "rect": [177, 87, 56, 60] }
+        ],
+        "drawingHash": "75b773a8f61e323e",
+        "inputsHash": "9dcbbcff4c7f5840",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.1855, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "mouth_shock",
+        "group": "mouth",
+        "layers": [
+          { "id": "sprite_mouth_shock_mouth", "key": "mouth", "rect": [152, 137, 56, 36] }
+        ],
+        "drawingHash": "c405f5d876f0bef6",
+        "inputsHash": "4faaa68f861dcb3e",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.7936, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "mouth_grin",
+        "group": "mouth",
+        "layers": [
+          { "id": "sprite_mouth_grin_mouth", "key": "mouth", "rect": [152, 137, 56, 36] }
+        ],
+        "drawingHash": "d060338496869847",
+        "inputsHash": "4faaa68f861dcb3e",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.7209, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "mouth_frown",
+        "group": "mouth",
+        "layers": [
+          { "id": "sprite_mouth_frown_mouth", "key": "mouth", "rect": [152, 137, 56, 36] }
+        ],
+        "drawingHash": "7b535bf0dd7480b9",
+        "inputsHash": "4faaa68f861dcb3e",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.7936, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "mouth_smile",
+        "group": "mouth",
+        "layers": [
+          { "id": "sprite_mouth_smile_mouth", "key": "mouth", "rect": [152, 137, 56, 36] }
+        ],
+        "drawingHash": "1cb0a580e8eae229",
+        "inputsHash": "4faaa68f861dcb3e",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.7936, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "brows_worried",
+        "group": "brows",
+        "layers": [
+          { "id": "sprite_brows_worried_imageLeft", "key": "imageLeft", "rect": [126, 73, 58, 22] },
+          {
+            "id": "sprite_brows_worried_imageRight",
+            "key": "imageRight",
+            "rect": [176, 73, 58, 22]
+          }
+        ],
+        "drawingHash": "651b7b013c5eccfa",
+        "inputsHash": "e8d48a6be4b1ea8a",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.2819, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "brows_angry",
+        "group": "brows",
+        "layers": [
+          { "id": "sprite_brows_angry_imageLeft", "key": "imageLeft", "rect": [126, 73, 58, 22] },
+          { "id": "sprite_brows_angry_imageRight", "key": "imageRight", "rect": [176, 73, 58, 22] }
+        ],
+        "drawingHash": "be7899a0095ee90b",
+        "inputsHash": "e8d48a6be4b1ea8a",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.281, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handR_open",
+        "group": "handR",
+        "layers": [
+          {
+            "id": "sprite_handR_open_hand",
+            "key": "hand",
+            "rect": [82, 278, 68, 68],
+            "outline": [
+              98, 333, 99, 293, 100, 289, 101, 287, 106, 282, 109, 281, 117, 281, 121, 283, 124, 286,
+              133, 297, 135, 300, 137, 304, 138, 307, 141, 328, 141, 332, 140, 334, 138, 336,
+              136, 337, 107, 342, 103, 342, 101, 341, 99, 339, 98, 337
+            ]
+          }
+        ],
+        "drawingHash": "2944479a068af588",
+        "inputsHash": "ca96710b4b8790d7",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.4776, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handR_palm_up",
+        "group": "handR",
+        "layers": [
+          {
+            "id": "sprite_handR_palm_up_hand",
+            "key": "hand",
+            "rect": [82, 278, 68, 68],
+            "outline": [
+              99, 293, 100, 289, 101, 287, 106, 282, 109, 281, 117, 281, 121, 283, 124, 286,
+              133, 297, 135, 300, 137, 304, 138, 307, 138, 317, 136, 336, 134, 340, 133, 341,
+              129, 343, 122, 343, 120, 342, 116, 338, 105, 322, 103, 318, 102, 313, 100, 302,
+              99, 296
+            ]
+          }
+        ],
+        "drawingHash": "026e6156d2a0bc4d",
+        "inputsHash": "ca96710b4b8790d7",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.3839, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handR_point",
+        "group": "handR",
+        "layers": [
+          {
+            "id": "sprite_handR_point_hand",
+            "key": "hand",
+            "rect": [82, 278, 68, 68],
+            "outline": [
+              99, 293, 100, 289, 101, 287, 106, 282, 109, 281, 117, 281, 121, 283, 124, 286,
+              133, 297, 135, 300, 137, 304, 138, 307, 138, 317, 137, 320, 135, 324, 126, 341,
+              125, 342, 123, 343, 117, 343, 114, 340, 103, 318, 102, 313, 100, 302, 99, 296
+            ]
+          }
+        ],
+        "drawingHash": "1f8ee2ff3f1b4985",
+        "inputsHash": "ca96710b4b8790d7",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.3653, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handR_fist",
+        "group": "handR",
+        "layers": [
+          {
+            "id": "sprite_handR_fist_hand",
+            "key": "hand",
+            "rect": [82, 278, 68, 68],
+            "outline": [
+              99, 293, 100, 289, 101, 287, 106, 282, 109, 281, 117, 281, 121, 283, 124, 286,
+              133, 297, 135, 300, 137, 304, 138, 307, 138, 317, 137, 320, 135, 324, 120, 327,
+              112, 327, 108, 325, 105, 322, 103, 318, 102, 313, 100, 302, 99, 296
+            ]
+          }
+        ],
+        "drawingHash": "c998cf0ded73f9b1",
+        "inputsHash": "ca96710b4b8790d7",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.2989, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handR_thumb_up",
+        "group": "handR",
+        "layers": [
+          {
+            "id": "sprite_handR_thumb_up_hand",
+            "key": "hand",
+            "rect": [82, 278, 68, 68],
+            "outline": [
+              95, 329, 99, 293, 100, 289, 101, 287, 106, 282, 109, 281, 117, 281, 121, 283, 124, 286,
+              133, 297, 135, 300, 137, 304, 138, 307, 138, 317, 137, 320, 135, 324, 108, 340,
+              106, 341, 101, 341, 97, 339, 96, 338, 95, 336
+            ]
+          }
+        ],
+        "drawingHash": "438b5339ca6cce06",
+        "inputsHash": "ca96710b4b8790d7",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.3897, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handR_count2",
+        "group": "handR",
+        "layers": [
+          {
+            "id": "sprite_handR_count2_hand",
+            "key": "hand",
+            "rect": [82, 278, 68, 68],
+            "outline": [
+              99, 293, 100, 289, 101, 287, 106, 282, 109, 281, 117, 281, 121, 283, 124, 286,
+              133, 297, 135, 300, 137, 304, 138, 307, 138, 317, 137, 320, 131, 334, 130, 336,
+              128, 338, 117, 340, 112, 340, 110, 339, 109, 338, 108, 336, 103, 318, 102, 313,
+              100, 302, 99, 296
+            ]
+          }
+        ],
+        "drawingHash": "e951842939cb338a",
+        "inputsHash": "ca96710b4b8790d7",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.3912, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handR_count3",
+        "group": "handR",
+        "layers": [
+          {
+            "id": "sprite_handR_count3_hand",
+            "key": "hand",
+            "rect": [82, 278, 68, 68],
+            "outline": [
+              99, 293, 100, 289, 101, 287, 106, 282, 109, 281, 117, 281, 121, 283, 124, 286,
+              133, 297, 135, 300, 137, 304, 138, 307, 138, 317, 136, 334, 133, 337, 123, 339,
+              112, 341, 107, 341, 104, 338, 103, 336, 99, 296
+            ]
+          }
+        ],
+        "drawingHash": "aa23a0b19a2850f4",
+        "inputsHash": "ca96710b4b8790d7",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.4302, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handL_open",
+        "group": "handL",
+        "layers": [
+          {
+            "id": "sprite_handL_open_hand",
+            "key": "hand",
+            "rect": [210, 278, 68, 68],
+            "outline": [
+              219, 328, 222, 307, 223, 304, 225, 300, 227, 297, 236, 286, 239, 283, 243, 281,
+              251, 281, 254, 282, 259, 287, 260, 289, 261, 293, 262, 333, 262, 337, 261, 339,
+              259, 341, 257, 342, 253, 342, 224, 337, 222, 336, 220, 334, 219, 332
+            ]
+          }
+        ],
+        "drawingHash": "9b4b6111e87ccfc6",
+        "inputsHash": "fce78672beb850d4",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.4793, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handL_palm_up",
+        "group": "handL",
+        "layers": [
+          {
+            "id": "sprite_handL_palm_up_hand",
+            "key": "hand",
+            "rect": [210, 278, 68, 68],
+            "outline": [
+              222, 307, 223, 304, 225, 300, 227, 297, 236, 286, 239, 283, 243, 281, 251, 281,
+              254, 282, 259, 287, 260, 289, 261, 293, 261, 313, 258, 331, 257, 336, 256, 339,
+              255, 341, 252, 344, 250, 345, 242, 345, 240, 344, 237, 341, 225, 324, 223, 320,
+              222, 317
+            ]
+          }
+        ],
+        "drawingHash": "80d2832a51c1f1ee",
+        "inputsHash": "fce78672beb850d4",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.4045, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handL_point",
+        "group": "handL",
+        "layers": [
+          {
+            "id": "sprite_handL_point_hand",
+            "key": "hand",
+            "rect": [210, 278, 68, 68],
+            "outline": [
+              222, 307, 223, 304, 225, 300, 227, 297, 236, 286, 239, 283, 243, 281, 251, 281,
+              254, 282, 259, 287, 260, 289, 261, 293, 261, 296, 260, 302, 258, 313, 257, 318,
+              246, 340, 243, 343, 237, 343, 235, 342, 234, 341, 225, 324, 223, 320, 222, 317
+            ]
+          }
+        ],
+        "drawingHash": "3996b7c761b2bc15",
+        "inputsHash": "fce78672beb850d4",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.3653, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handL_fist",
+        "group": "handL",
+        "layers": [
+          {
+            "id": "sprite_handL_fist_hand",
+            "key": "hand",
+            "rect": [210, 278, 68, 68],
+            "outline": [
+              222, 307, 223, 304, 225, 300, 227, 297, 236, 286, 239, 283, 243, 281, 251, 281,
+              254, 282, 259, 287, 260, 289, 261, 293, 261, 296, 260, 302, 258, 313, 257, 318,
+              255, 322, 252, 325, 248, 327, 240, 327, 225, 324, 223, 320, 222, 317
+            ]
+          }
+        ],
+        "drawingHash": "d731c4adabff8eb3",
+        "inputsHash": "fce78672beb850d4",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.2989, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handL_thumb_up",
+        "group": "handL",
+        "layers": [
+          {
+            "id": "sprite_handL_thumb_up_hand",
+            "key": "hand",
+            "rect": [210, 278, 68, 68],
+            "outline": [
+              217, 324, 222, 307, 223, 304, 225, 300, 227, 297, 236, 286, 239, 283, 243, 281,
+              251, 281, 254, 282, 259, 287, 260, 289, 261, 293, 261, 296, 260, 302, 258, 313,
+              257, 318, 255, 322, 252, 325, 248, 327, 229, 335, 221, 335, 218, 332, 217, 330
+            ]
+          }
+        ],
+        "drawingHash": "dc51022206adc484",
+        "inputsHash": "fce78672beb850d4",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.3711, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handL_count2",
+        "group": "handL",
+        "layers": [
+          {
+            "id": "sprite_handL_count2_hand",
+            "key": "hand",
+            "rect": [210, 278, 68, 68],
+            "outline": [
+              222, 307, 223, 304, 225, 300, 227, 297, 236, 286, 239, 283, 243, 281, 251, 281,
+              254, 282, 259, 287, 260, 289, 261, 293, 261, 296, 260, 302, 258, 313, 257, 318,
+              252, 336, 251, 338, 250, 339, 248, 340, 243, 340, 232, 338, 230, 336, 229, 334,
+              223, 320, 222, 317
+            ]
+          }
+        ],
+        "drawingHash": "e1e30d9f0f031705",
+        "inputsHash": "fce78672beb850d4",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.3917, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      },
+      {
+        "id": "handL_count3",
+        "group": "handL",
+        "layers": [
+          {
+            "id": "sprite_handL_count3_hand",
+            "key": "hand",
+            "rect": [210, 278, 68, 68],
+            "outline": [
+              222, 307, 223, 304, 225, 300, 227, 297, 236, 286, 239, 283, 243, 281, 251, 281,
+              254, 282, 259, 287, 260, 289, 261, 293, 261, 296, 257, 336, 256, 338, 253, 341,
+              248, 341, 237, 339, 227, 337, 224, 334, 222, 317
+            ]
+          }
+        ],
+        "drawingHash": "b16deb88b5a2cf98",
+        "inputsHash": "fce78672beb850d4",
+        "layersHash": "646037f5a9261fb9",
+        "check": { "outsideDiff": 0, "insideChanged": 0.4307, "badShare": 0, "nearDiff": 0, "tolerance": 2 }
+      }
+    ],
+    "rejected": []
+  }
+}

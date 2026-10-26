@@ -64,6 +64,7 @@ describe('variant rows', () => {
       ['mouth_u', 'missing', 'neutral'],
       ['mouth_e', 'missing', 'neutral'],
       ['mouth_o', 'drawn', 'tint'],
+      ...VARIANT_IDS.slice(9).map(id=>[id,'missing','neutral']),
     ]);
     expect(rows[0].detail).toEqual({ kind: 'check', outside: 0.41, inside: 0.53 });
     expect(rows[1].detail).toEqual({ kind: 'requested' });
@@ -86,7 +87,7 @@ describe('variant rows', () => {
   it('show the recommended ones and those with something to say first', () => {
     const { shown, hidden } = splitRows(rows);
     expect(shown.map((r) => r.id)).toEqual(['eyes_closed', 'eyes_half', 'eyes_smile', 'mouth_a', 'mouth_o']);
-    expect(hidden.map((r) => r.id)).toEqual(['mouth_a_half', 'mouth_i', 'mouth_u', 'mouth_e']);
+    expect(hidden.map((r) => r.id)).toEqual(['mouth_a_half', 'mouth_i', 'mouth_u', 'mouth_e',...VARIANT_IDS.slice(9)]);
     expect(splitRows(variantRows(info(), [], 'source.png')).shown.map((r) => r.id)).toEqual(['eyes_closed', 'mouth_a']);
   });
 });

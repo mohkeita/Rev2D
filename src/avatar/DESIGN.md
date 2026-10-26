@@ -351,3 +351,16 @@ PNG and use it as the "illustration", with an avatar spec derived from hana's kn
 (`test/fixtures` builders), and assert the quality bar numerically (e.g. the nose moves farther than
 the ears at AngleX = 30; no iris-coloured pixels inside the opening at EyeOpen = 0; hair pixels move
 and face pixels do not when a strand parameter changes).
+
+
+## Authored arms and acting
+
+The optional arms feature cuts authored capsules/outlines and gloves before face layers. It fills
+only the torso behind a limb and clears its former exterior pixels. Separate sleeve and forearm meshes use single-bone auto weights, preserving drawn cloth and wire
+width through elbow bends. The sleeve root stays behind the torso; the forearm and glove respect
+the front flag. A covered elbow and sampled-colour wrist extension keep both joints connected.
+Opaque overlap under the torso avoids breathing cracks; padded hand masks and pixel hulls retain
+anti-aliased outlines without leaving ghost fingers. Rigid glove meshes follow hand bones. Shoulder roots share the body fields
+through bindings because v1 bone parents cannot be warps. Full-body sway/bounce anchor feet or seat.
+Expression patches keep existing visemes separate and discrete hand forms parent to the wrist.
+No browser or Node dependency enters the feature pipeline. See docs/GESTURES.md.

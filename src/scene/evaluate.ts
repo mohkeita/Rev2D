@@ -49,6 +49,7 @@ export function layerPoseOptions(layer: SceneLayer, source: SceneSource, t: numb
     animations: source.rig
       ? layer.animations.map((a) => {
           if (typeof a === 'string') return toLayer(source.rig!.model, a);
+          if('gesture' in a || 'expression' in a)throw new Error('compileSceneActing must resolve scene acting before evaluation');
           const { once, start, ...rest } = a;
           return toLayer(source.rig!.model, {
             ...rest,

@@ -192,7 +192,7 @@ describe('avatarOverlay', () => {
     // The left end of the head ellipse (x = 70, y = 170): the stroke is centred on it.
     expect(px(o.image, o.origin[0] + 70 * 3, o.origin[1] + 170 * 3)).toEqual(HEAD);
     // Every group leaves pixels of its colour.
-    for (const g of AVATAR_PART_GROUPS) expect(count(o.image, rgb(g.color)), g.id).toBeGreaterThan(30);
+    for (const g of AVATAR_PART_GROUPS.filter(g=>!['arms','legs'].includes(g.id))) expect(count(o.image, rgb(g.color)), g.id).toBeGreaterThan(30);
     // The picture itself is still there, exact, away from the shapes.
     expect(px(o.image, o.origin[0] + 300 * 3 + 1, o.origin[1] + 470 * 3 + 1)).toEqual(BODY);
   });
@@ -267,7 +267,7 @@ describe('avatarOverlay', () => {
     expect(toolError(() => avatarOverlay(SOURCE, validDoc(), { part: 'cheeks.imageUp' })).message).toBe('unknown part "cheeks.imageUp"');
     const typo = toolError(() => avatarOverlay(SOURCE, doc, { part: 'eye' }));
     expect(typo.hint).toContain('did you mean "eyes"?');
-    expect(typo.hint).toContain('groups: head, eyes, mouth, face, cheeks, strands, attachments, body');
+    expect(typo.hint).toContain('groups: head, eyes, mouth, face, cheeks, strands, attachments, arms, legs, body');
     const noCheeks = validDoc();
     delete noCheeks.face.cheeks;
     expect(toolError(() => avatarOverlay(SOURCE, noCheeks, { part: 'cheeks' })).message).toBe('nothing to draw: no landmark of "cheeks" is placed yet');

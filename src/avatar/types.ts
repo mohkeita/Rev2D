@@ -82,11 +82,11 @@ export interface AvatarPartItem {
   tip?: string;
 }
 
-export type AvatarPartGroupId = 'head' | 'eyes' | 'mouth' | 'face' | 'cheeks' | 'strands' | 'attachments' | 'body';
+export type AvatarPartGroupId = 'head' | 'eyes' | 'mouth' | 'face' | 'cheeks' | 'strands' | 'attachments' | 'body' | 'arms' | 'legs';
 
 export interface AvatarPartGroup {
   id: AvatarPartGroupId;
-  category: 'face' | 'hair' | 'body';
+  category: 'face' | 'hair' | 'body' | 'arms' | 'legs';
   /** English label and one-line description (i18n keys: `group.<id>.label|description`). */
   label: string;
   description: string;
@@ -139,7 +139,7 @@ export interface CompileAvatarResult {
 
 // ----------------------------------------------------------------------------- drawn variants
 
-export type VariantGroup = 'eyes' | 'mouth';
+export type VariantGroup = 'eyes' | 'mouth' | 'brows' | 'handR' | 'handL';
 
 /** Drawn variants an image generator can provide. Mesh deformation is the fallback for each. */
 export const VARIANT_IDS = [
@@ -152,6 +152,27 @@ export const VARIANT_IDS = [
   'mouth_u',
   'mouth_e',
   'mouth_o',
+  'eyes_wide',
+  'mouth_shock',
+  'mouth_grin',
+  'mouth_frown',
+  'mouth_smile',
+  'brows_worried',
+  'brows_angry',
+  'handR_open',
+  'handR_palm_up',
+  'handR_point',
+  'handR_fist',
+  'handR_thumb_up',
+  'handR_count2',
+  'handR_count3',
+  'handL_open',
+  'handL_palm_up',
+  'handL_point',
+  'handL_fist',
+  'handL_thumb_up',
+  'handL_count2',
+  'handL_count3',
 ] as const;
 export type VariantId = (typeof VARIANT_IDS)[number];
 

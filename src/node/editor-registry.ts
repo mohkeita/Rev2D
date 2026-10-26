@@ -665,7 +665,7 @@ export interface AvatarVariantsInfo {
   /** Files in variants/ that are not drawings of a known variant. */
   ignored: Array<{ file: string; reason: string; hint?: string }>;
   /** The edit areas in source pixels, [x, y, width, height] (eyes: both eyes; mouth: the mouth area); null without a valid spec. */
-  areas: { eyes: [number, number, number, number] | null; mouth: [number, number, number, number] | null };
+  areas: Partial<Record<import('../avatar/types.js').VariantGroup, [number, number, number, number] | null>>;
   /** variant-requests/README.md and preview.png when written (project-relative), else null. */
   requests: { readme: string | null; preview: string | null };
   notes: string[];

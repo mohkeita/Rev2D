@@ -881,3 +881,11 @@ the face, and the bottom row looks down. The outline changes only a little.
 - **Verify visually** after rig changes: render a sweep sheet of the parameters you bound.
 
 Library imports preserve existing avatar projects. Customize generated rigs through `avatar.json` post ops as described in [AVATAR.md](AVATAR.md), then rebuild with `library rig` to refresh the build fingerprints. See [LIBRARY.md](LIBRARY.md).
+
+
+### act
+
+`act` authors a numeric anticipation/main/overshoot/settle/hold/release animation. Required fields:
+`animation`, `target`, `from`, `to`. Optional `t`, `duration`, `anticipation`, `overshoot`, `settle`,
+`hold`, `release`. Parameter keys, including overshoot, must remain in range.
+See [GESTURES.md](GESTURES.md#act-motion-curve) for timings and an executable JSON example.

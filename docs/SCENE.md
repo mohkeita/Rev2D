@@ -71,6 +71,21 @@ use their center. `x/y` add offsets; scene tracks targeting `x/y` replace the re
 parent layer's transform. `attach: "hero.point:180,110"` follows a source-space point. Add `offset`
 in world pixels to place a bubble beside the head. Circular placement references are rejected.
 
+## Foreground occlusion
+
+A table painted into a flat background cannot hide a character drawn over that background.
+Author a separate foreground cutout containing only the table, including its legs and transparent
+gaps between them. Use an image with alpha or a model whose textured mesh follows the furniture
+outline. Draw the room at `z: 0`, the character at `z: 10`, and the foreground at `z: 20`.
+An opaque rectangular crop would also paint its floor/wall pixels over the character.
+
+Keep the foreground aligned with its source background: use the same world placement, scale and
+camera `depth`. A full-room-sized foreground model can use `anchor: [0,0]` and `at: [0,0]`.
+`depth` controls camera parallax; `z` controls draw order. Neither reconstructs furniture layers
+from a flattened image. When deriving mesh UVs from source-pixel coordinates, retain sufficient
+precision (for example `formatModelJson(model, {precision: 10})`) to avoid shifting fine outlines.
+Review an actual intersection with the character, including the tabletop edge and each leg.
+
 ## Poses, tracks and appearances
 
 Character `poses` are strictly increasing `{t,pose,transition?}` entries. The first pose holds before
@@ -186,3 +201,12 @@ MCP: `rev2d_scene_validate`, `rev2d_scene_frame`, `rev2d_scene_sheet`, `rev2d_sc
 `rev2d_scene_render`. Frame and sheet return PNGs inline. Node entry points are in `src/node/scene.ts`
 and `src/node/video.ts`; browser clients import `src/scene/index.ts`. See [LIBRARY.md](LIBRARY.md)
 for asset preparation and [AVATAR.md](AVATAR.md) for landmark/build/review work.
+
+
+## Acting on characters
+
+Layers may use `"idle_alive"` and `{gesture:"voila",t:"@text:voilà",intensity:0.8}` or
+`{expression:"surprised",t:2.5,hold:1.2}` alongside existing animation references. These are JSON
+objects with quoted keys in scene files. Generation happens after narration cue resolution, on
+cloned models in memory; source model files are unchanged. Set an optional scene `id` for stable
+character-plus-shot idle seeding. See [GESTURES.md](GESTURES.md#seeded-idle-and-scenes).

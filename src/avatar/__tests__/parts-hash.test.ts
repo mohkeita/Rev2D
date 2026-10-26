@@ -36,7 +36,7 @@ function spec(doc: Json = validDoc()): AvatarSpec {
 describe('describeAvatarParts', () => {
   const groups = describeAvatarParts(validDoc());
 
-  it('lists the eight groups in editor order with their categories', () => {
+  it('lists the ten groups in editor order with their categories', () => {
     expect(groups.map((g) => [g.id, g.category])).toEqual([
       ['head', 'face'],
       ['eyes', 'face'],
@@ -45,18 +45,19 @@ describe('describeAvatarParts', () => {
       ['cheeks', 'face'],
       ['strands', 'hair'],
       ['attachments', 'body'],
+      ['arms','body'],['legs','body'],
       ['body', 'body'],
     ]);
     for (const g of groups) {
       expect(g.label.length).toBeGreaterThan(2);
       expect(g.description.length).toBeGreaterThan(10);
-      expect(g.present).toBe(true);
+      expect(g.present).toBe(!['arms','legs'].includes(g.id));
     }
   });
 
   it('gives every group its own colour, distinct in hue and brightness', () => {
     const colors = groups.map((g) => parseColor(g.color)!);
-    expect(new Set(groups.map((g) => g.color)).size).toBe(8);
+    expect(new Set(groups.map((g) => g.color)).size).toBe(10);
     for (let i = 0; i < colors.length; i++) {
       for (let j = i + 1; j < colors.length; j++) {
         const d = Math.hypot(colors[i][0] - colors[j][0], colors[i][1] - colors[j][1], colors[i][2] - colors[j][2]);
@@ -152,7 +153,7 @@ describe('describeAvatarParts', () => {
 
   it('works on a draft: required groups present, nothing placed, optional groups absent', () => {
     const draft = describeAvatarParts(draftAvatarSpec('x', 100, 100));
-    expect(draft.filter((g) => !g.present).map((g) => g.id)).toEqual(['cheeks', 'strands', 'attachments']);
+    expect(draft.filter((g) => !g.present).map((g) => g.id)).toEqual(['cheeks', 'strands', 'attachments','arms','legs']);
     expect(draft.flatMap((g) => g.items).every((i) => !i.placed)).toBe(true);
     expect(draft.find((g) => g.id === 'cheeks')!.items.map((i) => i.id)).toEqual(['cheeks.imageLeft', 'cheeks.imageRight']);
     expect(draft.find((g) => g.id === 'strands')!.items).toEqual([]);
@@ -178,7 +179,7 @@ describe('describeAvatarParts', () => {
   it('never throws on malformed documents', () => {
     for (const doc of [null, 7, 'x', [], {}, { head: 3, face: [], hair: { strands: 'no' }, attachments: {} }]) {
       const g = describeAvatarParts(doc);
-      expect(g).toHaveLength(8);
+      expect(g).toHaveLength(10);
       expect(g.flatMap((x) => x.items).some((i) => i.placed)).toBe(false);
     }
     const odd = describeAvatarParts({

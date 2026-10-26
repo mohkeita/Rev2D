@@ -302,7 +302,7 @@ PNG sequences need no encoder. No source files or library assets are changed by 
 
 ## Library and avatar reference
 
-Eleven library/avatar tools supplement the upstream eighteen; five scene tools bring the total to 34. See [LIBRARY.md](LIBRARY.md).
+Eleven library/avatar tools supplement the upstream eighteen; five scene tools and three acting tools bring the total to 37. See [LIBRARY.md](LIBRARY.md).
 
 | Tool | Inputs | Result |
 | --- | --- | --- |
@@ -322,3 +322,13 @@ Eleven library/avatar tools supplement the upstream eighteen; five scene tools b
 saved images retain their coordinates. Inspect every pose sheet and fix landmarks before accepting a
 character. The current face/bust builder does not infer articulated arms/legs. A library character
 import is explicitly a draft, even though its cutout and avatar.json exist.
+
+
+## Acting
+
+- `rev2d_gesture_list {}`: read-only gesture and expression catalogues.
+- `rev2d_gesture_apply {path,gesture,id?,t?,duration?,intensity?,hold?,release?,side?,count?,dry_run?}`.
+- `rev2d_expression_apply {path,expression,id?,t?,duration?,intensity?,hold?,release?,dry_run?}`.
+
+Apply tools write the model unless `dry_run:true`, replacing only the animation with the same id.
+They return the complete animation and missing-control diagnostics. See [GESTURES.md](GESTURES.md).

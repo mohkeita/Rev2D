@@ -301,6 +301,7 @@ export function setValue(doc: SpecDoc, pointer: SpecPointer, value: unknown): Sp
 }
 
 function finiteList(v: unknown): number[] | null {
+  v=Array.isArray(v)?v.flat():v;
   return Array.isArray(v) && v.every((n) => typeof n === 'number' && Number.isFinite(n)) ? (v as number[]) : null;
 }
 

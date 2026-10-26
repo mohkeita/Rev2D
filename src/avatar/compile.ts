@@ -13,7 +13,7 @@
  * besides the defaults, which lattices collapse by design); `findFolds(model, compiled.folds)`
  * (./folds.ts) uses it. The fold check itself is not run here: it evaluates dozens of poses.
  */
-import { AVATAR_Z, ModelBuilder } from './builder.js';
+import { AVATAR_Z, ModelBuilder, STANDARD_PARAMETERS } from './builder.js';
 import { AVATAR_FEATURES } from './features/index.js';
 import { createReportSink } from './features/report.js';
 import type { AvatarFeature, CompileContext } from './features/types.js';
@@ -63,6 +63,15 @@ export function compileModel(spec: AvatarSpec, meta: LayersMeta, features: reado
     base = { id: BASE_LAYER, file: layerFile(BASE_LAYER), rect: [0, 0, width, height] };
   }
   // The same cells as the lattice: every mesh vertex is a lattice point, so the base moves exactly as the lattice does.
+  const bounds=meta.fullBaseBounds;
+  if(spec.framing==='full'&&Array.isArray(bounds)&&bounds.length===4&&bounds.every(Number.isFinite)){
+    // Retain the original lattice vertices; omit the large transparent border from drawable bounds.
+    const xs=Array.from({length:root.lattice.cols+1},(_,i)=>i*width/root.lattice.cols).filter(x=>x>=bounds[0]-metrics.cell.body&&x<=bounds[2]+metrics.cell.body);
+    const ys=Array.from({length:root.lattice.rows+1},(_,i)=>i*height/root.lattice.rows).filter(y=>y>=bounds[1]-metrics.cell.body&&y<=bounds[3]+metrics.cell.body);
+    const vertices=ys.flatMap(y=>xs.flatMap(x=>[x,y])),uvs=vertices.map((v,i)=>v/(i%2?height:width)),triangles:number[]=[];
+    for(let y=0;y<ys.length-1;y++)for(let x=0;x<xs.length-1;x++){const a=y*xs.length+x,b=a+1,c=a+xs.length,d=c+1;triangles.push(a,b,c,b,d,c);}
+    model.part({id:'base',parent:root.id,z:AVATAR_Z.base,shape:{type:'mesh',texture:model.texture(base),vertices,uvs,triangles},description:'Continuous base lattice, restricted to the occupied image region.'});
+  }else{
   model.imagePart(base, {
     parent: root.id,
     cols: root.lattice.cols,
@@ -70,6 +79,7 @@ export function compileModel(spec: AvatarSpec, meta: LayersMeta, features: reado
     z: AVATAR_Z.base,
     description: 'The illustration (moving layers cut out and filled in behind) as one continuous mesh.',
   });
+  }
 
   const ctx: CompileContext = {
     spec,
@@ -87,6 +97,10 @@ export function compileModel(spec: AvatarSpec, meta: LayersMeta, features: reado
     report,
   };
   for (const feature of features) feature.compile?.(ctx);
+  if(spec.framing==='full'||spec.arms?.length){
+    const ids=['BodyY','BodyAngleZ','ArmRA','ArmLA','ArmRB','ArmLB','HandR','HandL','HandRForm','HandLForm','EyeWide','MouthShape'] as const;
+    for(const id of ids)if(model.hasParameter(id))for(const v of [STANDARD_PARAMETERS[id].min,STANDARD_PARAMETERS[id].max])for(const x of [-30,30])for(const b of [-10,10])folds.poses.push({[id]:v,AngleX:x,BodyAngleX:b});
+  }
 
   for (const [name, value] of Object.entries(model.stats())) report.stat(name, value);
   report.stat('latticeCols', root.lattice.cols);

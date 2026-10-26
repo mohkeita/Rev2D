@@ -16,6 +16,7 @@ import { choiceHint, describe, fieldHint, Fields, isObject, type JsonObject, OpE
 import { opCompose } from './compose.js';
 import { opFollow } from './follow.js';
 import { opRecolor } from './recolor.js';
+import { opAct } from './act.js';
 import { opBind, opBindLinear, opKey, opSet, opUnbind, opUnkey } from './values.js';
 import { opBindWarp } from './warp.js';
 
@@ -53,6 +54,7 @@ export interface ApplyOpsResult {
 }
 
 const HANDLERS: Record<string, (ctx: OpContext, f: Fields) => string> = {
+  act: opAct,
   add: opAdd,
   update: opUpdate,
   remove: opRemove,

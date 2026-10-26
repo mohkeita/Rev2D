@@ -217,6 +217,20 @@ export const AvatarBuildSchema = z
 
 // ----------------------------------------------------------------------------- spec
 
+/** Native flat polygons; nested point pairs are also accepted from authored JSON. */
+const ArmOutline = z.union([AvatarPointsSchema, z.array(AvatarVec2Schema)]).transform((p) => p.flat() as number[]);
+export const AvatarArmSchema = z.strictObject({
+  id: z.enum(['armR', 'armL']),
+  shoulder: AvatarVec2Schema, elbow: AvatarVec2Schema, wrist: AvatarVec2Schema,
+  width: AvatarRadiusSchema.describe('CUTS LAYERS. Upper/forearm widths, including the outline.'),
+  outline: ArmOutline.optional().describe('CUTS LAYERS. Polygon around the arm, excluding the hand; optional capsule fallback.'),
+  hand: z.strictObject({ center: AvatarVec2Schema, radius: Finite.positive(), outline: ArmOutline.optional() }),
+  front: z.boolean().default(true).describe('Forearm and glove in front of the torso; the sleeve root stays behind it for a clean shoulder overlap.'),
+});
+export const AvatarLegsSchema = z.strictObject({
+  hips: AvatarVec2Schema, feet: z.tuple([AvatarVec2Schema, AvatarVec2Schema]), seated: z.boolean().default(false),
+});
+
 export const AvatarSpecSchema = z
   .strictObject({
     $schema: z.string().optional(),
@@ -235,6 +249,9 @@ export const AvatarSpecSchema = z
     hair: AvatarHairSchema.optional(),
     attachments: z.array(AvatarAttachmentSchema).optional().describe('Optional extra pieces: hanging accessories, wobbling buns, things in front of the face.'),
     body: AvatarBodySchema,
+    framing: z.enum(['bust', 'full']).optional().describe('Default bust. Full uses legs to anchor body sway and bounce.'),
+    arms: z.array(AvatarArmSchema).max(2).optional().describe('CUTS LAYERS. Authored shoulder, elbow, wrist and hand for each articulated arm.'),
+    legs: AvatarLegsSchema.optional().describe('Required for full framing: hips and both planted feet, or seated pivot.'),
     build: AvatarBuildSchema.optional(),
     post: z
       .array(z.looseObject({ op: z.string() }))

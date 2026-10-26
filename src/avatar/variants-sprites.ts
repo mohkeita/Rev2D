@@ -1,3 +1,4 @@
+import {pixelHull} from './image/hull.js';
 /**
  * Sprites from accepted drawings (step 4 of ./variants.ts) and their bookkeeping in layers.json.
  *
@@ -30,6 +31,7 @@
 import { Rig, buildRenderList } from '../core/rig.js';
 import type { ImageRGBA, Model } from '../core/types.js';
 import { renderImage } from '../render/raster.js';
+import { pointInPolygon } from './image/polygon.js';
 import { AVATAR_Z } from './builder.js';
 import { extendEdges } from './image/inpaint.js';
 import { maskBounds } from './image/mask.js';
@@ -46,6 +48,8 @@ export const SPRITES_META_KEY = 'sprites';
 
 
 export interface SpriteLayerMeta {
+  /** Convex pixel outline for rigid gloves, in source coordinates. */
+  outline?:number[];
   /** Layer (and texture) id. */
   id: string;
   /** The edit area it was cut from: an eye ("imageLeft" / "imageRight") or "mouth". */
@@ -104,7 +108,7 @@ export function spritesMeta(meta: LayersMeta | null | undefined): SpritesMeta | 
       typeof s === 'object' &&
       isVariantId(s.id) &&
       Array.isArray(s.layers) &&
-      s.layers.every((l) => l !== null && typeof l === 'object' && typeof l.id === 'string' && typeof l.key === 'string' && isRect(l.rect)) &&
+      s.layers.every((l) => l !== null && typeof l === 'object' && typeof l.id === 'string' && typeof l.key === 'string' && isRect(l.rect) && (l.outline===undefined || Array.isArray(l.outline)&&l.outline.length>=6&&l.outline.length%2===0&&l.outline.every(v=>typeof v==='number'&&Number.isFinite(v)))) &&
       typeof s.drawingHash === 'string' &&
       typeof s.inputsHash === 'string',
   );
@@ -145,7 +149,7 @@ export interface SpriteBackdrop {
 
 /** Parts with a z above this are drawn over the sprites of the group (AVATAR_Z: eye sprites 27..29, mouth sprites 37..39). */
 export function spriteTopZ(group: VariantGroup): number {
-  return group === 'eyes' ? AVATAR_Z.eyeSprites + 2 : AVATAR_Z.mouthSprites + 2;
+  return group === 'eyes' ? AVATAR_Z.eyeSprites + 2 : group === 'mouth' ? AVATAR_Z.mouthSprites + 3 : group === 'brows' ? AVATAR_Z.hair + 3 : AVATAR_Z.arms + 2;
 }
 
 /**
@@ -232,7 +236,8 @@ function unmix(d: Uint8ClampedArray, o: number, above: ImageRGBA, ai: number, ba
  * (spriteBackdrop), what lies under the layers drawn above the sprite is un-mixed (see the file
  * comment); without one the drawing's pixels are used as they are.
  */
-export function cutVariantSprites(id: VariantId, drawing: ImageRGBA, edit: VariantEditAreas, backdrop?: SpriteBackdrop): CutSprites {
+
+export function cutVariantSprites(id: VariantId, drawing: ImageRGBA, edit: VariantEditAreas, backdrop?: SpriteBackdrop, hand?:{source:ImageRGBA;arm:NonNullable<AvatarSpec['arms']>[number]}): CutSprites {
   const layers: SpriteLayerMeta[] = [];
   const images: Record<string, ImageRGBA> = {};
   const px = [0, 0, 0, 0];
@@ -260,6 +265,11 @@ export function cutVariantSprites(id: VariantId, drawing: ImageRGBA, edit: Varia
           px[2] = drawing.data[so + 2];
           px[3] = drawing.data[so + 3];
         }
+        if(hand){
+          const h=hand.arm.hand,inside=h.outline?pointInPolygon(h.outline,gx+0.5,gy+0.5):Math.hypot(gx+0.5-h.center[0],gy+0.5-h.center[1])<=h.radius+2;
+          const changed=[0,1,2,3].some(c=>Math.abs(drawing.data[so+c]-hand.source.data[so+c])>2);
+          if(!inside&&!changed)px[3]=0;
+        }
         const o = (y * w + x) * 4;
         img.data[o] = px[0];
         img.data[o + 1] = px[1];
@@ -269,7 +279,7 @@ export function cutVariantSprites(id: VariantId, drawing: ImageRGBA, edit: Varia
     }
     const layerId = spriteLayerId(id, area.key);
     images[layerFile(layerId)] = extendEdges(img, 2);
-    layers.push({ id: layerId, key: area.key, rect: [x0, y0, w, h] });
+    layers.push({ id: layerId, key: area.key, rect: [x0, y0, w, h],...(hand?{outline:pixelHull(img,x0,y0)}:{}) });
   }
   return { layers, images };
 }
@@ -338,7 +348,8 @@ export function buildSprites(spec: AvatarSpec, meta: LayersMeta, source: ImageRG
       continue;
     }
     const backdrop = options.backdrops?.[group];
-    const cut = cutVariantSprites(id, drawing, editOf(group), backdrop);
+    const arm=group.startsWith('hand')?spec.arms?.find(a=>a.id===(group==='handR'?'armR':'armL')):undefined;
+    const cut = cutVariantSprites(id, drawing, editOf(group), backdrop,arm?{source,arm}:undefined);
     const old = sprites.find((s) => s.id === id);
     if (old) {
       const now = new Set(cut.layers.map((l) => l.id));
@@ -456,7 +467,7 @@ export function variantStatuses(
     const rejection = sm?.rejected.find((r) => r.id === id && f.drawing !== null && r.drawingHash === f.drawing.hash) ?? null;
     const stale: string[] = [];
     if (sprite) {
-      if (spec && sprite.inputsHash !== variantInputsHash(spec, def.group)) stale.push(def.group === 'eyes' ? 'the eye regions changed since the sprites were cut' : 'the mouth area changed since the sprite was cut');
+      if (spec && sprite.inputsHash !== variantInputsHash(spec, def.group)) stale.push(def.group==='eyes'?'the eye regions changed since the sprites were cut':def.group==='mouth'?'the mouth area changed since the sprite was cut':`the ${def.group} landmarks changed since the sprites were cut`);
       else if (meta && sprite.layersHash !== null && sprite.layersHash !== meta.inputsHash) stale.push('the layers over the sprite were rebuilt from other landmarks since it was cut');
       if (!f.drawing) stale.push(`variants/${id}.png is gone (import again to remove the sprite)`);
       else if (f.drawing.hash !== sprite.drawingHash && !rejection) stale.push(`variants/${id}.png changed since it was imported`);

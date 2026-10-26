@@ -99,6 +99,8 @@ function requestedIds(dir: string): VariantId[] {
 // ----------------------------------------------------------------------------- request
 
 export interface WriteVariantRequestsOptions {
+  /** All variants supported by the authored landmarks. */
+  all?:boolean;
   /** Variants to request (default: the recommended eyes_closed and mouth_a, plus every variant requested before). */
   ids?: VariantId[];
   /** How the project folder is written in the README's commands (default "."). */
@@ -107,7 +109,7 @@ export interface WriteVariantRequestsOptions {
 
 export interface WrittenVariantRequest {
   id: VariantId;
-  group: 'eyes' | 'mouth';
+  group: VariantGroup;
   label: string;
   recommended: boolean;
   /** Project-relative paths: where the drawing goes, the mask and the prompt. */
@@ -142,8 +144,9 @@ export async function writeAvatarVariantRequests(dir: string, options: WriteVari
   const project = await usableProject(dir, 'write variant requests');
   const { spec, source } = project;
   const earlier = requestedIds(project.dir);
-  const wanted = options.ids && options.ids.length ? options.ids : RECOMMENDED_VARIANT_IDS;
-  const ids = normalizeVariantIds([...wanted, ...earlier]);
+  const available=(id:VariantId)=>!VARIANTS[id].group.startsWith('hand')||spec.arms?.some(a=>a.id===(VARIANTS[id].group==='handR'?'armR':'armL'));
+  const wanted = options.all?VARIANT_IDS.filter(available):options.ids && options.ids.length ? options.ids : RECOMMENDED_VARIANT_IDS;
+  const ids = normalizeVariantIds([...wanted, ...earlier.filter(available)]);
   const sourceName = spec.image.file;
   const set = variantRequests(spec, source, ids, { sourceName });
   const files: string[] = [];

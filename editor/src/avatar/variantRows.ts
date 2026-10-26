@@ -5,7 +5,7 @@
  * variant. Pure (tested in test/editor-avatar-variants.test.ts).
  */
 import type { AvatarInfo, AvatarVariantStatus, AvatarVariantsInfo } from '../api.js';
-import { VARIANT_IDS, type VariantId } from '../../../src/avatar/types.js';
+import { VARIANT_IDS, type VariantId, type VariantGroup } from '../../../src/avatar/types.js';
 import { VARIANTS } from '../../../src/avatar/variants-areas.js';
 
 export type VariantState = AvatarVariantStatus['state'];
@@ -23,7 +23,7 @@ export const STATE_TONE: Record<VariantState, VariantTone> = {
 
 export interface VariantRowView {
   id: VariantId;
-  group: 'eyes' | 'mouth';
+  group: VariantGroup;
   state: VariantState;
   tone: VariantTone;
   recommended: boolean;
@@ -114,5 +114,9 @@ export function variantPose(id: VariantId): Record<string, number> {
   if (v.eye === 'closed') return { EyeLOpen: 0, EyeROpen: 0 };
   if (v.eye === 'half') return { EyeLOpen: 0.45, EyeROpen: 0.45 };
   if (v.eye === 'smile') return { EyeLSmile: 1, EyeRSmile: 1 };
-  return { MouthOpen: v.mouth!.open, MouthForm: v.mouth!.form };
+  if(v.eye==='wide')return {EyeWide:1};
+  if(v.handForm!==undefined)return {[v.group==='handR'?'HandRForm':'HandLForm']:v.handForm};
+  if(v.group==='brows')return {BrowLY:id==='brows_worried'?0.7:-0.7,BrowRY:id==='brows_worried'?0.7:-0.7};
+  if(v.expression!==undefined)return {MouthShape:v.expression};
+  return v.mouth?{ MouthOpen: v.mouth.open, MouthForm: v.mouth.form }:{};
 }

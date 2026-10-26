@@ -51,6 +51,7 @@ import { didYouMean, formatList } from '../core/validate/text.js';
 import type { Diagnostic } from '../core/types.js';
 import { ID_PATTERN } from '../core/schema.js';
 import { OP_CATALOG } from '../ops/catalog.js';
+import { validateArmLandmarks } from './arms-spec.js';
 import {
   AVATAR_FORMAT,
   AVATAR_VERSION,
@@ -122,6 +123,19 @@ export const AVATAR_DIAGNOSTIC_CODES = {
   'avatar-pendulum-degenerate': 'error',
   'avatar-implausible-value': 'warning',
   'avatar-post-op': 'error',
+  'avatar-legs-missing':'error',
+  'avatar-arm-outside-image':'error',
+  'avatar-arm-duplicate-id':'error',
+  'avatar-arm-segment-short':'error',
+  'avatar-arm-hand-detached':'error',
+  'avatar-arm-shoulder-detached':'error',
+  'avatar-arm-outline':'error',
+  'avatar-arm-outline-crosses':'error',
+  'avatar-arm-outline-joint':'error',
+  'avatar-legs-outside-image':'error',
+  'avatar-legs-feet-coincident':'error',
+  'avatar-legs-order':'error',
+
 } as const satisfies Record<string, Diagnostic['severity']>;
 
 /**
@@ -214,6 +228,7 @@ export function parseAvatarSpec(input: unknown, options: ParseAvatarSpecOptions 
   diagnostics.push(...structural.filter((d) => !hidden(d)));
   semanticChecks(doc, sink, options);
   diagnostics.push(...sink.items);
+  if (result.success) diagnostics.push(...validateArmLandmarks(result.data));
 
   const failed = diagnostics.some((d) => d.severity === 'error');
   return { spec: result.success && !failed ? result.data : null, diagnostics, doc };

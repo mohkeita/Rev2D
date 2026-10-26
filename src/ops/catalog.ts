@@ -23,9 +23,31 @@ const BINDING_SELECTOR = 'bindings only (they may have no id): select the bindin
 
 export const OP_CATALOG: readonly OpDescription[] = [
   {
+    op: 'act',
+    summary:
+      'Anticipate, move, settle and hold. Writes numeric keys into an animation, creating or extending it; generated parameter values must stay inside the declared range.',
+    fields: {
+      animation: '(required) animation id',
+      target: '(required) numeric address, e.g. param:ArmRA',
+      from: '(required) initial absolute value',
+      to: '(required) destination absolute value',
+      t: 'start time in seconds (default 0)',
+      duration: 'main move seconds (default 0.6)',
+      anticipation: 'opposite amplitude share in 0..1 (default 0.15)',
+      overshoot: 'overshoot share in 0..1 (default 0.12)',
+      settle: 'settling seconds (default 0.3)',
+      hold: 'hold seconds (default 0)',
+      release: 'optional positive return duration in seconds',
+    },
+    example: {
+      op: 'act', animation: 'point', target: 'param:AngleX', from: 0, to: 15,
+      t: 0.3, duration: 0.5, anticipation: 0.15, overshoot: 0.12, settle: 0.3, hold: 1.5, release: 0.4,
+    },
+  },
+  {
     op: 'add',
     summary:
-      'Add an item to a model section. The array is created if missing; duplicate ids fail. Bones may give "world": [x, y] (setup-space position) instead of local x/y, and "worldRotation" (setup-space degrees) instead of local rotation; both are converted with the parent\'s setup world transform (rotated, scaled and mirrored parents included).',
+      'Add a model item. The array is created if missing; duplicate ids fail. Bones may give "world": [x, y] (setup-space position) instead of local x/y, and "worldRotation" (setup-space degrees) instead of local rotation; both are converted with the parent\'s setup world transform (rotated, scaled and mirrored parents included).',
     fields: {
       kind: `(required) ${KIND}`,
       value: '(required) the item object exactly as in the model file (see docs/SPEC.md); bones also accept "world" and "worldRotation"',
@@ -38,7 +60,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   {
     op: 'update',
     summary:
-      'Change fields of an item. "set" maps field paths to new values: dotted paths reach nested fields ("shape.rx", "stroke.width"), null deletes a field. Bones accept "world": [x, y] and "worldRotation": degrees (setup space); with "keepWorld": true a bone whose parent changes keeps its setup world pose (x/y/rotation/scale are recomputed, so they cannot be set in the same update). Ids change only with rename (an id-less binding can get one here). The message lists only fields whose value changed (long arrays summarized) and names the unchanged ones.',
+      'Change item fields. "set" maps field paths to new values: dotted paths reach nested fields ("shape.rx", "stroke.width"), null deletes a field. Bones accept "world": [x, y] and "worldRotation": degrees (setup space); with "keepWorld": true a bone whose parent changes keeps its setup world pose (x/y/rotation/scale are recomputed, so they cannot be set in the same update). Ids change only with rename (an id-less binding can get one here). The message lists only fields whose value changed (long arrays summarized) and names the unchanged ones.',
     fields: {
       kind: `(required) ${KIND}`,
       id: '(required unless kind is binding) id of the item',
@@ -65,7 +87,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   {
     op: 'rename',
     summary:
-      'Rename an item and update every reference. That covers parents, masks, skin bones, IK bones/targets, binding params, physics params, texture refs and address strings ("bone:old.rotation" -> "bone:new.rotation", "param:Old" -> "param:New").',
+      'Rename and update references. That covers parents, masks, skin bones, IK bones/targets, binding params, physics params, texture refs and address strings ("bone:old.rotation" -> "bone:new.rotation", "param:Old" -> "param:New").',
     fields: {
       kind: `(required) ${KIND}`,
       from: '(required) current id',
@@ -76,7 +98,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   {
     op: 'set',
     summary:
-      'Set the setup (rest) value of one property. Addresses: bone:<id>.x|y|rotation|scaleX|scaleY|length, part:<id>.opacity|z|visible|tint|fill (solid colour)|stroke.color|stroke.width|shape.<field>, ik:<id>.mix. Point lists accept a full list or a sparse map {"<index>": [x, y]}. Parameter defaults and non-animatable fields (blend, parent, shape.detail, ...) use update; warp offsets have no setup value (bind them).',
+      'Set a property’s rest value. Addresses: bone:<id>.x|y|rotation|scaleX|scaleY|length, part:<id>.opacity|z|visible|tint|fill (solid colour)|stroke.color|stroke.width|shape.<field>, ik:<id>.mix. Point lists accept a full list or a sparse map {"<index>": [x, y]}. Parameter defaults and non-animatable fields (blend, parent, shape.detail, ...) use update; warp offsets have no setup value (bind them).',
     fields: {
       target: '(required) property address, e.g. "part:mouth.shape.rx"',
       value: '(required) absolute value (number, colour string, point list / sparse map, path string, boolean)',
@@ -86,7 +108,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   {
     op: 'bind',
     summary:
-      'Create or replace a parameter -> property binding. A binding with the same target and the same parameter set is replaced (keeping its id, description and interpolation unless given); the message says added or replaced. Keys must form a full grid over the distinct "at" values of each parameter. Values are absolute; with "relative": true they are offsets added to the current setup value (numbers, point lists and sparse point maps; not colours, paths or booleans) and stored as absolute keyforms.',
+      'Bind parameters to a property. A binding with the same target and the same parameter set is replaced (keeping its id, description and interpolation unless given); the message says added or replaced. Keys must form a full grid over the distinct "at" values of each parameter. Values are absolute; with "relative": true they are offsets added to the current setup value (numbers, point lists and sparse point maps; not colours, paths or booleans) and stored as absolute keyforms.',
     fields: {
       target: '(required) property address (not param:)',
       params: '(required) 1 to 3 parameter ids (a single id string is accepted)',
@@ -109,7 +131,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   {
     op: 'bind_linear',
     summary:
-      'Make a numeric property follow one parameter linearly. Upserts the 2-key binding value = setup + scale × param, keyed at "at" (default: the parameter range), e.g. FootLY -> bone:footL.y with scale 1 moves the foot 1 px per unit. The message shows the formula and warns when the parameter default is not 0 (the rest pose would move).',
+      'Drive a numeric property linearly. Upserts the 2-key binding value = setup + scale × param, keyed at "at" (default: the parameter range), e.g. FootLY -> bone:footL.y with scale 1 moves the foot 1 px per unit. The message shows the formula and warns when the parameter default is not 0 (the rest pose would move).',
     fields: {
       target: '(required) address of a numeric property, e.g. "bone:footL.y"',
       param: '(required) parameter id',
@@ -123,7 +145,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   {
     op: 'bind_warp',
     summary:
-      'Bind warp offsets from head-turn poses. Generates full "warp:<id>.offsets" keyforms and upserts the binding. Per key: yaw/pitch (pseudo-3D turn: positive yaw turns toward +x, content shifts right and the far side compresses; positive pitch looks DOWN, content shifts +y, so with the Live2D convention "AngleY > 0 looks up" use negative pitch at AngleY > 0), then scale and rotate (clockwise degrees) about "pivot" (default: rect centre), then translate, plus optional raw "offsets" added on top.',
+      'Bind head-turn warp offsets. Generates full "warp:<id>.offsets" keyforms and upserts the binding. Per key: yaw/pitch (pseudo-3D turn: positive yaw turns toward +x, content shifts right and the far side compresses; positive pitch looks DOWN, content shifts +y, so with the Live2D convention "AngleY > 0 looks up" use negative pitch at AngleY > 0), then scale and rotate (clockwise degrees) about "pivot" (default: rect centre), then translate, plus optional raw "offsets" added on top.',
     fields: {
       warp: '(required) warp id',
       params: '(required) 1 to 3 parameter ids',
@@ -147,7 +169,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   {
     op: 'follow',
     summary:
-      'Make a rigid accessory follow a point of a deformer. E.g. a hat on a turning head: the accessory ("warp" or "bone", attached next to the followed item, e.g. both on bone "head") gets keyforms over the key grid of the followed motion that put its anchor "at" exactly where Rig.mapPoint maps that point through "follow"; "rotate" / "scale" also match the local rotation / scale (from two probe points). A warp gets one "warp:<id>.offsets" binding, a bone x / y (rotation, scaleX / scaleY) bindings; a binding with the same target and params is replaced. The message reports the anchor shift and the residual error at keyforms and at grid midpoints.',
+      'Attach a rigid accessory to a deformer. E.g. a hat on a turning head: the accessory ("warp" or "bone", attached next to the followed item, e.g. both on bone "head") gets keyforms over the key grid of the followed motion that put its anchor "at" exactly where Rig.mapPoint maps that point through "follow"; "rotate" / "scale" also match the local rotation / scale (from two probe points). A warp gets one "warp:<id>.offsets" binding, a bone x / y (rotation, scaleX / scaleY) bindings; a binding with the same target and params is replaced. The message reports the anchor shift and the residual error at keyforms and at grid midpoints.',
     fields: {
       warp: 'accessory warp id (give "warp" or "bone")',
       bone: 'accessory bone id (instead of "warp")',
@@ -164,7 +186,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   },
   {
     op: 'unbind',
-    summary: 'Remove the binding(s) on a target. With "params", only the binding driven by exactly that parameter set.',
+    summary: 'Remove target bindings. With "params", only the binding driven by exactly that parameter set.',
     fields: {
       target: '(required) property address',
       params: 'parameter ids of the binding to remove (default: every binding on the target)',
@@ -198,7 +220,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   },
   {
     op: 'move',
-    summary: 'Reorder an item within its section. E.g. part draw order for equal z. Give exactly one of index, before, after.',
+    summary: 'Reorder a section item. E.g. part draw order for equal z. Give exactly one of index, before, after.',
     fields: {
       kind: `(required) ${KIND}`,
       id: '(required unless kind is binding) id of the item',
@@ -213,7 +235,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   {
     op: 'recolor',
     summary:
-      'Recolour parts by colour map or HSL shift. Select parts with "parts", "tag" or "all". "map": {"#old": "#new"} replaces exact colour matches (RGB; a key with alpha also matches alpha) and keeps each colour\'s own alpha; "hsl": {"h": degrees, "s": delta, "l": delta} rotates the hue and adds to saturation / lightness (0..1 units). Applies to written solid fills, gradient stops and stroke colours (tints with "include": ["tint"]) and to the binding keyforms and animation keys on those colour properties. Reports counts per part; fails when nothing changed (the hint lists the colours found).',
+      'Recolour with a map or HSL shift. Select parts with "parts", "tag" or "all". "map": {"#old": "#new"} replaces exact colour matches (RGB; a key with alpha also matches alpha) and keeps each colour\'s own alpha; "hsl": {"h": degrees, "s": delta, "l": delta} rotates the hue and adds to saturation / lightness (0..1 units). Applies to written solid fills, gradient stops and stroke colours (tints with "include": ["tint"]) and to the binding keyforms and animation keys on those colour properties. Reports counts per part; fails when nothing changed (the hint lists the colours found).',
     fields: {
       parts: 'part ids to recolour',
       tag: 'recolour every part with this tag',
@@ -227,7 +249,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   {
     op: 'compose',
     summary:
-      'Bake layered animations into one new animation. Layers combine exactly like playback layers (weight, mode, start, hold); the result played alone at weight 1 matches them. Tracks on targets only one layer animates are copied (shifted by start, eases and offset kept) when that is exact, and layers of the same one-shot animation with disjoint windows (e.g. "blink" at 1 s and 3 s) are merged into one key list; other targets are baked by sampling the rig at "fps" (default 60) into linear keys, with a WARNING listing source key times and "hold": false window boundaries that fall between samples (and an fps that hits them). Events are merged. Duration defaults to the longest layer, loop to true when every layer loops. Fails on an existing id unless "replace": true.',
+      'Bake layered animations. Layers combine exactly like playback layers (weight, mode, start, hold); the result played alone at weight 1 matches them. Tracks on targets only one layer animates are copied (shifted by start, eases and offset kept) when that is exact, and layers of the same one-shot animation with disjoint windows (e.g. "blink" at 1 s and 3 s) are merged into one key list; other targets are baked by sampling the rig at "fps" (default 60) into linear keys, with a WARNING listing source key times and "hold": false window boundaries that fall between samples (and an fps that hits them). Events are merged. Duration defaults to the longest layer, loop to true when every layer loops. Fails on an existing id unless "replace": true.',
     fields: {
       id: '(required) id of the new animation',
       layers:
@@ -247,7 +269,7 @@ export const OP_CATALOG: readonly OpDescription[] = [
   {
     op: 'patch',
     summary:
-      'Low-level JSON Patch fallback. RFC 6902 operations (add, remove, replace, move, copy, test) with RFC 6901 JSON pointers, applied in order. Extension: an array segment may be an item id ("/parts/mouth/opacity").',
+      'Apply JSON Patch. RFC 6902 operations (add, remove, replace, move, copy, test) with RFC 6901 JSON pointers, applied in order. Extension: an array segment may be an item id ("/parts/mouth/opacity").',
     fields: {
       patch: '(required) [{"op": "replace", "path": "/meta/name", "value": "hero"}, ...]',
     },
