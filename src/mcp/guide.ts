@@ -170,13 +170,15 @@ ${RECIPES.map(renderRecipe).join('\n\n')}
 - Writes by rev2d_apply_ops reformat the file (comments are not preserved).
 
 ## Tools
-rev2d_guide (this) | rev2d_schema {name?} JSON Schema | rev2d_docs {topic} scene, spec, ops, cli, mcp, recipes, interop, avatar, library, architecture, examples, agents
+rev2d_guide (this) | rev2d_schema {name?} JSON Schema | rev2d_docs {topic} episode, scene, spec, ops, cli, mcp, recipes, interop, avatar, library, architecture, examples, agents
 rev2d_create_model | rev2d_validate | rev2d_info | rev2d_render | rev2d_sheet | rev2d_inspect | rev2d_analyze | rev2d_hit_test
 rev2d_apply_ops (edits; the tool description lists every op) | rev2d_diff_images (before/after pixels)
 rev2d_import {format: "spine" | "live2d"} | rev2d_export {format, out_dir} (Spine JSON + atlas, Live2D motion3 / physics3 JSON)
 rev2d_editor_state | rev2d_editor_command | rev2d_editor_screenshot (live editor bridge)
 Reusable assets: rev2d_library_search | rev2d_library_validate | rev2d_library_import | rev2d_library_request | rev2d_library_sheet. Read rev2d_docs {topic: "library"}.
 Acting: rev2d_gesture_list -> rev2d_gesture_apply / rev2d_expression_apply (dry_run first) -> sheet/analyze. Read rev2d_docs {topic: "gestures"}. Scene acting is generated in memory.
+Episodes: rev2d_episode_validate -> rev2d_episode_plan -> rev2d_episode_build -> rev2d_episode_render -> rev2d_episode_report -> rev2d_episode_assemble; rev2d_episode_thumbnails. Read rev2d_docs {topic: "episode"}.
+
 Scenes: rev2d_scene_validate -> rev2d_scene_sheet / rev2d_scene_frame -> rev2d_scene_analyze -> rev2d_scene_render. Read rev2d_docs {topic: "scene"}; scene cues synchronize appearances and pose changes to narration. MP4/GIF use optional ffmpeg; PNG sequences need none.
 Avatars: rev2d_avatar_new -> rev2d_avatar_grid / rev2d_avatar_overlay -> rev2d_avatar_validate -> rev2d_avatar_build -> rev2d_avatar_poses.
 Import creates draft landmarks; a built model is not artistic approval. The current avatar builder animates the face/bust, not articulated whole-body actions. Read rev2d_docs {topic: "avatar"}.

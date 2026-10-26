@@ -10,6 +10,7 @@ import { docs, schema } from './reference.js';
 import { diff, frames, gif, render, sheet } from './render.js';
 import { watch } from './watch.js';
 import { LIBRARY_COMMANDS,LIBRARY_PARENT } from './library.js';
+import {EPISODE_COMMANDS,EPISODE_PARENT} from './episode.js';
 import { SCENE_COMMANDS, SCENE_PARENT } from './scene.js';
 
 export const COMMANDS: Command[] = [
@@ -29,6 +30,7 @@ export const COMMANDS: Command[] = [
   ...AVATAR_COMMANDS,
   ...LIBRARY_COMMANDS,
   ...SCENE_COMMANDS,
+  ...EPISODE_COMMANDS,
   ...ACTING_COMMANDS,
   importSpine,
   importLive2d,
@@ -61,5 +63,6 @@ export const PARENTS: Record<string, { summary: string; subcommands: Command[] }
   avatar: AVATAR_PARENT,
   library: LIBRARY_PARENT,
   scene: SCENE_PARENT,
+  episode: EPISODE_PARENT,
   gesture:GESTURE_PARENT,expression:EXPRESSION_PARENT,
 };

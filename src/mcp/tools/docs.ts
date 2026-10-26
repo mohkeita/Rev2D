@@ -106,12 +106,13 @@ export function formatOpCatalogue(): string {
 
 // ----------------------------------------------------------------------------- docs
 
-export const DOC_TOPICS = ['gestures','scene', 'library', 'spec', 'ops', 'cli', 'mcp', 'recipes', 'interop', 'avatar', 'architecture', 'examples', 'agents'] as const;
+export const DOC_TOPICS = ['episode','gestures','scene', 'library', 'spec', 'ops', 'cli', 'mcp', 'recipes', 'interop', 'avatar', 'architecture', 'examples', 'agents'] as const;
 export type DocTopic = (typeof DOC_TOPICS)[number];
 
 /** Candidate files per topic, relative to the package root (first existing wins). */
 const DOC_FILES: Record<Exclude<DocTopic, 'examples'>, string[]> = {
   gestures:['docs/GESTURES.md'],
+  episode: ['docs/EPISODE.md'],
   scene: ['docs/SCENE.md'],
   library: ['docs/LIBRARY.md'],
   spec: ['docs/SPEC.md'],
@@ -239,7 +240,7 @@ export function registerDocTools(server: McpServer): void {
         `${recipesTopicText()}; ` +
         'interop = Spine / Live2D import and export (support matrix, parameter map, limitations, workflows); ' +
         'avatar = an animated avatar from ONE illustration (the rev2d avatar CLI workflow: landmarks, build, review, drawn variants, lip sync, the editor\'s Avatar mode); ' +
-        'scene = layered scenes, camera, narration cues and video export; library = reusable asset catalogue, keying, generation requests and avatar rig review; ' +
+        'episode = storyboard builds, cached shot renders, transitions, audio mix and review; scene = layered scenes, camera, narration cues and video export; library = reusable asset catalogue, keying, generation requests and avatar rig review; ' +
         'architecture = pipeline and module map (for changing Rev2D itself); ' +
         'examples = the templates/example models with their parameters and animations; agents = the working guide for AI agents (AGENTS.md, else the rev2d_guide quickstart).',
       input: z.strictObject({ topic: z.enum(DOC_TOPICS).describe('Documentation topic.') }),

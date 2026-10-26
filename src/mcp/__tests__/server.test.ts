@@ -87,6 +87,7 @@ describe('mcp server: discovery', () => {
       [
         'rev2d_analyze',
         'rev2d_gesture_list','rev2d_gesture_apply','rev2d_expression_apply',
+        ...['validate','plan','build','render','assemble','report','thumbnails'].map(s=>'rev2d_episode_'+s),
         'rev2d_scene_validate',
         'rev2d_scene_frame',
         'rev2d_scene_sheet',

@@ -17,3 +17,9 @@ export * from './node/video.js';
 
 export * from './gestures/index.js';
 export * from './node/acting.js';
+
+export * from './episode/index.js';
+export {loadEpisode,validateEpisode,planEpisode,buildEpisode,readEpisodeBuild} from './node/episode.js';
+export {renderEpisode} from './node/episode-render.js';
+export {assembleEpisode} from './node/episode-assemble.js';
+export {reportEpisode,episodeThumbnails} from './node/episode-report.js';
