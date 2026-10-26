@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "acting-demo",
+  "width": 960,
+  "height": 540,
+  "fps": 24,
+  "duration": 12,
+  "background": "#f4e7d5",
+  "layers": [
+    {
+      "id": "hero",
+      "type": "model",
+      "src": "figure/figure_full.r2d.json",
+      "x": 470,
+      "y": 510,
+      "anchor": "bottom-center",
+      "animations": [
+        "idle_alive",
+        { "gesture": "voila", "t": 0.3, "hold": 0.7 },
+        { "gesture": "point_right", "t": 3, "hold": 0.7 },
+        { "gesture": "scratch_head", "t": 5.7, "hold": 0.7 },
+        { "expression": "shocked", "t": 8.3, "hold": 0.7 },
+        { "expression": "thinking", "t": 10, "hold": 0.7 }
+      ]
+    }
+  ]
+}
