@@ -26,7 +26,13 @@ const Appearance = z.strictObject({
   overshoot: z.number().min(0).max(1).default(0.15),
   ease: EaseSchema.optional(),
 });
+const ActingFields = {
+  t: TimeSchema.optional(), duration:z.number().positive().optional(), intensity:z.number().min(0).max(1).optional(),
+  hold:z.number().nonnegative().optional(), release:z.number().positive().optional(),
+};
 const Animation = z.union([
+  z.strictObject({...ActingFields,gesture:z.string().min(1),side:z.enum(['R','L','both']).optional(),count:z.union([z.literal(1),z.literal(2),z.literal(3)]).optional()}),
+  z.strictObject({...ActingFields,expression:z.string().min(1)}),
   z.string().min(1),
   z.strictObject({
     id: z.string().min(1),
@@ -127,6 +133,7 @@ export const CameraSchema = z.strictObject({
 export const SceneSchema = z
   .strictObject({
     version: z.literal(1),
+    id: IdSchema.optional(),
     library: z.string().min(1).optional(),
     width: z.number().int().min(2).max(3840).default(1920),
     height: z.number().int().min(2).max(3840).default(1080),

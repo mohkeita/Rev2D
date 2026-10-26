@@ -13,6 +13,7 @@ export interface SceneSource {
   scale: number;
   points?: Record<string, { at: [number, number]; parent?: string }>;
   pointParent?: string;
+  generatedAnimations?:string[];
 }
 export interface LayerAssets {
   sources: Record<string, SceneSource>;

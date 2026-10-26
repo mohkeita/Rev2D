@@ -133,6 +133,7 @@ describe('describeOps', () => {
   it('describes every op with fields and a runnable example shape', () => {
     const ops = describeOps();
     expect(ops.map((d) => d.op)).toEqual([
+      'act',
       'add',
       'update',
       'remove',

@@ -7,3 +7,5 @@ export * from './evaluate.js';
 export * from './render.js';
 export * from './validate.js';
 export * from './analyze.js';
+
+export * from './acting.js';
