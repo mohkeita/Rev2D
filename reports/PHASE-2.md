@@ -109,6 +109,21 @@ Les landmarks de démonstration ont été repris manuellement. Pour C2, une déc
 - Le nombre de tests ignorés est identique à la phase précédente ; aucun nouveau test n’est volontairement ignoré. Le journal compact ne permet pas d’attribuer rétrospectivement chacun des deux skips de ce passage.
 - Les phases 3/4, les dessins supplémentaires et la fidélité artistique complète restent à faire. La phase 5 nécessite une demande explicite.
 
+## Retouche du contact de P037 après livraison technique
+
+Le nouvel extrait local retenu pour ce geste est `out/demo-phase2/user-contact-refined/P037.mp4`. Les vidéos `user-release` ci-dessus restent les preuves du premier lot ; ce complément affine uniquement P037.
+
+```sh
+node --import tsx out/demo-phase2/prepare-contact.ts
+node --import tsx out/demo-phase2/render-contact.ts
+```
+
+Le premier script utilise les assets existants de `user-release` et écrit dans un nouveau dossier. Il choisit un repère auteur sur la tempe et un point du contour du poing. Un solveur à deux segments produit des pistes numériques de scène pour l’épaule, le coude et le poignet à 24 fps. Il suit le mouvement de la tête, ajoute un petit grattement à amplitude progressive, garde l’œil dégagé et ramène le bras au repos. Une variante hors de portée a été rejetée avant la sélection finale. Ces pistes sont propres à ce plan ; elles n’ajoutent pas de solveur universel de contact au moteur.
+
+Le contrôle final mesure 69 images pendant le maintien : écart maximal **0,0023891 pixel modèle** entre le point du gant et sa cible animée. Il mesure la cohérence de deux repères auteurs, pas une détection automatique de la surface des cheveux. Le SHA-256 du modèle source reste identique avant/après préparation et export : `83a99694505f9e0a6a47337a1887e307adaead6df23f7b162e08a8f4304d729f`.
+
+`contact-report.json` et `export-report.json` accompagnent l’extrait. ffprobe confirme 1376×768, H.264/yuv420p, 24/1, 144 images et 6 s, avec AAC de 6 s. La planche et les vues agrandies ont été examinées. Les deux avertissements de sourcils absents subsistent. Le moteur et l’exemple public n’ont reçu aucune modification fonctionnelle après la suite verte ; ce complément concerne l’animation privée et sa documentation.
+
 ## Inventaire des fichiers
 
 L’inventaire ci-dessous couvre chaque fichier ajouté ou modifié dans cette phase. Les artefacts privés sous `out/` n’y figurent pas.
