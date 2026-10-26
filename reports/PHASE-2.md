@@ -3,7 +3,7 @@
 **Statut : phase 2 implémentée et vérifiée techniquement ; limites artistiques explicites.**
 
 **Version P037 courante :** `out/demo-phase2/P037-reference-rhythm/P037.mp4` ; aperçu agrandi des six secondes : `P037-detail.mp4` dans le même dossier. Les autres versions P037 ci-dessous sont des étapes de revue conservées.
-Les corrections de bras répondent au défaut visuel signalé : manches étirées, raccords au poignet et morceaux de l’ancienne main. Les gestes numériques restent à adapter artistiquement aux personnages et aux contacts de chaque plan. La phase 3 n’est pas commencée.
+Les corrections de bras répondent au défaut visuel signalé : manches étirées, raccords au poignet et morceaux de l’ancienne main. Les gestes numériques restent à adapter artistiquement aux personnages et aux contacts de chaque plan. À cette livraison, la phase 3 n’était pas commencée ; son suivi courant est désormais dans [PHASE-3.md](PHASE-3.md).
 
 ## Révisions et périmètre
 
