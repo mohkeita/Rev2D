@@ -66,6 +66,7 @@ const common = {
   params: z.record(z.string(), z.number()).default({}),
   tracks: z.array(z.strictObject({ param: z.string().min(1), keys: z.array(Key).min(1) })).default([]),
 };
+export const SceneLayerFields = common;
 export const SceneLayerSchema = z.discriminatedUnion('type', [
   z.strictObject({ ...common, type: z.literal('background'), ref: z.string().min(1) }),
   z.strictObject({

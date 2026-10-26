@@ -39,7 +39,12 @@
       "types": "./dist/render/browser.d.ts",
       "default": "./dist/render/browser.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./episode": {
+      "rev2d-source": "./src/episode/index.ts",
+      "types": "./dist/episode/index.d.ts",
+      "default": "./dist/episode/index.js"
+    }
   },
   "files": [
     "dist",
