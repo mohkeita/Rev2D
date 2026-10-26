@@ -71,6 +71,21 @@ use their center. `x/y` add offsets; scene tracks targeting `x/y` replace the re
 parent layer's transform. `attach: "hero.point:180,110"` follows a source-space point. Add `offset`
 in world pixels to place a bubble beside the head. Circular placement references are rejected.
 
+## Foreground occlusion
+
+A table painted into a flat background cannot hide a character drawn over that background.
+Author a separate foreground cutout containing only the table, including its legs and transparent
+gaps between them. Use an image with alpha or a model whose textured mesh follows the furniture
+outline. Draw the room at `z: 0`, the character at `z: 10`, and the foreground at `z: 20`.
+An opaque rectangular crop would also paint its floor/wall pixels over the character.
+
+Keep the foreground aligned with its source background: use the same world placement, scale and
+camera `depth`. A full-room-sized foreground model can use `anchor: [0,0]` and `at: [0,0]`.
+`depth` controls camera parallax; `z` controls draw order. Neither reconstructs furniture layers
+from a flattened image. When deriving mesh UVs from source-pixel coordinates, retain sufficient
+precision (for example `formatModelJson(model, {precision: 10})`) to avoid shifting fine outlines.
+Review an actual intersection with the character, including the tabletop edge and each leg.
+
 ## Poses, tracks and appearances
 
 Character `poses` are strictly increasing `{t,pose,transition?}` entries. The first pose holds before

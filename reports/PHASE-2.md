@@ -124,6 +124,25 @@ Le contrôle final mesure 69 images pendant le maintien : écart maximal **0,002
 
 `contact-report.json` et `export-report.json` accompagnent l’extrait. ffprobe confirme 1376×768, H.264/yuv420p, 24/1, 144 images et 6 s, avec AAC de 6 s. La planche et les vues agrandies ont été examinées. Les deux avertissements de sourcils absents subsistent. Le moteur et l’exemple public n’ont reçu aucune modification fonctionnelle après la suite verte ; ce complément concerne l’animation privée et sa documentation.
 
+## Correction de la main et du premier plan du décor
+
+Après revue utilisateur, le poing et sa manchette vectoriels de P037 sont retirés du plan retenu : le suivi correct d’un repère ne garantissait pas une main lisible. La nouvelle version `out/demo-phase2/user-hand-table/P037.mp4` conserve **le gant original découpé**, avec `HandRForm=0` pendant les 144 images. L’orientation et la cible utilisent cette fois un véritable bout de doigt de l’image source. Les pièces `nativeHandR*` restent invisibles sur chaque image vérifiée.
+
+La table basse était entièrement peinte dans le fond opaque ; placer ensuite C1 au-dessus du décor le faisait passer devant elle. Un modèle de premier plan réutilise maintenant les pixels du décor, avec des maillages UV tracés autour du plateau et des quatre pieds. Leurs intervalles restent transparents. Ordre explicite : décor `z=0`, personnage `z=10`, table `z=20`. C1 est placé à `[890,640]`, légèrement à gauche et plus haut pour correspondre à sa position derrière la table dans le plan maître. Les UV sont conservés à dix décimales pour garder les contours alignés.
+
+Commandes locales reproductibles, dans un dossier neuf :
+
+```sh
+node --import tsx out/demo-phase2/prepare-hand-table.ts
+node --import tsx out/demo-phase2/verify-hand-table.ts
+node --import tsx out/demo-phase2/render-contact.ts out/demo-phase2/user-hand-table
+node node_modules/vitest/vitest.mjs run --project node test/docs-links.test.ts test/docs-commands.test.ts
+```
+
+Résultats : scène sans erreur ; les deux avertissements de sourcils préexistants subsistent. À `t=0`, `1.3`, `2.8`, `4.2` et `5.5`, les **836 pixels opaques de chevauchement** table/personnage reprennent exactement la couleur du décor : 0 pixel incorrect, erreur maximale 0 niveau/canal. Les 144 images utilisent le gant original et aucune pièce du poing synthétique. Le modèle source conserve son SHA-256. ffprobe confirme 1376×768, 24/1, H.264/yuv420p, 144 images et 6 s avec AAC. Les contrôles documentaires passent : 25 tests, 2 fichiers, code 0. Aucune modification fonctionnelle du moteur n’accompagne cette correction de composition.
+
+La vue `P037-detail.mp4` est un simple agrandissement du même rendu pour examiner main et table ; le plan de production est `P037.mp4`. `visual-checks.json`, `contact-report.json`, `export-report.json` et les scripts restent locaux. Cette version remplace les précédentes démonstrations P037 ; elle ne prétend pas reconstruire tous les calques d’un décor automatiquement. La procédure de premier plan est ajoutée à `docs/SCENE.md` pour éviter la même erreur dans les autres plans.
+
 ## Inventaire des fichiers
 
 L’inventaire ci-dessous couvre chaque fichier ajouté ou modifié dans cette phase. Les artefacts privés sous `out/` n’y figurent pas.
