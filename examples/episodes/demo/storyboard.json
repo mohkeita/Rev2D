@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "id": "episode-demo",
+  "library": "../../scenes/room-demo/library",
+  "size": [960, 540],
+  "fps": 24,
+  "narration": { "audio": "voice.wav", "alignment": "voice.alignment.json" },
+  "music": {
+    "src": "music.wav",
+    "gain": 0.2,
+    "duck": { "under": "narration", "amount": 0.6 }
+  },
+  "defaults": { "camera": "static", "transition": "cut" },
+  "shots": [
+    {
+      "id": "P001",
+      "start": 0,
+      "end": "@text:Two",
+      "transition": "cut",
+      "background": "room",
+      "characters": [
+        { "id": "hero", "character": "figure", "at": "sofa_left", "pose": "sitting_phone" }
+      ],
+      "focus": "hero",
+      "note": "One character on the sofa. The cue is at frame zero."
+    },
+    {
+      "id": "P002",
+      "start": "@text:Two",
+      "end": "@text:Three",
+      "transition": "dissolve",
+      "background": "room",
+      "characters": [
+        { "id": "hero", "character": "figure", "at": "sofa_left", "pose": "sitting_phone" },
+        { "id": "friend", "character": "figure", "at": [730, 480], "pose": "standing" }
+      ],
+      "focus": "friend",
+      "note": "Two characters. The portrait crop deliberately excludes the sofa character."
+    },
+    {
+      "id": "P003",
+      "start": "@text:Three",
+      "end": "@text:Four",
+      "transition": "whip-left",
+      "background": "room",
+      "ui": [
+        {
+          "ref": "phone_progress",
+          "at": [480, 490],
+          "tracks": [
+            {
+              "param": "Progress",
+              "keys": [
+                { "t": 0, "v": 0 },
+                { "t": 1.8, "v": 1 }
+              ]
+            }
+          ]
+        }
+      ],
+      "focus": [0.5, 0.5],
+      "note": "A reusable phone UI animates its native Progress parameter."
+    },
+    {
+      "id": "P004",
+      "start": "@text:Four",
+      "end": "@text:Five",
+      "transition": "whip-right",
+      "layers": [
+        {
+          "id": "actor",
+          "type": "model",
+          "src": "../../scenes/acting-demo/figure/figure_full.r2d.json",
+          "anchor": "bottom-center",
+          "x": 480,
+          "y": 510,
+          "animations": [
+            "idle_alive",
+            { "gesture": "point_right", "t": 0.1, "hold": 0.4 }
+          ]
+        }
+      ],
+      "focus": "actor",
+      "note": "An original fully rigged figure points right."
+    },
+    {
+      "id": "P005",
+      "start": "@text:Five",
+      "end": "@text:Six",
+      "transition": "dip-to-black",
+      "external": { "video": "external.mp4", "fit": "cover" },
+      "note": "An explicitly declared external clip: an original procedural ffmpeg test pattern."
+    },
+    {
+      "id": "P006",
+      "start": "@text:Six",
+      "end": "@end",
+      "transition": "cut",
+      "background": "room",
+      "characters": [
+        { "id": "hero", "character": "figure", "at": "center", "pose": "standing" }
+      ],
+      "props": [
+        { "ref": "box", "at": [720, 485], "scale": 0.5 }
+      ],
+      "bubbles": [
+        {
+          "ref": "thought",
+          "attach": "hero.head",
+          "offset": [30, -15],
+          "scale": 0.75,
+          "content": { "type": "image", "src": "../../scenes/room-demo/library/props/box/source.png" }
+        }
+      ],
+      "focus": "hero",
+      "camera": "slow-push",
+      "note": "A thought bubble and prop conclude the episode, preserving the final narration silence."
+    }
+  ]
+}

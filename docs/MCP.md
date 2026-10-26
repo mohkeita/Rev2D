@@ -302,7 +302,7 @@ PNG sequences need no encoder. No source files or library assets are changed by 
 
 ## Library and avatar reference
 
-Eleven library/avatar tools supplement the upstream eighteen; five scene tools and three acting tools bring the total to 37. See [LIBRARY.md](LIBRARY.md).
+Eleven library/avatar tools supplement the upstream eighteen; five scene tools, three acting tools and seven episode tools bring the total to 44. See [LIBRARY.md](LIBRARY.md).
 
 | Tool | Inputs | Result |
 | --- | --- | --- |
@@ -332,3 +332,21 @@ import is explicitly a draft, even though its cutout and avatar.json exist.
 
 Apply tools write the model unless `dry_run:true`, replacing only the animation with the same id.
 They return the complete animation and missing-control diagnostics. See [GESTURES.md](GESTURES.md).
+
+## Episodes
+
+Seven episode tools bring the total to 44. Read [EPISODE.md](EPISODE.md) or
+`rev2d_docs {"topic":"episode"}` first. All share the CLI Node adapters and stable diagnostics.
+
+| Tool | Inputs | Result |
+| --- | --- | --- |
+| `rev2d_episode_validate` | `path` (storyboard) | Timing, asset and source checks; read-only; isError if invalid |
+| `rev2d_episode_plan` | `path`, optional `out` | Exact missing assets and optionally new generation request packages |
+| `rev2d_episode_build` | `path`, `out`, optional `only` ids, `force` | Complete generated scenes and managed manifest; can replace owned scene files |
+| `rev2d_episode_render` | `path` (build directory), optional `jobs`, `only` ids, `force` | Rendered/cached shot ids; replaces owned cache outputs |
+| `rev2d_episode_assemble` | `path`, `out`, optional `size:[width,height]` | New MP4 with narration/music, cuts, crop warnings and media metadata |
+| `rev2d_episode_report` | `path`, `out` | New sheets/analysis and HTML/Markdown/JSON review indexes |
+| `rev2d_episode_thumbnails` | `path`, `out`, optional `at` | New per-shot PNGs at middle/start/end plus index |
+
+Build/render are annotated destructive because they can update owned generated files; original artwork
+and authored scene sources remain read-only. Other outputs must be new. No generation service is called.

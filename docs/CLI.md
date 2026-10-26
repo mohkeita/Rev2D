@@ -2144,3 +2144,46 @@ List expressions; accepts `--json`.
 
 `rev2d expression apply <model> --expression <name>` accepts `--id`, `--t`, `--duration`,
 `--intensity`, `--hold`, `--release`, `--dry-run`, `--json`. See [GESTURES.md](GESTURES.md).
+
+## Episodes
+
+See [EPISODE.md](EPISODE.md) for the tested six-shot workflow, ownership, cache and transition semantics.
+Every command accepts `--json`. Files and review directories must be new; a managed build/cache can be updated.
+
+### rev2d episode validate
+
+`rev2d episode validate <storyboard.json> [--json]` returns `{ok,id,frames,duration,shots,missing,diagnostics}`;
+invalid input returns `{ok:false,diagnostics}` and exits 1.
+
+### rev2d episode plan
+
+`rev2d episode plan <storyboard.json> [-o requests/] [--json]` returns `{ok,missing,requests,diagnostics}`.
+`--out` writes one generation-request package per missing kind/id/pose without generating media.
+
+### rev2d episode build
+
+`rev2d episode build <storyboard.json> -o episode/ [--only P001,P060] [--force] [--json]`
+returns `{directory,built,frames,duration,diagnostics}`. `--force` explicitly replaces edited generated scenes.
+Authored source scenes are never rewritten. A partial build keeps unbuilt ids explicit.
+
+### rev2d episode render
+
+`rev2d episode render <episode/> [--jobs 2] [--only P001,P060] [--force] [--json]`
+returns `{ok,rendered,cached,total}`. Jobs are isolated processes (integer 1–16). Cache checks transitive
+resources and output hashes; `--force` bypasses it. Progress stays on stderr.
+
+### rev2d episode assemble
+
+`rev2d episode assemble <episode/> -o final.mp4 [--size 1080x1920] [--json]`
+returns media dimensions/duration/audio, frame count, exact cut positions, crop decisions and diagnostics.
+Preserves narration duration through transitions and mixes ducked music. Refuses stale renders.
+
+### rev2d episode report
+
+`rev2d episode report <episode/> -o report/ [--json]` writes per-shot sheets and analysis plus
+HTML, Markdown and JSON indexes; returns `{ok,directory,shots,index}`.
+
+### rev2d episode thumbnails
+
+`rev2d episode thumbnails <episode/> -o thumbs/ [--at middle] [--json]`
+accepts `middle`, `start`, `end`; returns `{ok,directory,files}` with each shot id/path/time.

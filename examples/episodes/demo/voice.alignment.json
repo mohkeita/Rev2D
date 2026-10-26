@@ -1,0 +1,8 @@
+[
+  { "word": "One", "start": 0, "end": 0.7 },
+  { "word": "Two", "start": 2, "end": 2.7 },
+  { "word": "Three", "start": 4, "end": 4.7 },
+  { "word": "Four", "start": 6, "end": 6.7 },
+  { "word": "Five", "start": 8, "end": 8.7 },
+  { "word": "Six", "start": 10, "end": 10.7 }
+]

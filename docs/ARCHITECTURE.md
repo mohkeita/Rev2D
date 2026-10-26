@@ -491,3 +491,13 @@ by `parseLayerSpec` / `toLayer` in `src/api/layers.ts`.
 ## Asset-library modules
 
 `src/library` provides pure, browser-safe schemas, Lab keying, tag/text search and generation prompts. `src/node/library.ts` owns filesystem IO, optional external-remover execution without a shell, avatar build provenance and contact sheets. CLI `library` and eleven library/avatar MCP wrappers share these functions. The runtime and editor model schema remain unchanged.
+
+## Episode pipeline
+
+`src/episode` is browser-safe: Zod storyboard schema, cue resolution to shared integer cut frames,
+missing-asset planning and scene compilation. `rev2d/episode` exposes this pure entry point.
+`src/node/episode.ts` handles source validation and managed builds; `episode-render.ts` hashes
+transitive assets/output and runs isolated `episode-worker.ts` processes. `episode-media.ts` bounds
+shell-free optional ffmpeg/ffprobe processes; `episode-assemble.ts` handles timeline-preserving
+transitions, continuous audio and focus crops; `episode-report.ts` creates review artifacts.
+CLI/MCP call these same adapters. See [EPISODE.md](EPISODE.md).

@@ -731,3 +731,11 @@ Acting: read [docs/GESTURES.md](docs/GESTURES.md) before using `gesture apply`, 
 the `act` op or scene `idle_alive`/gesture/expression references. New names belong in the pure
 `src/gestures/` catalogue/generators; IO is shared in `src/node/acting.ts`. Review both motion and
 contact positions; generated numeric gestures do not establish artistic fidelity.
+
+Episodes: read [docs/EPISODE.md](docs/EPISODE.md) before storyboard work. `src/episode` is pure and
+browser-safe (schema, cue/frame timeline, asset planning and scene compilation). All file IO,
+worker processes, content hashes, ffmpeg/ffprobe, assembly and review belong in `src/node/episode*.ts`.
+CLI/MCP share those adapters. Preserve polished source scenes through storyboard `scene` references;
+do not flatten their tracks or replace them with old clips. A passing build proves timing/resource
+validity, not artistic equivalence. Original episode builders live in `scripts/examples/episode-demo.ts`;
+private user assets and renders stay in ignored `out/`.

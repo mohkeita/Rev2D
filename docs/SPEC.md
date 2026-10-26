@@ -466,3 +466,10 @@ names only its kind (`(not a part id)`), and an unknown prefix throws `unknown p
    part bounds) to check geometry without looking.
 
 Reusable asset metadata uses a separate versioned `library.json` format, documented in [LIBRARY.md](LIBRARY.md). It references ordinary avatar projects and model files; it does not alter the model v1 schema.
+
+## Episode storyboards
+
+The separate version 1 storyboard format compiles complete scene documents and uses shared integer
+cut frames to assemble continuous narration. See [EPISODE.md](EPISODE.md) for its contract, authored
+scene imports, explicit external clips, cache hashes, transitions, music and portrait focus. It does
+not change model evaluation, scene tracks or parameter semantics; finishing looks remain null.
