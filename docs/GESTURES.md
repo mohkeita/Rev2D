@@ -40,6 +40,9 @@ For rubbing or scratching, author a hand pose with the appropriate finger curl a
 keep the cuff stable while animating localized finger flex and small wrist movement. A correct wrist
 coordinate or an unfolded mesh does not establish a convincing hand pose. Review the contact passage
 at enlarged scale, including the fingers, rather than approving only the arm's endpoint.
+A contact-specific glove may be unsuitable when the arm hangs down: restore the rest glove during
+withdrawal and review the first and last frames too. Match the reference's starting pose and action
+timing before adding a complete lift/contact/release cycle.
 
 Controls absent from the model are skipped, with a warning `gesture-missing-param`, a JSON pointer
 and a correction hint. Missing hand drawings keep the original glove and warn about the absent

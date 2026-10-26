@@ -1,6 +1,8 @@
 # Phase 2 — jeu d’acteur, bras et expressions
 
 **Statut : phase 2 implémentée et vérifiée techniquement ; limites artistiques explicites.**
+
+**Version P037 courante :** `out/demo-phase2/P037-reference-rhythm/P037.mp4` ; aperçu agrandi des six secondes : `P037-detail.mp4` dans le même dossier. Les autres versions P037 ci-dessous sont des étapes de revue conservées.
 Les corrections de bras répondent au défaut visuel signalé : manches étirées, raccords au poignet et morceaux de l’ancienne main. Les gestes numériques restent à adapter artistiquement aux personnages et aux contacts de chaque plan. La phase 3 n’est pas commencée.
 
 ## Révisions et périmètre
@@ -82,7 +84,7 @@ La suite ajoute aussi un contrôle des distances entre sommets des manches et av
 
 ## Démonstrations et correction des bras
 
-Les fichiers retenus sont exclusivement :
+Le premier lot d’exports vérifié est conservé sous les chemins suivants. Pour P037, utiliser la version courante indiquée en tête du rapport :
 
 - `out/demo-phase2/acting-demo-final.mp4` : exemple synthétique original, 960×540, 24 fps, 288 images, 12 s.
 - `out/demo-phase2/user-release/P010.mp4` : C2 pointe le calendrier, C1 assis ; 1376×768, 169 images, 7,041667 s.
@@ -158,6 +160,22 @@ node --import tsx out/demo-phase2/render-rub-fingers.ts
 Les scripts prennent aussi un dossier neuf directement sous `out/demo-phase2/`. Vérifications locales : aucun pli dans les poses testées, scène sans erreur, variante de frottement active sur 144 images, déformation locale des doigts jusqu’à 7,0778 pixels modèle et **0 déplacement local de la manchette**. Les cinq contrôles d’occlusion de table conservent 836 pixels de chevauchement correctement masqués, avec erreur de couleur maximale 0. Le modèle original reste intact ; seule sa copie locale reçoit cette pose et ce contrôle. L’export est H.264/yuv420p, 1376×768, 24 fps, 144 images / 6 s, AAC 6 s. Les deux avertissements de sourcils subsistent ; les 25 contrôles documentaires passent.
 
 `P037-frottement-detail.mp4` agrandit uniquement la séquence de frottement pour sa revue. La source de main est petite : cet agrandissement n’ajoute pas de résolution. La flexion reste une déformation 2D légère d’une pose dessinée, sans articulation 3D des phalanges ni simulation de contact. Le résultat est présenté comme un nouvel essai visuel, pas comme une preuve automatique de naturel. Le point de contact numérique mesure le repère de pose ; il ne mesure pas la surface effective des doigts déformés. Le moteur public ne change pas ; `docs/GESTURES.md` précise désormais cette distinction entre pose de main et position du poignet.
+
+## P037 : séquence complète, expression et rythme de référence
+
+Après revue des six secondes et du clip utilisateur P037, l’action est recalée : le personnage commence déjà la main sur la tête, frotte jusqu’à environ 1,7 s, retire latéralement la main puis baisse le bras. La main de frottement cesse d’être affichée à 1,95 s ; le bras est au repos à 2,5 s. Le gant relâché d’origine remplace alors la pose de contact, qui formait auparavant un crochet lorsqu’elle restait active au bas du corps. Le clip utilisateur a servi uniquement à observer le rythme ; aucune image extraite du fichier vidéo n’est utilisée comme calque. La main provient toujours de l’image maître PNG.
+
+L’expression reste inquiète : bouche en léger arc, regard discret et clignements autour de 2 s, 3 s et 5,5 s. Le sourcil visible est isolé avec la feature existante `brows` et animé ; celui que cachent les cheveux n’est pas inventé. Les contrôles visibles sont directement écrits dans les pistes de la scène, au lieu de demander à une expression générique un sourcil absent. Le balancement de tête est ajusté dans les limites du maillage. La table reste au premier plan.
+
+```sh
+node --import tsx out/demo-phase2/prepare-P037-rhythm.ts
+node --import tsx out/demo-phase2/verify-P037-rhythm.ts
+node --import tsx out/demo-phase2/render-rub-fingers.ts out/demo-phase2/P037-reference-rhythm
+```
+
+Les trois commandes acceptent un même dossier neuf directement sous `out/demo-phase2/`. La pose de main, sa flexion et la bouche sont maintenant enregistrées dans les post-opérations de `avatar.json` ; la texture de référence est interne au projet avatar. La bibliothèque est donc régénérable : deux builds donnent des modèles identiques octet par octet, les empreintes sont enregistrées, et `validateLibrary` renvoie `ok: true, diagnostics: []`.
+
+Contrôles : 144 images inspectées, 47 avec la pose de frottement et 97 avec le gant relâché ; expression inquiète maintenue ; 0 pli et aucun diagnostic de scène. La table masque correctement les 836 pixels de chevauchement aux cinq instants vérifiés, sans erreur de couleur. Les keyforms pleines précision confirment une flexion des doigts et une manchette localement fixe ; les propriétés d’inspection arrondies ne servent pas à mesurer les écarts submillipixel. L’export reste H.264/yuv420p, 1376×768, 24 fps, 144 images / 6 s et AAC 6 s. Les planches du mouvement complet et du retrait ont été examinées, ainsi que l’aperçu agrandi. L’identité et les proportions proviennent encore de l’avatar canonique : ce travail ne prétend pas une égalité pixel à pixel avec le personnage du clip généré.
 
 ## Inventaire des fichiers
 
